@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Roundhouse stores nothing in Firestore — auth, progress, results and live
+// rooms all live in the Realtime Database (see database.rules.json).
+//
+// This file exists to close Firestore rather than leave it on whatever the
+// project was created with. A Firestore instance left in test mode is open to
+// the world until its expiry date, and an unused database is the easiest one
+// to forget about.
+//
+// If you ever do put something in Firestore, replace this block — do not
+// loosen it in place.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "rules": {
+    // A player's profile and progress: readable by any signed-in user so
+    // rooms can show names, writable only by its owner.
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    // Session history is private to the player it belongs to.
+    "results": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    // Code -> room lookup. This is the only globally readable thing, and it
+    // holds no game data: a code, the room it points at, and whether that
+    // room is still open. Without it, joining by code would require reading
+    // every room in the project.
+    "roomCodes": {
+      ".read": "auth != null",
+      "$code": {
+        // Only the host of the referenced room may claim or update a code.
+        ".write": "auth != null && root.child('rooms').child(newData.child('roomId').val()).child('hostUid').val() == auth.uid",
+        ".validate": "newData.hasChildren(['roomId', 'status'])"
+      }
+    },
+
+    "rooms": {
+      "$roomId": {
+        // Readable only by people actually in the room. A joiner gets in by
+        // writing their own seat first (permitted below), which then makes
+        // this rule true for them.
+        ".read": "auth != null && (data.child('hostUid').val() == auth.uid || data.child('players').child(auth.uid).exists())",
+
+        // The host creates the room and is the only one who moves the round
+        // on. The seat rule below grants each player one exception.
+        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() == auth.uid)",
+
+        "players": {
+          // Any signed-in player may claim or release their own seat.
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid"
+          }
+        }
+      }
+    },
+
+    // Answers live outside the room on purpose. Read permission in this
+    // database cascades downward and cannot be revoked on a child, so an
+    // answers node inside the room would be readable by everyone who can
+    // read the room — letting a player see what their opponents picked
+    // before the reveal.
+    "roomAnswers": {
+      "$roomId": {
+        // The host reads the whole set, and only to resolve the question.
+        ".read": "auth != null && root.child('rooms').child($roomId).child('hostUid').val() == auth.uid",
+
+        "$index": {
+          "$uid": {
+            // You can read your own answer back, write it exactly once, and
+            // never overwrite it — this is what stops an answer being
+            // changed after the reveal.
+            ".read": "auth != null && auth.uid == $uid",
+            ".write": "auth != null && auth.uid == $uid && !data.exists()",
+            ".validate": "newData.hasChildren(['choice'])"
+          }
+        }
+      }
+    }
+  }
+}

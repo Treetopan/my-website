@@ -8,6 +8,7 @@ import {
   type InstanceRef,
 } from "./templates";
 import { rng, type Built, type Rng } from "./generators/kit";
+import type { Answer } from "./grading.server";
 import { ALGEBRA_1 } from "./generators/algebra-1";
 import { GEOMETRY } from "./generators/geometry";
 import { ALGEBRA_2 } from "./generators/algebra-2";
@@ -49,22 +50,90 @@ const GENERATORS: Record<string, Generator[]> = {
 // ─── Minting and grading ─────────────────────────────────
 
 /** A generated question plus the answer, which stays on this side of the wire. */
-type Resolved = { question: Question; answer: number };
+export type Resolved = { question: Question; answer: Answer };
+
+/**
+ * Splits what a generator returns into the half that travels and the half that
+ * does not. This is the only place the two are ever joined, which is what makes
+ * the boundary easy to keep: everything downstream of here has either a
+ * question or an answer, never both.
+ */
+function split(built: Built, id: string, topic: string): Resolved {
+  switch (built.kind) {
+    case "choice":
+      return {
+        question: { kind: "choice", id, topic, prompt: built.prompt, options: built.options },
+        answer: { kind: "choice", index: built.answer },
+      };
+
+    case "fill":
+      return {
+        question: {
+          kind: "fill",
+          id,
+          topic,
+          prompt: built.prompt,
+          unit: built.unit,
+          hint: built.hint,
+        },
+        answer: {
+          kind: "fill",
+          accept: built.accept,
+          show: built.show,
+          tolerance: built.tolerance,
+        },
+      };
+
+    case "slider":
+      return {
+        question: {
+          kind: "slider",
+          id,
+          topic,
+          prompt: built.prompt,
+          min: built.min,
+          max: built.max,
+          step: built.step,
+          unit: built.unit,
+        },
+        answer: {
+          kind: "slider",
+          value: built.value,
+          full: built.full,
+          zero: built.zero,
+        },
+      };
+
+    case "point":
+      return {
+        question: { kind: "point", id, topic, prompt: built.prompt, span: built.span },
+        answer: { kind: "point", at: built.at, full: built.full, zero: built.zero },
+      };
+
+    case "line":
+      return {
+        question: { kind: "line", id, topic, prompt: built.prompt, span: built.span },
+        answer: {
+          kind: "line",
+          slope: built.slope,
+          intercept: built.intercept,
+          span: built.span,
+          full: built.full,
+          zero: built.zero,
+        },
+      };
+  }
+}
 
 function build(ref: InstanceRef): Resolved | null {
   const generator = GENERATORS[ref.subunitId]?.[ref.generator];
   if (!generator) return null;
 
-  const built = generator(rng(ref.seed));
-  return {
-    question: {
-      id: instanceId(ref.subunitId, ref.generator, ref.seed),
-      prompt: built.prompt,
-      options: built.options,
-      topic: GENERATED[ref.subunitId][ref.generator],
-    },
-    answer: built.answer,
-  };
+  return split(
+    generator(rng(ref.seed)),
+    instanceId(ref.subunitId, ref.generator, ref.seed),
+    GENERATED[ref.subunitId][ref.generator],
+  );
 }
 
 /**

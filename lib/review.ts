@@ -1,4 +1,11 @@
-import type { Difficulty } from "@/lib/curriculum";
+import type { Difficulty, Question } from "@/lib/curriculum";
+import {
+  describeResponse,
+  describeReveal,
+  isBlank,
+  type Response,
+  type Reveal,
+} from "@/lib/questions";
 
 /**
  * What the student sees after a game. The point is not the score — it is
@@ -8,17 +15,40 @@ import type { Difficulty } from "@/lib/curriculum";
 
 export type AnswerDetail = {
   questionId: string;
-  prompt: string;
   topic: string;
-  options: string[];
-  answer: number;
-  /** Null when the clock ran out. */
-  chosen: number | null;
+  /** The whole question, so the summary can describe any kind of answer. */
+  question: Question;
+  /** The right answer, as the server revealed it. */
+  reveal: Reveal;
+  /** What was submitted. Blank when the clock ran out. */
+  response: Response;
   difficulty: Difficulty;
   correct: boolean;
+  /** 0–1. Only the proximity kinds land between the two. */
+  score: number;
   /** Fraction of the clock still left when answered, 0–1. */
   speed: number;
 };
+
+/** The question text, for a summary that no longer stores it separately. */
+export function promptOf(d: AnswerDetail): string {
+  return d.question.prompt;
+}
+
+/** The right answer in words, whatever kind of question it was. */
+export function answerOf(d: AnswerDetail): string {
+  return describeReveal(d.reveal, d.question);
+}
+
+/** What the student said, in words. */
+export function givenOf(d: AnswerDetail): string {
+  return describeResponse(d.response, d.question);
+}
+
+/** Whether the clock ran out rather than an answer being wrong. */
+export function ranOut(d: AnswerDetail): boolean {
+  return isBlank(d.response);
+}
 
 export type TopicTally = {
   topic: string;
@@ -75,7 +105,7 @@ export function summarize(details: AnswerDetail[]): Summary {
     correct,
     total,
     accuracy: total === 0 ? 0 : correct / total,
-    timedOut: details.filter((d) => d.chosen === null).length,
+    timedOut: details.filter(ranOut).length,
 
     // Most missed first; ties broken by the one you got least right, so a
     // concept you missed twice out of two outranks two out of four.

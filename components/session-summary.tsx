@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { levelProgress, type Progress } from "@/lib/progression";
-import { summarize, verdict, type AnswerDetail } from "@/lib/review";
+import {
+  answerOf,
+  givenOf,
+  ranOut,
+  summarize,
+  verdict,
+  type AnswerDetail,
+} from "@/lib/review";
 
 /**
  * Shown once a session ends. Two jobs, in this order: tell the student what to
@@ -132,20 +139,28 @@ export function SessionSummary({
           <ul className="mt-5 flex flex-col gap-5">
             {s.review.map((d) => (
               <li key={d.questionId} className="flex flex-col gap-2">
-                <p className="text-[14.5px] leading-snug">{d.prompt}</p>
+                <p className="text-[14.5px] leading-snug">{d.question.prompt}</p>
 
                 <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
                   <span className="eyebrow text-correct">Answer</span>
-                  <span className="text-ink">{d.options[d.answer]}</span>
+                  <span className="text-ink">{answerOf(d)}</span>
                 </p>
 
                 <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
                   <span className="eyebrow text-out">
-                    {d.chosen === null ? "Ran out" : "You said"}
+                    {ranOut(d) ? "Ran out" : "You said"}
                   </span>
                   <span className="text-muted">
-                    {d.chosen === null ? "no answer given" : d.options[d.chosen]}
+                    {ranOut(d) ? "no answer given" : givenOf(d)}
                   </span>
+
+                  {/* A part-marked answer was not simply wrong, and a review
+                      that lists it beside a blank one says the wrong thing. */}
+                  {d.score > 0 && (
+                    <span className="font-mono text-[11px] text-muted tnum">
+                      · {Math.round(d.score * 100)}% of the marks
+                    </span>
+                  )}
                 </p>
 
                 <span className="font-mono text-[10px] tracking-[0.12em] text-faint uppercase">

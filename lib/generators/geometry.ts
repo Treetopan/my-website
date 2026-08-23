@@ -3,10 +3,12 @@ import "server-only";
 import {
   among,
   ask,
+  fill,
   frac,
   nearMisses,
   piFrac,
   signed,
+  slider,
   type Built,
   type Rng,
 } from "./kit";
@@ -52,6 +54,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         ],
         r,
       );
+    },
+  ],
+
+  // ── 1.2 Angle measure ──
+  "math/geometry/unit-1/1.2": [
+    // Dragging to an angle is a different skill from naming one, and the
+    // scoring says how far out you were rather than just that you were.
+    (r) => {
+      const angle = r.int(10, 170);
+      return slider(`Set the slider to an angle of ${angle}°.`, {
+        min: 0,
+        max: 180,
+        step: 1,
+        value: angle,
+        unit: "degrees",
+        full: 3,
+        zero: 30,
+      });
     },
   ],
 
@@ -237,6 +257,27 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           c + 1,
         ],
         r,
+      );
+    },
+  ],
+
+  // ── 8.2 Pythagorean triples ──
+  "math/geometry/unit-8/8.2": [
+    (r) => {
+      const [a, b] = r.pick([
+        [3, 4],
+        [6, 8],
+        [5, 12],
+        [8, 15],
+        [7, 24],
+        [9, 12],
+        [20, 21],
+      ]);
+      const c = Math.round(Math.sqrt(a * a + b * b));
+      return fill(
+        `A right triangle has legs ${a} and ${b}. How long is the hypotenuse?`,
+        c,
+        { hint: "a whole number" },
       );
     },
   ],

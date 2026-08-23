@@ -3,17 +3,23 @@
 /**
  * Client side of server grading. The browser never holds the answer key — it
  * asks about one position at a time, and gets back a verdict plus the correct
- * option for that position only.
+ * answer for that position only.
  */
 
 import type { Question } from "@/lib/curriculum";
+import type { Response, Reveal } from "@/lib/questions";
 
 export type Verdict = {
+  /** 0 to 1. Only the proximity kinds land between the two. */
+  score: number;
+  /** Whether it counts as right — for streaks, elimination and the tally. */
   correct: boolean;
-  /** Index of the right option. Only ever arrives after grading. */
-  answer: number;
-  /** What was picked. For a bot turn the server chooses this. */
-  choice: number | null;
+  /** The correct answer. Only ever arrives after grading. */
+  reveal: Reveal;
+  /** What was submitted. For a bot turn the server chooses this. */
+  response: Response;
+  /** The score a proximity answer has to clear to count as right. */
+  pass: number;
 };
 
 export type OpenedSession = {
@@ -45,15 +51,15 @@ export async function openSession(
 }
 
 /**
- * Grades the question at `position`. `choice: null` is a timeout, and still
+ * Grades the question at `position`. A blank response is a timeout, and still
  * burns that position's single grading — the server will not answer twice.
  */
 export async function grade(
   sessionId: string,
   position: number,
-  choice: number | null,
+  response: Response,
 ): Promise<Verdict> {
-  return post({ sessionId, position, choice });
+  return post({ sessionId, position, response });
 }
 
 /** Asks the server to play a bot's turn at the given accuracy. */
@@ -76,7 +82,10 @@ async function post(body: Record<string, unknown>): Promise<Verdict> {
   return (await res.json()) as Verdict;
 }
 
-async function reason(res: Response, fallback: string) {
+async function reason(res: Response_, fallback: string) {
   const body = await res.json().catch(() => null);
   return (body?.error as string | undefined) ?? fallback;
 }
+
+/** The DOM Response, shadowed here by the answer-shaped one from questions.ts. */
+type Response_ = globalThis.Response;

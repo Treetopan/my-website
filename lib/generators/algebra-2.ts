@@ -5,8 +5,10 @@ import {
   ask,
   frac,
   head,
+  fill,
   nearMisses,
   piFrac,
+  slider,
   poly,
   signed,
   type Built,
@@ -284,6 +286,15 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
     },
   ],
 
+  // ── 6.5 Graphing logarithmic functions ──
+  "math/algebra-2/unit-6/6.5": [
+    (r) => {
+      const base = r.pick([2, 3, 5, 10]);
+      const n = r.int(2, 5);
+      return fill(`Evaluate: log_${base}(${base ** n})`, n, { hint: "a number" });
+    },
+  ],
+
   // ── 6.8 Solving exponential equations ──
   "math/algebra-2/unit-6/6.8": [
     (r) => {
@@ -469,6 +480,27 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
           a * b,
         ],
         r,
+      );
+    },
+  ],
+
+  // ── 10.2 Probability of compound events ──
+  "math/algebra-2/unit-10/10.2": [
+    (r) => {
+      const sides = r.pick([6, 8, 10]);
+      const wanted = r.int(2, sides - 1);
+      const chance = Math.round((wanted / sides) * 100);
+      return slider(
+        `A fair ${sides}-sided die is rolled. What is the probability of rolling ${wanted} or lower, as a percentage?`,
+        {
+          min: 0,
+          max: 100,
+          step: 1,
+          value: chance,
+          unit: "%",
+          full: 2,
+          zero: 25,
+        },
       );
     },
   ],

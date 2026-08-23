@@ -18,6 +18,11 @@ import { ClockRail, QuestionStage } from "@/components/question-stage";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, openSession } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
+import {
+  emptyResponse,
+  type Response as Answered,
+  type Reveal,
+} from "@/lib/questions";
 
 const REVEAL_MS = 1700;
 const TICK_MS = 100;
@@ -51,15 +56,16 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("asking");
-  const [picked, setPicked] = useState<number | null>(null);
+  const [draft, setDraft] = useState<Answered>({ kind: "choice", choice: null });
   const [msLeft, setMsLeft] = useState(totalMs);
   const [you, setYou] = useState(0);
   const [bot, setBot] = useState(0);
   const [answers, setAnswers] = useState<AnswerDetail[]>([]);
   const [lastGain, setLastGain] = useState<number | null>(null);
 
-  // The correct option is not in this bundle — it arrives with the verdict.
-  const [correctIndex, setCorrectIndex] = useState<number | null>(null);
+  // The correct answer is not in this bundle — it arrives with the verdict.
+  const [reveal, setReveal] = useState<Reveal | null>(null);
+  const [score, setScore] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
 
@@ -67,15 +73,15 @@ export function Racer({ subunitId }: { subunitId: string }) {
   const question = questions[index];
 
   const resolve = useCallback(
-    async (choice: number | null, msRemaining: number) => {
+    async (response: Answered, msRemaining: number) => {
       if (!question || !sessionId) return;
 
       const speed = Math.max(0, Math.min(1, msRemaining / totalMs));
-      setPicked(choice);
+      setDraft(response);
 
       let verdict;
       try {
-        verdict = await grade(sessionId, index, choice);
+        verdict = await grade(sessionId, index, response);
       } catch (e) {
         // A race that cannot be graded is over. Better to say so than to
         // quietly mark every remaining question wrong.
@@ -86,30 +92,32 @@ export function Racer({ subunitId }: { subunitId: string }) {
         return;
       }
 
-      const { correct, answer } = verdict;
-      setCorrectIndex(answer);
+      setReveal(verdict.reveal);
+      setScore(verdict.score);
       setPhase("revealed");
 
       setAnswers((prev) => [
         ...prev,
         {
           questionId: question.id,
-          prompt: question.prompt,
           topic: question.topic,
-          options: question.options,
-          answer,
-          chosen: choice,
+          question,
+          reveal: verdict.reveal,
+          response: verdict.response,
           difficulty,
-          correct,
+          correct: verdict.correct,
+          score: verdict.score,
           speed,
         },
       ]);
 
-      // Distance is one length for being right, plus up to another for being
-      // quick. Speed is the whole point of a race, so it has to move the car.
-      const gain = correct ? 1 + speed : 0;
-      setLastGain(correct ? gain : null);
-      if (correct) setYou((d) => d + gain);
+      // Distance scales with how right the answer was, plus up to another
+      // length for being quick. Speed is the whole point of a race, so it has
+      // to move the car — and a nearly-right answer has to move it a little,
+      // or the proximity kinds would score like multiple choice after all.
+      const gain = verdict.score * (1 + speed);
+      setLastGain(gain > 0 ? gain : null);
+      if (gain > 0) setYou((d) => d + gain);
 
       const botRight = Math.random() < BOT.accuracy;
       if (botRight) {
@@ -125,6 +133,13 @@ export function Racer({ subunitId }: { subunitId: string }) {
   useEffect(() => {
     resolveRef.current = resolve;
   }, [resolve]);
+
+  // The clock reads the draft through a ref so that ticking does not restart
+  // the interval on every keystroke.
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
 
   // One grading session per race. Without it the clock would start before
   // anything could be graded, so the timer waits on it below.
@@ -162,7 +177,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
       setMsLeft(left);
       if (left === 0) {
         clearInterval(id);
-        resolveRef.current(null, 0);
+        resolveRef.current(draftRef.current, 0);
       }
     }, TICK_MS);
 
@@ -178,8 +193,9 @@ export function Racer({ subunitId }: { subunitId: string }) {
         setPhase("over");
         return;
       }
-      setPicked(null);
-      setCorrectIndex(null);
+      setDraft(emptyResponse(questions[index + 1]?.kind ?? "choice"));
+      setReveal(null);
+      setScore(null);
       setLastGain(null);
       setIndex(index + 1);
       setMsLeft(totalMs);
@@ -187,7 +203,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
     }, REVEAL_MS);
 
     return () => clearTimeout(id);
-  }, [phase, index, total, totalMs]);
+  }, [phase, index, total, totalMs, questions]);
 
   const won = you > bot;
 
@@ -289,12 +305,13 @@ export function Racer({ subunitId }: { subunitId: string }) {
             after={after}
             onAgain={() => {
               setIndex(0);
-              setPicked(null);
+              setDraft({ kind: "choice", choice: null });
               setYou(0);
               setBot(0);
               setAnswers([]);
               setLastGain(null);
-              setCorrectIndex(null);
+              setReveal(null);
+              setScore(null);
               setSessionId(null);
               setQuestions([]);
               setFault(null);
@@ -310,10 +327,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
             <QuestionStage
               question={question}
               eyebrow={found.subunit.name}
-              picked={picked}
-              correctIndex={correctIndex}
-              onPick={(choice) => {
-                if (phase === "asking") resolve(choice, msLeft);
+              draft={draft}
+              reveal={reveal}
+              score={score}
+              onDraft={setDraft}
+              onSubmit={(response) => {
+                if (phase === "asking") resolve(response, msLeft);
               }}
             />
           )

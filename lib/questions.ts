@@ -1,0 +1,372 @@
+/**
+ * What a question can be, and what counts as answering one.
+ *
+ * Multiple choice is one kind among several rather than the shape everything
+ * has to fit. Four options is a fine way to ask which theorem applies, and a
+ * poor way to ask where a point goes — the options either give the answer away
+ * or turn a spatial question into a reading exercise. So a question declares
+ * its kind, and the games render and grade whichever it is.
+ *
+ * Two of the kinds are graded by proximity rather than by matching. Dropping a
+ * point one unit off the mark is not the same mistake as putting it in the
+ * wrong quadrant, and a scale that cannot tell them apart is throwing away the
+ * most useful thing it knows.
+ *
+ * This module holds the shapes and the scoring curve, both of which are public.
+ * What stays server-side is only ever the target value — see `grading.server`.
+ */
+
+export type Point = { x: number; y: number };
+
+export type QuestionKind = "choice" | "fill" | "slider" | "point" | "line";
+
+type Identity = {
+  id: string;
+  prompt: string;
+  /** The concept this tests, for the post-game summary. */
+  topic: string;
+};
+
+/** Pick one of four. */
+export type ChoiceQuestion = Identity & {
+  kind: "choice";
+  options: string[];
+};
+
+/** Type the answer. Graded exactly, so the accepted forms have to be generous. */
+export type FillQuestion = Identity & {
+  kind: "fill";
+  /** Shown after the input, e.g. "°" or "units". Never part of the answer. */
+  unit?: string;
+  /** Placeholder text, for saying what form the answer should take. */
+  hint?: string;
+};
+
+/** Drag to a value on a line. Graded by how close. */
+export type SliderQuestion = Identity & {
+  kind: "slider";
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+};
+
+/** Place a point on a coordinate grid. Graded by distance. */
+export type PointQuestion = Identity & {
+  kind: "point";
+  /** The grid runs from -span to +span on both axes. */
+  span: number;
+};
+
+/** Drag two handles to draw a line. Graded by how far the line is out. */
+export type LineQuestion = Identity & {
+  kind: "line";
+  span: number;
+};
+
+export type Question =
+  | ChoiceQuestion
+  | FillQuestion
+  | SliderQuestion
+  | PointQuestion
+  | LineQuestion;
+
+// ─── Answering ───────────────────────────────────────────
+
+/**
+ * What the student submits. Every kind has an empty form, because the clock
+ * running out still has to submit something — a turn that produces no response
+ * at all would be indistinguishable from one that never happened, and the
+ * one-grading-per-position rule depends on telling those apart.
+ */
+export type Response =
+  | { kind: "choice"; choice: number | null }
+  | { kind: "fill"; text: string }
+  | { kind: "slider"; value: number | null }
+  | { kind: "point"; at: Point | null }
+  | { kind: "line"; through: [Point, Point] | null };
+
+/** The correct answer, sent back only with a verdict. */
+export type Reveal =
+  | { kind: "choice"; index: number }
+  | { kind: "fill"; text: string }
+  | { kind: "slider"; value: number }
+  | { kind: "point"; at: Point }
+  | { kind: "line"; slope: number; intercept: number };
+
+export type Verdict = {
+  /** 0 to 1. Only the proximity kinds ever land between the two. */
+  score: number;
+  /** Whether this counts as right — for streaks, elimination and the tally. */
+  correct: boolean;
+  /** The correct answer. Arrives only after grading. */
+  reveal: Reveal;
+  /** What was submitted. For a bot turn the server chooses this. */
+  response: Response;
+};
+
+/**
+ * The score at which an answer counts as correct.
+ *
+ * Exact kinds only ever score 0 or 1, so this is really a decision about the
+ * proximity kinds: how close is close enough to be "right" rather than "nearly".
+ * Set where a visibly-close answer counts — a point within about a unit, a
+ * slider within a few percent — because a student who put it very nearly in the
+ * right place has demonstrated the thing being tested, and telling them they
+ * were wrong teaches them nothing they can act on.
+ */
+export const PASS = 0.6;
+
+/**
+ * Turns an error into a score.
+ *
+ * Full marks out to `full`, nothing beyond `zero`, and a straight line between.
+ * Linear rather than something smoother because the falloff is shown to the
+ * student as a percentage, and a curve makes "why did that score 40%?"
+ * unanswerable.
+ */
+export function proximity(error: number, full: number, zero: number): number {
+  const size = Math.abs(error);
+  if (size <= full) return 1;
+  if (size >= zero) return 0;
+  return (zero - size) / (zero - full);
+}
+
+/** Distance between two points, for grading a placement. */
+export function distance(a: Point, b: Point): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** The line through two points, or null when they share an x. */
+export function lineThrough(
+  a: Point,
+  b: Point,
+): { slope: number; intercept: number } | null {
+  if (a.x === b.x) return null;
+  const slope = (b.y - a.y) / (b.x - a.x);
+  return { slope, intercept: a.y - slope * a.x };
+}
+
+/** An empty response of the right kind, for a question not yet answered. */
+export function emptyResponse(kind: QuestionKind): Response {
+  switch (kind) {
+    case "choice":
+      return { kind: "choice", choice: null };
+    case "fill":
+      return { kind: "fill", text: "" };
+    case "slider":
+      return { kind: "slider", value: null };
+    case "point":
+      return { kind: "point", at: null };
+    case "line":
+      return { kind: "line", through: null };
+  }
+}
+
+/**
+ * Reads a response back out of untrusted data, or null if it is not one.
+ *
+ * Used on everything that crosses a boundary: the request body at the grading
+ * endpoint, and a turn read back out of the Realtime Database. The database is
+ * the reason `undefined` and `null` are treated alike — RTDB drops keys whose
+ * value is null, so `{kind: "choice", choice: null}` comes back as
+ * `{kind: "choice"}`, and a missing field that stayed `undefined` would read as
+ * an answer rather than as a timeout.
+ */
+export function parseResponse(value: unknown): Response | null {
+  if (!value || typeof value !== "object") return null;
+  const r = value as Record<string, unknown>;
+
+  const blank = (v: unknown) => v === null || v === undefined;
+
+  switch (r.kind) {
+    case "choice":
+      return blank(r.choice)
+        ? { kind: "choice", choice: null }
+        : Number.isInteger(r.choice)
+          ? { kind: "choice", choice: r.choice as number }
+          : null;
+
+    case "fill":
+      if (blank(r.text)) return { kind: "fill", text: "" };
+      return typeof r.text === "string" && r.text.length <= 100
+        ? { kind: "fill", text: r.text }
+        : null;
+
+    case "slider":
+      return blank(r.value)
+        ? { kind: "slider", value: null }
+        : Number.isFinite(r.value)
+          ? { kind: "slider", value: r.value as number }
+          : null;
+
+    case "point": {
+      if (blank(r.at)) return { kind: "point", at: null };
+      const at = parsePoint(r.at);
+      return at ? { kind: "point", at } : null;
+    }
+
+    case "line": {
+      if (blank(r.through)) return { kind: "line", through: null };
+      if (!Array.isArray(r.through) || r.through.length !== 2) return null;
+      const a = parsePoint(r.through[0]);
+      const b = parsePoint(r.through[1]);
+      return a && b ? { kind: "line", through: [a, b] } : null;
+    }
+
+    default:
+      return null;
+  }
+}
+
+function parsePoint(value: unknown): Point | null {
+  if (!value || typeof value !== "object") return null;
+  const p = value as Record<string, unknown>;
+  return Number.isFinite(p.x) && Number.isFinite(p.y)
+    ? { x: p.x as number, y: p.y as number }
+    : null;
+}
+
+/**
+ * The same for a reveal, which also travels through the database on its way
+ * from the host to the rest of the table.
+ */
+export function parseReveal(value: unknown): Reveal | null {
+  if (!value || typeof value !== "object") return null;
+  const r = value as Record<string, unknown>;
+
+  switch (r.kind) {
+    case "choice":
+      return Number.isInteger(r.index)
+        ? { kind: "choice", index: r.index as number }
+        : null;
+    case "fill":
+      return typeof r.text === "string" ? { kind: "fill", text: r.text } : null;
+    case "slider":
+      return Number.isFinite(r.value)
+        ? { kind: "slider", value: r.value as number }
+        : null;
+    case "point": {
+      const at = parsePoint(r.at);
+      return at ? { kind: "point", at } : null;
+    }
+    case "line":
+      return Number.isFinite(r.slope) && Number.isFinite(r.intercept)
+        ? {
+            kind: "line",
+            slope: r.slope as number,
+            intercept: r.intercept as number,
+          }
+        : null;
+    default:
+      return null;
+  }
+}
+
+/** Whether anything was actually submitted, for telling a timeout from a guess. */
+export function isBlank(response: Response): boolean {
+  switch (response.kind) {
+    case "choice":
+      return response.choice === null;
+    case "fill":
+      return response.text.trim() === "";
+    case "slider":
+      return response.value === null;
+    case "point":
+      return response.at === null;
+    case "line":
+      return response.through === null;
+  }
+}
+
+// ─── Reading answers back ────────────────────────────────
+
+/**
+ * Normalises a typed answer so that equivalent spellings match.
+ *
+ * Fill-in questions are marked by comparing strings, which means every way a
+ * student might reasonably write the same number has to compare equal. This
+ * strips the cosmetic differences; the generator supplies the genuinely
+ * different forms (`0.5` and `1/2`) in its accepted list.
+ */
+export function normalise(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/^\+/, "")
+    // Unicode minus, en dash and em dash all read as a minus sign here.
+    .replace(/[−–—]/g, "-")
+    .replace(/[,$]/g, "")
+    .replace(/°/g, "")
+    // A trailing ".0" or ".50" is the same number written differently.
+    .replace(/^(-?\d+)\.0+$/, "$1")
+    .replace(/^(-?\d*\.\d*?[1-9])0+$/, "$1")
+    .replace(/^(-?)\./, "$10.");
+}
+
+/** Reads a number out of a typed answer, including `a/b`. Null if it isn't one. */
+export function readNumber(text: string): number | null {
+  const clean = normalise(text);
+
+  const fraction = clean.match(/^(-?\d+)\/(-?\d+)$/);
+  if (fraction) {
+    const bottom = Number(fraction[2]);
+    if (bottom === 0) return null;
+    return Number(fraction[1]) / bottom;
+  }
+
+  if (!/^-?\d*\.?\d+$/.test(clean)) return null;
+  const value = Number(clean);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** How a reveal reads in the summary, where there is no grid to draw. */
+export function describeReveal(reveal: Reveal, question: Question): string {
+  switch (reveal.kind) {
+    case "choice":
+      return question.kind === "choice"
+        ? (question.options[reveal.index] ?? "—")
+        : "—";
+    case "fill":
+      return reveal.text;
+    case "slider":
+      return String(reveal.value);
+    case "point":
+      return `(${reveal.at.x}, ${reveal.at.y})`;
+    case "line": {
+      const { slope, intercept } = reveal;
+      const sign = intercept < 0 ? "−" : "+";
+      return `y = ${slope}x ${sign} ${Math.abs(intercept)}`;
+    }
+  }
+}
+
+/** The same, for what the student submitted. */
+export function describeResponse(response: Response, question: Question): string {
+  switch (response.kind) {
+    case "choice":
+      return response.choice === null
+        ? "No answer"
+        : question.kind === "choice"
+          ? (question.options[response.choice] ?? "—")
+          : "—";
+    case "fill":
+      return response.text.trim() || "No answer";
+    case "slider":
+      return response.value === null ? "No answer" : String(response.value);
+    case "point":
+      return response.at ? `(${response.at.x}, ${response.at.y})` : "No answer";
+    case "line": {
+      if (!response.through) return "No answer";
+      const line = lineThrough(response.through[0], response.through[1]);
+      if (!line) return "A vertical line";
+      const sign = line.intercept < 0 ? "−" : "+";
+      return `y = ${round(line.slope)}x ${sign} ${Math.abs(round(line.intercept))}`;
+    }
+  }
+}
+
+function round(n: number): number {
+  return Math.round(n * 100) / 100;
+}

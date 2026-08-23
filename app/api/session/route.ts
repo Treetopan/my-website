@@ -77,14 +77,14 @@ export async function POST(req: NextRequest) {
   const caller =
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
 
-  if (!mintAllowed(caller, now)) {
+  if (!(await mintAllowed(caller, now))) {
     return Response.json(
       { error: "Too many sessions. Wait a minute." },
       { status: 429 },
     );
   }
 
-  const session = createSession(subunitId, order, now);
+  const session = await createSession(subunitId, order, now);
 
   // The question text goes out with the order. A bank question could still be
   // looked up locally, but a generated one exists nowhere else, so every game

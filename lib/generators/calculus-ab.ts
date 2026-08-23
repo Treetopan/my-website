@@ -4,6 +4,7 @@ import {
   ask,
   frac,
   head,
+  fill,
   nearMisses,
   poly,
   signed,
@@ -270,6 +271,22 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
           `(${low - 1}, ${high + 1})`,
         ],
         r,
+      );
+    },
+  ],
+
+  // ── 5.2 Critical points ──
+  "math/ap-calculus-ab/unit-5/5.2": [
+    // Typed, because a critical point is a number the student finds rather
+    // than one they spot among four.
+    (r) => {
+      const root = r.nonzero(-6, 6);
+      const a = r.coefficient(4);
+      // f'(x) = 2a(x - root), so the only critical point is at root.
+      return fill(
+        `f'(x) = ${poly([[2 * a, 1], [-2 * a * root, 0]])}. At what x does f have its only critical point?`,
+        root,
+        { hint: "a number" },
       );
     },
   ],

@@ -66,7 +66,52 @@ export function rng(seed: number): Rng {
 
 // ─── Assembling a question ───────────────────────────────
 
-export type Built = { prompt: string; options: string[]; answer: number };
+/**
+ * What a generator returns: the question and its answer, still joined. The
+ * caller splits them — the question goes to the browser, the answer stays here.
+ *
+ * `ask` and `among` build the multiple-choice kind and are unchanged, so every
+ * generator written before the other kinds existed still works as it did.
+ */
+export type Built =
+  | { kind: "choice"; prompt: string; options: string[]; answer: number }
+  | {
+      kind: "fill";
+      prompt: string;
+      unit?: string;
+      hint?: string;
+      accept: string[];
+      show: string;
+      tolerance?: number;
+    }
+  | {
+      kind: "slider";
+      prompt: string;
+      min: number;
+      max: number;
+      step: number;
+      unit?: string;
+      value: number;
+      full: number;
+      zero: number;
+    }
+  | {
+      kind: "point";
+      prompt: string;
+      span: number;
+      at: { x: number; y: number };
+      full: number;
+      zero: number;
+    }
+  | {
+      kind: "line";
+      prompt: string;
+      span: number;
+      slope: number;
+      intercept: number;
+      full: number;
+      zero: number;
+    };
 
 /**
  * Assembles one question from its answer and the mistakes it invites.
@@ -103,7 +148,128 @@ export function ask(
     [options[i], options[j]] = [options[j], options[i]];
   }
 
-  return { prompt, options, answer: options.indexOf(right) };
+  return { kind: "choice", prompt, options, answer: options.indexOf(right) };
+}
+
+// ─── The other kinds ─────────────────────────────────────
+
+/**
+ * Type the answer.
+ *
+ * Reach for this where four options would give the game away — anything whose
+ * answer is a single number the student should be able to produce rather than
+ * recognise. `accept` takes every form worth allowing; equivalent numbers match
+ * on value anyway, so it only needs the genuinely different spellings.
+ */
+export function fill(
+  prompt: string,
+  answer: number | string,
+  options: {
+    accept?: (number | string)[];
+    unit?: string;
+    hint?: string;
+    /** Numeric answers within this count. Default: exact. */
+    tolerance?: number;
+  } = {},
+): Built {
+  const show = String(answer);
+  return {
+    kind: "fill",
+    prompt,
+    unit: options.unit,
+    hint: options.hint,
+    accept: [show, ...(options.accept ?? []).map(String)],
+    show,
+    tolerance: options.tolerance,
+  };
+}
+
+/**
+ * Drag to a value, graded by how close.
+ *
+ * For questions about magnitude, where being nearly right is genuinely most of
+ * the way there — an angle, a probability, a rate. `full` is the error that
+ * still scores everything, `zero` the error that scores nothing; by default
+ * they are a step and a tenth of the range, which makes the scale feel like it
+ * is measuring rather than snapping.
+ */
+export function slider(
+  prompt: string,
+  spec: {
+    min: number;
+    max: number;
+    step: number;
+    value: number;
+    unit?: string;
+    full?: number;
+    zero?: number;
+  },
+): Built {
+  const range = spec.max - spec.min;
+  return {
+    kind: "slider",
+    prompt,
+    min: spec.min,
+    max: spec.max,
+    step: spec.step,
+    unit: spec.unit,
+    value: spec.value,
+    full: spec.full ?? spec.step,
+    zero: spec.zero ?? range / 10,
+  };
+}
+
+/**
+ * Place a point on a grid, graded by distance.
+ *
+ * The one kind that asks a spatial question spatially. Reading a coordinate off
+ * a list of four is a different skill from knowing where it goes.
+ */
+export function point(
+  prompt: string,
+  spec: {
+    span: number;
+    x: number;
+    y: number;
+    full?: number;
+    zero?: number;
+  },
+): Built {
+  return {
+    kind: "point",
+    prompt,
+    span: spec.span,
+    at: { x: spec.x, y: spec.y },
+    // Exact by default: the grid snaps to whole units, so anything off is off
+    // by at least one, and a near miss is a real miss.
+    full: spec.full ?? 0.25,
+    zero: spec.zero ?? 4,
+  };
+}
+
+/**
+ * Draw a line by dragging two handles, graded on how far the drawn line sits
+ * from the intended one at the edges of the grid.
+ */
+export function line(
+  prompt: string,
+  spec: {
+    span: number;
+    slope: number;
+    intercept: number;
+    full?: number;
+    zero?: number;
+  },
+): Built {
+  return {
+    kind: "line",
+    prompt,
+    span: spec.span,
+    slope: spec.slope,
+    intercept: spec.intercept,
+    full: spec.full ?? 0.25,
+    zero: spec.zero ?? spec.span,
+  };
 }
 
 /**

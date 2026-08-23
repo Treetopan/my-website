@@ -48,6 +48,27 @@
       }
     },
 
+    // Grading sessions. Denied to everybody, including signed-in users and the
+    // player the session belongs to: a session records which questions were
+    // served and which positions have already been graded, and being able to
+    // read either is enough to work around the one-verdict-per-position rule.
+    //
+    // The server reaches this node with the Admin SDK, which bypasses rules
+    // entirely, so denying it here costs nothing and closes it to every client.
+    // Deny-by-default would cover this too; it is written out because a node
+    // that nothing may read is worth saying on purpose rather than by omission.
+    "sessions": {
+      ".read": false,
+      ".write": false
+    },
+
+    // Per-caller session-minting counters, bucketed by time window. Same
+    // reasoning: server-only, and readable by nobody.
+    "mints": {
+      ".read": false,
+      ".write": false
+    },
+
     // Answers live outside the room on purpose. Read permission in this
     // database cascades downward and cannot be revoked on a child, so an
     // answers node inside the room would be readable by everyone who can
@@ -68,7 +89,7 @@
             // changed after the reveal.
             ".read": "auth != null && auth.uid == $uid",
             ".write": "auth != null && auth.uid == $uid && !data.exists()",
-            ".validate": "!newData.exists() || newData.hasChildren(['choice'])"
+            ".validate": "!newData.exists() || newData.hasChildren(['response'])"
           }
         }
       }

@@ -6,7 +6,10 @@ import {
   frac,
   head,
   poly,
+  fill,
+  line,
   nearMisses,
+  point,
   radical,
   signed,
   type Built,
@@ -204,6 +207,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
     },
   ],
 
+  // ── 2.4 Literal equations ──
+  "math/algebra-1/unit-2/2.4": [
+    // Typed rather than chosen: four rearrangements of the same formula are
+    // hard to tell apart at a glance, which tests reading rather than algebra.
+    (r) => {
+      const a = r.coefficient(9);
+      const b = r.nonzero(-15, 15);
+      const y = r.nonzero(-9, 9);
+      const value = frac(y - b, a);
+      return fill(
+        `If y = ${head(a, "x")}${signed(b)}, what is x when y = ${y}?`,
+        value,
+        { hint: "a number or fraction" },
+      );
+    },
+  ],
+
   // ── 2.2 Multi-step, variables on both sides ──
   "math/algebra-1/unit-2/2.2": [
     // ax + b = cx + d, built backwards from a whole-number solution.
@@ -290,6 +310,30 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
     },
   ],
 
+  // ── 3.1 Relations, domain and range ──
+  "math/algebra-1/unit-3/3.1": [
+    // Plotting a point is the one thing four options cannot ask. Either the
+    // options give the quadrant away or the student reads rather than places.
+    (r) => {
+      const span = 8;
+      const x = r.nonzero(-span, span);
+      const y = r.nonzero(-span, span);
+      return point(`Plot the point (${x}, ${y}).`, { span, x, y });
+    },
+    // Reflection, which is a question about where things go rather than what
+    // they are called.
+    (r) => {
+      const span = 8;
+      const x = r.nonzero(-span, span);
+      const y = r.nonzero(-span, span);
+      const axis = r.bool();
+      return point(
+        `Plot the reflection of (${x}, ${y}) across the ${axis ? "x" : "y"}-axis.`,
+        { span, x: axis ? x : -x, y: axis ? -y : y },
+      );
+    },
+  ],
+
   // ── 4.1 Rate of change and slope ──
   "math/algebra-1/unit-4/4.1": [
     // Slope through two points, left as a fraction when it does not reduce.
@@ -369,6 +413,34 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
           b - m * x, // subtracted the wrong way round
         ],
         r,
+      );
+    },
+  ],
+
+  // ── 4.3 Graphing a line ──
+  "math/algebra-1/unit-4/4.3": [
+    // Drawing the line rather than picking its equation. Slope and intercept
+    // stay small so the line crosses the visible grid at a readable angle.
+    (r) => {
+      const span = 8;
+      const slope = r.nonzero(-3, 3);
+      const intercept = r.int(-4, 4);
+      return line(
+        `Draw the line y = ${head(slope, "x")}${signed(intercept)}.`,
+        { span, slope, intercept },
+      );
+    },
+    // The same skill from two points, which is where slope stops being a
+    // formula and becomes a direction.
+    (r) => {
+      const span = 8;
+      const slope = r.nonzero(-3, 3);
+      const intercept = r.int(-4, 4);
+      const x1 = r.int(-3, 0);
+      const x2 = r.int(1, 3);
+      return line(
+        `Draw the line through (${x1}, ${slope * x1 + intercept}) and (${x2}, ${slope * x2 + intercept}).`,
+        { span, slope, intercept },
       );
     },
   ],

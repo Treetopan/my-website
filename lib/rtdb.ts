@@ -15,6 +15,12 @@ import {
 import { realtimeDb } from "@/lib/firebase";
 import type { Question } from "@/lib/curriculum";
 import {
+  parseResponse,
+  parseReveal,
+  type Response,
+  type Reveal as Answer,
+} from "@/lib/questions";
+import {
   EMPTY_PROGRESS,
   applySession,
   type Progress,
@@ -45,10 +51,13 @@ export type RoomPlayer = {
 /** What just happened on the last turn, so every client shows the same reveal. */
 export type Reveal = {
   uid: string;
-  choice: number | null;
+  /** What the player submitted, of whichever kind the question was. */
+  response: Response;
   correct: boolean;
-  /** The right option, as graded by the server. */
-  answer: number;
+  /** How much of it was right, 0–1. Below 1 only on the proximity kinds. */
+  score: number;
+  /** The right answer, as graded by the server. */
+  answer: Answer;
 };
 
 export type Room = {
@@ -85,8 +94,8 @@ export type Room = {
   createdAt: number | object;
 };
 
-/** What one player picked on one question. Stored outside the room. */
-export type AnswerEntry = { choice: number; at: number };
+/** What one player submitted on one question. Stored outside the room. */
+export type AnswerEntry = { response: Response; at: number };
 
 export type SessionResult = {
   game: GameId;
@@ -247,7 +256,22 @@ export async function joinRoom(
 
 export function watchRoom(roomId: string, cb: (room: Room | null) => void) {
   return onValue(ref(realtimeDb, `rooms/${roomId}`), (snap) => {
-    cb(snap.val());
+    const room = snap.val() as Room | null;
+    if (!room) return cb(null);
+
+    // The reveal takes the same round trip as a stored answer and loses its
+    // null fields the same way, so it is rebuilt rather than trusted. A reveal
+    // that cannot be read is dropped: showing the table a half-decoded turn is
+    // worse than showing it none.
+    const reveal = room.reveal;
+    if (reveal) {
+      const response = parseResponse(reveal.response);
+      const answer = parseReveal(reveal.answer);
+      room.reveal =
+        response && answer ? { ...reveal, response, answer } : null;
+    }
+
+    cb(room);
   });
 }
 
@@ -255,20 +279,39 @@ export async function submitAnswer(
   roomId: string,
   index: number,
   uid: string,
-  choice: number,
+  response: Response,
 ) {
   // Outside the room, so opponents cannot read it before the reveal.
   // Write-once at the rules level, so it cannot be changed after.
   await set(ref(realtimeDb, `roomAnswers/${roomId}/${index}/${uid}`), {
-    choice,
+    response,
     at: serverTimestamp(),
   });
+}
+
+/**
+ * Reads a stored turn back into a response.
+ *
+ * The database drops keys whose value is null, so a timeout written as
+ * `{kind: "choice", choice: null}` returns as `{kind: "choice"}`. Left alone
+ * that reads as an answer rather than as no answer, which would score a
+ * timeout as a wrong guess and, worse, keep a player in the round.
+ */
+function reviveAnswers(
+  raw: Record<string, { response?: unknown; at?: number }>,
+): Record<string, AnswerEntry> {
+  const out: Record<string, AnswerEntry> = {};
+  for (const [uid, entry] of Object.entries(raw ?? {})) {
+    const response = parseResponse(entry?.response);
+    if (response) out[uid] = { response, at: entry?.at ?? 0 };
+  }
+  return out;
 }
 
 /** Host only — one shot, at resolve time, rather than a standing listener. */
 export async function readAnswers(roomId: string, index: number) {
   const snap = await get(ref(realtimeDb, `roomAnswers/${roomId}/${index}`));
-  return (snap.val() ?? {}) as Record<string, AnswerEntry>;
+  return reviveAnswers(snap.val() ?? {});
 }
 
 /**
@@ -281,7 +324,7 @@ export function watchAnswers(
   cb: (answers: Record<string, AnswerEntry>) => void,
 ) {
   return onValue(ref(realtimeDb, `roomAnswers/${roomId}/${index}`), (snap) => {
-    cb((snap.val() ?? {}) as Record<string, AnswerEntry>);
+    cb(reviveAnswers(snap.val() ?? {}));
   });
 }
 

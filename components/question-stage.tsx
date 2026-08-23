@@ -2,49 +2,69 @@
 
 import { useEffect } from "react";
 import type { Question } from "@/lib/curriculum";
+import type { Point, Response, Reveal } from "@/lib/questions";
+import {
+  FillAnswer,
+  LineAnswer,
+  PointAnswer,
+  SliderAnswer,
+} from "@/components/answer-inputs";
 
 /**
  * The question is the hero on both game screens, so it lives in one place and
  * both games hand it the same props. Everything about game state — track,
  * turn order, elimination — is the caller's business and sits in the periphery.
+ *
+ * The caller holds the draft rather than this component, because the clock
+ * lives out there: when time runs out the game submits whatever the draft holds,
+ * and that only works if the game can see it.
  */
 export function QuestionStage({
   question,
   eyebrow,
-  picked,
-  correctIndex,
+  draft,
+  reveal,
+  score,
   disabled,
-  onPick,
+  onDraft,
+  onSubmit,
 }: {
   question: Question;
   eyebrow: string;
-  picked: number | null;
+  /** What the student has entered so far, of the question's own kind. */
+  draft: Response;
   /**
-   * The right option, or null while the question is still live. The client
-   * has no answer key — this arrives from the server once the question has
-   * been graded, which is also what makes it the reveal signal.
+   * The right answer, or null while the question is still live. The client has
+   * no answer key — this arrives from the server once the question has been
+   * graded, which is also what makes it the reveal signal.
    */
-  correctIndex: number | null;
-  /** True when it isn't your turn — the options show but don't respond. */
+  reveal: Reveal | null;
+  /** What the answer scored, once graded. Between 0 and 1 on the proximity kinds. */
+  score: number | null;
+  /** True when it isn't your turn — the question shows but doesn't respond. */
   disabled?: boolean;
-  onPick: (choice: number) => void;
+  onDraft: (draft: Response) => void;
+  onSubmit: (response: Response) => void;
 }) {
-  const revealed = correctIndex !== null;
-  const locked = revealed || disabled;
+  const revealed = reveal !== null;
+  const locked = revealed || !!disabled;
 
-  // Number keys still work for anyone who wants them, but they are no longer
-  // advertised on each option — the answer itself is the target.
+  // Number keys pick an option, for anyone who wants them. They are no longer
+  // advertised on each option — the answer itself is the target — and they only
+  // apply to the one kind that has numbered answers.
   useEffect(() => {
-    if (locked) return;
+    if (locked || question.kind !== "choice") return;
 
     const onKey = (e: KeyboardEvent) => {
       const n = Number(e.key);
-      if (n >= 1 && n <= question.options.length) onPick(n - 1);
+      if (n >= 1 && n <= question.options.length) {
+        onSubmit({ kind: "choice", choice: n - 1 });
+      }
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [locked, question.options.length, onPick]);
+  }, [locked, question, onSubmit]);
 
   return (
     <div key={question.id} className="animate-question-in w-full max-w-3xl">
@@ -54,40 +74,129 @@ export function QuestionStage({
         {question.prompt}
       </h1>
 
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {question.options.map((option, i) => {
-          const isAnswer = i === correctIndex;
-          const isPicked = i === picked;
+      {question.kind === "choice" && draft.kind === "choice" && (
+        <Options
+          options={question.options}
+          picked={draft.choice}
+          correctIndex={reveal?.kind === "choice" ? reveal.index : null}
+          locked={locked}
+          onPick={(choice) => onSubmit({ kind: "choice", choice })}
+        />
+      )}
 
-          let tone = "box";
-          if (!locked) tone = "box box-tap";
-          if (isPicked && !revealed) tone = "box box-on";
-          if (revealed && isAnswer) tone = "box border-correct bg-correct/12";
-          else if (revealed && isPicked) tone = "box border-out bg-out/12";
-          else if (revealed) tone = "box opacity-55";
+      {question.kind === "fill" && draft.kind === "fill" && (
+        <FillAnswer
+          question={question}
+          draft={draft.text}
+          locked={locked}
+          reveal={reveal}
+          onDraft={(text) => onDraft({ kind: "fill", text })}
+          onSubmit={() => onSubmit(draft)}
+        />
+      )}
 
-          return (
-            <li key={option}>
-              <button
-                type="button"
-                disabled={locked}
-                onClick={() => onPick(i)}
-                className={`flex min-h-20 w-full items-center px-5 py-4 text-left text-[16px] leading-snug disabled:cursor-default ${tone}`}
-              >
-                <span className="flex-1">{option}</span>
+      {question.kind === "slider" && draft.kind === "slider" && (
+        <SliderAnswer
+          question={question}
+          draft={draft.value}
+          locked={locked}
+          reveal={reveal}
+          score={score}
+          onDraft={(value) => onDraft({ kind: "slider", value })}
+          onSubmit={() => onSubmit(draft)}
+        />
+      )}
 
-                {revealed && isAnswer && (
-                  <span className="eyebrow ml-3 shrink-0 text-correct">Correct</span>
-                )}
-                {revealed && isPicked && !isAnswer && (
-                  <span className="eyebrow ml-3 shrink-0 text-out">Picked</span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {question.kind === "point" && draft.kind === "point" && (
+        <PointAnswer
+          question={question}
+          draft={draft.at}
+          locked={locked}
+          reveal={reveal}
+          score={score}
+          onDraft={(at: Point) => onDraft({ kind: "point", at })}
+          onSubmit={() => onSubmit(draft)}
+        />
+      )}
+
+      {question.kind === "line" && draft.kind === "line" && (
+        <LineAnswer
+          question={question}
+          draft={draft.through}
+          locked={locked}
+          reveal={reveal}
+          score={score}
+          onDraft={(through) => onDraft({ kind: "line", through })}
+          onSubmit={() =>
+            onSubmit(
+              // A line never submitted still has the starting handles on the
+              // grid, and grading what is drawn is fairer than grading nothing.
+              draft.through
+                ? draft
+                : {
+                    kind: "line",
+                    through: [
+                      { x: -Math.round(question.span / 2), y: 0 },
+                      { x: Math.round(question.span / 2), y: 0 },
+                    ],
+                  },
+            )
+          }
+        />
+      )}
     </div>
+  );
+}
+
+function Options({
+  options,
+  picked,
+  correctIndex,
+  locked,
+  onPick,
+}: {
+  options: string[];
+  picked: number | null;
+  correctIndex: number | null;
+  locked: boolean;
+  onPick: (choice: number) => void;
+}) {
+  const revealed = correctIndex !== null;
+
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {options.map((option, i) => {
+        const isAnswer = i === correctIndex;
+        const isPicked = i === picked;
+
+        let tone = "box";
+        if (!locked) tone = "box box-tap";
+        if (isPicked && !revealed) tone = "box box-on";
+        if (revealed && isAnswer) tone = "box border-correct bg-correct/12";
+        else if (revealed && isPicked) tone = "box border-out bg-out/12";
+        else if (revealed) tone = "box opacity-55";
+
+        return (
+          <li key={option}>
+            <button
+              type="button"
+              disabled={locked}
+              onClick={() => onPick(i)}
+              className={`flex min-h-20 w-full items-center px-5 py-4 text-left text-[16px] leading-snug disabled:cursor-default ${tone}`}
+            >
+              <span className="flex-1">{option}</span>
+
+              {revealed && isAnswer && (
+                <span className="eyebrow ml-3 shrink-0 text-correct">Correct</span>
+              )}
+              {revealed && isPicked && !isAnswer && (
+                <span className="eyebrow ml-3 shrink-0 text-out">Picked</span>
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

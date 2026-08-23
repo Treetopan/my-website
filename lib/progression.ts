@@ -62,20 +62,35 @@ export function levelProgress(xp: number) {
 export type AnswerRecord = {
   difficulty: Difficulty;
   correct: boolean;
+  /**
+   * How much of the answer was right, 0–1. Exact questions are 0 or 1; the
+   * proximity kinds — a slider, a placed point, a drawn line — land between.
+   */
+  score: number;
   /** Fraction of the clock still remaining when answered, 0–1. */
   speed: number;
 };
 
 /**
- * Correct answers pay the subunit's base XP plus up to half again for speed.
- * Wrong answers pay nothing — but they never subtract, because a student who
- * guesses on a hard subunit should still be better off than one who quits.
+ * An answer pays the subunit's base XP scaled by how right it was, plus up to
+ * half again for speed. Wrong answers pay nothing — but they never subtract,
+ * because a student who guesses on a hard subunit should still be better off
+ * than one who quits.
+ *
+ * Part marks are paid on the same curve rather than only on a pass, so a point
+ * placed one unit out earns most of the XP and a point placed in the wrong
+ * quadrant earns almost none. Paying only on the pass would make the two
+ * identical, which is exactly the distinction proximity grading exists to draw.
+ * The speed bonus still rides on the scaled amount, so being fast and nearly
+ * right cannot out-earn being right.
  */
-export function xpForAnswer({ difficulty, correct, speed }: AnswerRecord): number {
-  if (!correct) return 0;
-  const base = DIFFICULTY[difficulty].xp;
-  const bonus = Math.round(base * 0.5 * Math.max(0, Math.min(1, speed)));
-  return base + bonus;
+export function xpForAnswer({ difficulty, score, speed }: AnswerRecord): number {
+  const earned = Math.max(0, Math.min(1, score));
+  if (earned === 0) return 0;
+
+  const base = DIFFICULTY[difficulty].xp * earned;
+  const bonus = base * 0.5 * Math.max(0, Math.min(1, speed));
+  return Math.round(base + bonus);
 }
 
 export function xpForSession(answers: AnswerRecord[], won: boolean): number {

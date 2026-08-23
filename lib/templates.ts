@@ -42,11 +42,13 @@ export const GENERATED: Record<string, string[]> = {
     "Two-step equations",
     "Negative coefficients",
   ],
+  "math/algebra-1/unit-2/2.4": ["Rearranging for a value"],
   "math/algebra-1/unit-2/2.2": [
     "Variables on both sides",
     "Distributing before solving",
   ],
   "math/algebra-1/unit-2/2.8": ["Absolute value equations"],
+  "math/algebra-1/unit-3/3.1": ["Plotting a point", "Reflecting a point"],
   "math/algebra-1/unit-3/3.3": ["Evaluating a function"],
   "math/algebra-1/unit-4/4.1": [
     "Slope from two points",
@@ -56,6 +58,7 @@ export const GENERATED: Record<string, string[]> = {
     "Slope and intercept from an equation",
     "Evaluating a linear function",
   ],
+  "math/algebra-1/unit-4/4.3": ["Graphing from an equation", "Graphing from two points"],
   "math/algebra-1/unit-4/4.6": ["Parallel and perpendicular slopes"],
   "math/algebra-1/unit-5/5.3": ["Systems by elimination"],
   "math/algebra-1/unit-6/6.3": ["Multiplying binomials"],
@@ -74,6 +77,7 @@ export const GENERATED: Record<string, string[]> = {
   "math/algebra-1/unit-10/10.1": ["Mean and median"],
 
   // ─── Geometry ──────────────────────────────────────────
+  "math/geometry/unit-1/1.2": ["Setting an angle"],
   "math/geometry/unit-1/1.3": ["Segment addition"],
   "math/geometry/unit-1/1.4": ["Complements and supplements"],
   "math/geometry/unit-1/1.5": ["Midpoint", "Distance"],
@@ -84,6 +88,7 @@ export const GENERATED: Record<string, string[]> = {
   "math/geometry/unit-7/7.2": ["Scale factor"],
   "math/geometry/unit-7/7.7": ["Area ratios of similar figures"],
   "math/geometry/unit-8/8.1": ["The Pythagorean theorem"],
+  "math/geometry/unit-8/8.2": ["Finding the hypotenuse"],
   "math/geometry/unit-8/8.3": ["Special right triangles"],
   "math/geometry/unit-8/8.4": ["Trigonometric ratios"],
   "math/geometry/unit-9/9.1": ["Polygon angle sums"],
@@ -109,6 +114,7 @@ export const GENERATED: Record<string, string[]> = {
   "math/algebra-2/unit-5/5.2": ["Rational exponents"],
   "math/algebra-2/unit-5/5.8": ["Function composition"],
   "math/algebra-2/unit-5/5.9": ["Inverse functions"],
+  "math/algebra-2/unit-6/6.5": ["Evaluating a logarithm"],
   "math/algebra-2/unit-6/6.6": ["Properties of logarithms"],
   "math/algebra-2/unit-6/6.8": ["Solving exponential equations"],
   "math/algebra-2/unit-7/7.1": ["Degrees to radians"],
@@ -118,6 +124,7 @@ export const GENERATED: Record<string, string[]> = {
   "math/algebra-2/unit-8/8.3": ["Arithmetic series"],
   "math/algebra-2/unit-8/8.6": ["Infinite geometric series"],
   "math/algebra-2/unit-9/9.4": ["Ellipses"],
+  "math/algebra-2/unit-10/10.2": ["Probability as a percentage"],
   "math/algebra-2/unit-10/10.5": ["z-scores"],
 
   // ─── Precalculus ───────────────────────────────────────
@@ -150,6 +157,7 @@ export const GENERATED: Record<string, string[]> = {
   "math/ap-calculus-ab/unit-4/4.2": ["Straight-line motion"],
   "math/ap-calculus-ab/unit-4/4.5": ["Related rates"],
   "math/ap-calculus-ab/unit-4/4.7": ["L'Hospital's Rule"],
+  "math/ap-calculus-ab/unit-5/5.2": ["Finding a critical point"],
   "math/ap-calculus-ab/unit-5/5.3": ["Increasing and decreasing intervals"],
   "math/ap-calculus-ab/unit-5/5.7": ["The Second Derivative Test"],
   "math/ap-calculus-ab/unit-6/6.7": ["Definite integrals"],

@@ -43,6 +43,11 @@ import { ClockRail, QuestionStage } from "@/components/question-stage";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, gradeBot, openSession } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
+import {
+  emptyResponse,
+  type Response as Answered,
+  type Reveal,
+} from "@/lib/questions";
 
 const SEATS = 3;
 const REVEAL_MS = 1900;
@@ -82,7 +87,10 @@ export function Room({ subunitId }: { subunitId: string }) {
    * reveal the host publishes — this client never had it to begin with.
    */
   const [myPicks, setMyPicks] = useState<
-    Record<number, { choice: number | null; answer: number }>
+    Record<
+      number,
+      { response: Answered; answer: Reveal; correct: boolean; score: number }
+    >
   >({});
   const [now, setNow] = useState(() => Date.now());
 
@@ -105,7 +113,12 @@ export function Room({ subunitId }: { subunitId: string }) {
       // here or it would vanish from the summary entirely. -1 means no answer.
       if (r?.reveal && r.reveal.uid === user?.uid) {
         const at = r.currentIndex;
-        const entry = { choice: r.reveal.choice, answer: r.reveal.answer };
+        const entry = {
+          response: r.reveal.response,
+          answer: r.reveal.answer,
+          correct: r.reveal.correct,
+          score: r.reveal.score,
+        };
         setMyPicks((prev) => (at in prev ? prev : { ...prev, [at]: entry }));
       }
     });
@@ -143,10 +156,12 @@ export function Room({ subunitId }: { subunitId: string }) {
   const aliveCount = order.filter(([, p]) => p.alive).length;
   const me = user ? players[user.uid] : undefined;
   const myTurn = !!user && room?.turnUid === user.uid && !reveal;
-  // What I clicked on the live question, before the host has graded it.
-  const [pending, setPending] = useState<number | null>(null);
-  const picked = myPicks[index]?.choice ?? (reveal ? null : pending);
-  const correctIndex = reveal ? reveal.answer : null;
+  // What I have entered on the live question, before the host has graded it.
+  const [draft, setDraft] = useState<Answered>({ kind: "choice", choice: null });
+  // Locked once submitted: the answer is write-once at the rules level, so
+  // letting the input keep moving would only promise something it cannot keep.
+  const [submitted, setSubmitted] = useState(false);
+  const answered = myPicks[index] !== undefined || submitted;
 
   const myAnswers: AnswerDetail[] = useMemo(() => {
     if (!questions.length) return [];
@@ -155,13 +170,13 @@ export function Room({ subunitId }: { subunitId: string }) {
       const q = questions[Number(i) % questions.length];
       return {
         questionId: q.id,
-        prompt: q.prompt,
         topic: q.topic,
-        options: q.options,
-        answer: entry.answer,
-        chosen: entry.choice,
+        question: q,
+        reveal: entry.answer,
+        response: entry.response,
         difficulty,
-        correct: entry.choice === entry.answer,
+        correct: entry.correct,
+        score: entry.score,
         // Last One Standing pays no speed bonus — survival is the mechanic.
         speed: 0,
       };
@@ -261,7 +276,7 @@ export function Room({ subunitId }: { subunitId: string }) {
   }
 
   // ── Host: resolve a turn, then move around the table ───
-  async function resolveTurn(choice: number | null) {
+  async function resolveTurn(response: Answered) {
     if (!roomId || !room || !question || !room.turnUid || !room.sessionId) return;
 
     const turnUid = room.turnUid;
@@ -277,25 +292,36 @@ export function Room({ subunitId }: { subunitId: string }) {
     try {
       verdict = player.isBot
         ? await gradeBot(room.sessionId, index, accuracy)
-        : await grade(room.sessionId, index, choice);
+        : await grade(room.sessionId, index, response);
     } catch {
       // Grading failed. Leave the turn open rather than guessing an outcome;
       // the clock will come round again.
       return;
     }
 
-    const { correct, answer } = verdict;
+    const { correct, score } = verdict;
 
     // Show everyone what happened before the table moves on.
     await updateRoom(roomId, {
-      reveal: { uid: turnUid, choice: verdict.choice, correct, answer },
+      reveal: {
+        uid: turnUid,
+        response: verdict.response,
+        correct,
+        score,
+        answer: verdict.reveal,
+      },
       players: {
         ...room.players,
         [turnUid]: {
           ...player,
+          // Survival is all-or-nothing even where the score is not: a table
+          // cannot half-eliminate anybody. Part marks still pay, so a nearly
+          // right answer is worth more than a wrong one on the scoreboard
+          // even when both keep you standing.
           inRound: correct,
           correct: player.correct + (correct ? 1 : 0),
-          score: player.score + (correct ? DIFFICULTY[difficulty].xp : 0),
+          score:
+            player.score + Math.round(DIFFICULTY[difficulty].xp * score),
         },
       },
     });
@@ -307,6 +333,13 @@ export function Room({ subunitId }: { subunitId: string }) {
   useEffect(() => {
     resolveRef.current = resolveTurn;
   });
+
+  // Read through a ref so that typing or dragging does not tear down the
+  // answer listener and the clock on every change.
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
 
   // Watch for the current player's answer; resolve the moment it lands.
   useEffect(() => {
@@ -324,7 +357,10 @@ export function Room({ subunitId }: { subunitId: string }) {
 
       // The server rolls the outcome and picks the option, since choosing a
       // plausible wrong answer means knowing the right one.
-      const id = setTimeout(() => resolveRef.current(null), think);
+      const id = setTimeout(
+        () => resolveRef.current(emptyResponse(question.kind)),
+        think,
+      );
 
       return () => clearTimeout(id);
     }
@@ -332,12 +368,17 @@ export function Room({ subunitId }: { subunitId: string }) {
     // A person gets the clock, and resolves early if they commit.
     const stop = watchAnswers(roomId, index, (answers) => {
       const entry = answers[turnUid];
-      if (entry) resolveRef.current(entry.choice);
+      if (entry) resolveRef.current(entry.response);
     });
 
     const deadline = startedAt ? startedAt + totalMs : null;
     const remaining = deadline ? Math.max(0, deadline - (Date.now() + offset)) : totalMs;
-    const timeout = setTimeout(() => resolveRef.current(null), remaining + 250);
+    // Out of time grades whatever is on screen, which for a dragged point or
+    // a moved slider is a real answer the player simply never confirmed.
+    const timeout = setTimeout(
+      () => resolveRef.current(draftRef.current),
+      remaining + 250,
+    );
 
     return () => {
       stop();
@@ -442,10 +483,11 @@ export function Room({ subunitId }: { subunitId: string }) {
   }, [isHost, roomId, room]);
 
   // ── Answering ──────────────────────────────────────────
-  async function pick(choice: number) {
-    if (!roomId || !user || !myTurn || picked !== null) return;
-    setPending(choice);
-    await submitAnswer(roomId, index, user.uid, choice);
+  async function commit(response: Answered) {
+    if (!roomId || !user || !myTurn || answered) return;
+    setSubmitted(true);
+    setDraft(response);
+    await submitAnswer(roomId, index, user.uid, response);
   }
 
   // ── Bank the session ───────────────────────────────────
@@ -746,12 +788,14 @@ export function Room({ subunitId }: { subunitId: string }) {
                 <QuestionStage
                   question={question}
                   eyebrow={found.subunit.name}
-                  picked={
-                    reveal && reveal.uid === user?.uid ? reveal.choice : picked
+                  draft={
+                    reveal && reveal.uid === user?.uid ? reveal.response : draft
                   }
-                  correctIndex={correctIndex}
-                  disabled={!myTurn}
-                  onPick={pick}
+                  reveal={reveal ? reveal.answer : null}
+                  score={reveal ? reveal.score : null}
+                  disabled={!myTurn || answered}
+                  onDraft={setDraft}
+                  onSubmit={commit}
                 />
               </div>
             )

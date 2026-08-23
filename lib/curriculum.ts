@@ -25,17 +25,17 @@ import { generatorCount } from "./templates";
 
 export type Difficulty = "easy" | "medium" | "hard";
 
-export type Question = {
-  id: string;
-  prompt: string;
-  options: string[];
-  /**
-   * The concept this question tests. A subunit is one topic, but a student
-   * misses individual ideas inside it — this is what the post-game summary
-   * names back to them instead of just a score.
-   */
-  topic: string;
-};
+/**
+ * A question is one of several kinds — multiple choice, typed, a slider, a
+ * placed point, a drawn line. The shapes live in `questions.ts` and are
+ * re-exported here because the curriculum is where most code meets them.
+ *
+ * Every question carries a `topic`: the concept it tests. A subunit is one
+ * topic, but a student misses individual ideas inside it, and that is what the
+ * post-game summary names back to them instead of just a score.
+ */
+export type { Question } from "./questions";
+import type { Question } from "./questions";
 
 export type Subunit = {
   id: string;
@@ -110,6 +110,7 @@ function sub(
     name,
     difficulty,
     questions: rows.map((r, i) => ({
+      kind: "choice" as const,
       id: `${id}/q${i}`,
       prompt: r[0],
       options: [...r[1]],

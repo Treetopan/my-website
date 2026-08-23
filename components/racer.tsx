@@ -2,17 +2,22 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DIFFICULTY, describe, seededShuffle, type Question } from "@/lib/curriculum";
+import {
+  DIFFICULTY,
+  describe,
+  type Question,
+} from "@/lib/curriculum";
 import { useAuth } from "@/lib/auth-context";
 import { recordSession, watchProgress } from "@/lib/rtdb";
 import {
   EMPTY_PROGRESS,
   xpForAnswer,
-  type AnswerRecord,
   type Progress,
 } from "@/lib/progression";
 import { ClockRail, QuestionStage } from "@/components/question-stage";
-import { SessionResults } from "@/components/session-results";
+import { SessionSummary } from "@/components/session-summary";
+import { GradeError, grade, openSession } from "@/lib/grade";
+import type { AnswerDetail } from "@/lib/review";
 
 const REVEAL_MS = 1700;
 const TICK_MS = 100;
@@ -35,12 +40,11 @@ export function Racer({ subunitId }: { subunitId: string }) {
     return watchProgress(user.uid, setProgress);
   }, [user]);
 
-  // A fresh shuffle per race, held in state so a re-render never reorders
-  // the questions under the player.
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 2 ** 31));
-  const questions: Question[] = found
-    ? seededShuffle(found.subunit.questions, seed)
-    : [];
+  // The server fixes the question order when the session opens, so the race
+  // is graded by position and the client never shuffles anything. It sends the
+  // questions too — a generated subunit invents them per session, so there is
+  // nothing in this bundle to look them up in.
+  const [questions, setQuestions] = useState<Question[]>([]);
 
   const difficulty = found?.subunit.difficulty ?? "medium";
   const totalMs = DIFFICULTY[difficulty].seconds * 1000;
@@ -51,22 +55,55 @@ export function Racer({ subunitId }: { subunitId: string }) {
   const [msLeft, setMsLeft] = useState(totalMs);
   const [you, setYou] = useState(0);
   const [bot, setBot] = useState(0);
-  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const [answers, setAnswers] = useState<AnswerDetail[]>([]);
   const [lastGain, setLastGain] = useState<number | null>(null);
+
+  // The correct option is not in this bundle — it arrives with the verdict.
+  const [correctIndex, setCorrectIndex] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [fault, setFault] = useState<string | null>(null);
 
   const total = questions.length;
   const question = questions[index];
 
   const resolve = useCallback(
-    (choice: number | null, msRemaining: number) => {
-      if (!question) return;
+    async (choice: number | null, msRemaining: number) => {
+      if (!question || !sessionId) return;
 
-      const correct = choice === question.answer;
       const speed = Math.max(0, Math.min(1, msRemaining / totalMs));
-
       setPicked(choice);
+
+      let verdict;
+      try {
+        verdict = await grade(sessionId, index, choice);
+      } catch (e) {
+        // A race that cannot be graded is over. Better to say so than to
+        // quietly mark every remaining question wrong.
+        setFault(
+          e instanceof GradeError ? e.message : "Lost contact with the server.",
+        );
+        setPhase("over");
+        return;
+      }
+
+      const { correct, answer } = verdict;
+      setCorrectIndex(answer);
       setPhase("revealed");
-      setAnswers((prev) => [...prev, { difficulty, correct, speed }]);
+
+      setAnswers((prev) => [
+        ...prev,
+        {
+          questionId: question.id,
+          prompt: question.prompt,
+          topic: question.topic,
+          options: question.options,
+          answer,
+          chosen: choice,
+          difficulty,
+          correct,
+          speed,
+        },
+      ]);
 
       // Distance is one length for being right, plus up to another for being
       // quick. Speed is the whole point of a race, so it has to move the car.
@@ -81,7 +118,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
         setBot((d) => d + 1 + (1 - botSpeed));
       }
     },
-    [question, totalMs, difficulty],
+    [question, index, totalMs, difficulty, sessionId],
   );
 
   const resolveRef = useRef(resolve);
@@ -89,10 +126,35 @@ export function Racer({ subunitId }: { subunitId: string }) {
     resolveRef.current = resolve;
   }, [resolve]);
 
+  // One grading session per race. Without it the clock would start before
+  // anything could be graded, so the timer waits on it below.
+  useEffect(() => {
+    if (!found || sessionId) return;
+    let live = true;
+
+    openSession(subunitId)
+      .then(({ sessionId: id, questions: asked }) => {
+        if (!live) return;
+        setQuestions(asked);
+        setSessionId(id);
+      })
+      .catch((e) => {
+        if (live) {
+          setFault(
+            e instanceof GradeError ? e.message : "Could not start the race.",
+          );
+        }
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [found, subunitId, sessionId]);
+
   // Clock counts against a wall-clock deadline so a throttled tab cannot
   // hand out extra seconds.
   useEffect(() => {
-    if (phase !== "asking" || !question) return;
+    if (phase !== "asking" || !question || !sessionId) return;
 
     const deadline = Date.now() + totalMs;
     const id = setInterval(() => {
@@ -105,7 +167,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
     }, TICK_MS);
 
     return () => clearInterval(id);
-  }, [phase, index, totalMs, question]);
+  }, [phase, index, totalMs, question, sessionId]);
 
   // Advance, or end the race.
   useEffect(() => {
@@ -117,6 +179,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
         return;
       }
       setPicked(null);
+      setCorrectIndex(null);
       setLastGain(null);
       setIndex(index + 1);
       setMsLeft(totalMs);
@@ -162,7 +225,6 @@ export function Racer({ subunitId }: { subunitId: string }) {
     return <Missing />;
   }
 
-  const correctCount = answers.filter((a) => a.correct).length;
   const xpEarned =
     answers.reduce((sum, a) => sum + xpForAnswer(a), 0) + (won ? 50 : 0);
   const lead = you - bot;
@@ -208,22 +270,34 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
       <main className="flex flex-1 items-center justify-center px-6 py-10">
         {phase === "over" ? (
-          <SessionResults
-            headline={won ? "You took the race." : you === bot ? "Dead heat." : "The bot took it."}
-            detail={`${found.subunit.name} · ${DIFFICULTY[difficulty].name}`}
-            correct={correctCount}
-            total={total}
+          <SessionSummary
+            headline={
+              fault
+                ? "Race stopped."
+                : won
+                  ? "You took the race."
+                  : you === bot
+                    ? "Dead heat."
+                    : "The bot took it."
+            }
+            detail={
+              fault ?? `${found.subunit.name} · ${DIFFICULTY[difficulty].name}`
+            }
+            details={answers}
             xpEarned={xpEarned}
             before={before}
             after={after}
             onAgain={() => {
-              setSeed(Math.floor(Math.random() * 2 ** 31));
               setIndex(0);
               setPicked(null);
               setYou(0);
               setBot(0);
               setAnswers([]);
               setLastGain(null);
+              setCorrectIndex(null);
+              setSessionId(null);
+              setQuestions([]);
+              setFault(null);
               savedRef.current = false;
               setBefore(null);
               setAfter(null);
@@ -235,9 +309,9 @@ export function Racer({ subunitId }: { subunitId: string }) {
           question && (
             <QuestionStage
               question={question}
-              eyebrow={`Question ${index + 1} of ${total}`}
+              eyebrow={found.subunit.name}
               picked={picked}
-              revealed={phase === "revealed"}
+              correctIndex={correctIndex}
               onPick={(choice) => {
                 if (phase === "asking") resolve(choice, msLeft);
               }}

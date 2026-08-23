@@ -3,34 +3,37 @@
 /* ─────────────────────────────────────────────────────────
    Roundhouse design tokens
 
-   Dark-only by decision, not omission: this is a product you
-   play in a dim room, and a light theme would fight the one
-   thing the accent has to do — mark what is live right now.
+   Warm light theme. The page ground is a light brown, and
+   every panel is a cream box lifted off it — so the boxes
+   read as objects on a surface rather than as outlines.
 
-   Neutrals carry a slight blue bias (hue ~230) so they read as
-   chosen alongside the iris accent rather than as default grey.
+   The accent is a deep teal: it sits opposite the ground's
+   warm orange-brown on the colour wheel, which is what makes
+   a selected box separate from an unselected one instantly
+   without shouting.
    ───────────────────────────────────────────────────────── */
 @theme {
   /* Grounds and surfaces */
-  --color-ground: #08090c;
-  --color-surface: #0e1015;
-  --color-surface-2: #14161d;
-  --color-line: #1e212b;
-  --color-line-soft: #171a22;
+  --color-ground: #e7d9c0;
+  --color-surface: #f8f3e8;
+  --color-surface-2: #f1e8d7;
+  --color-line: #cbbb9d;
+  --color-line-soft: #dbcdb2;
 
-  /* Text */
-  --color-ink: #eef0f5;
-  --color-muted: #989dac;
-  --color-faint: #61667a;
+  /* Text — warm dark brown rather than black, so it belongs
+     to the same family as the ground. */
+  --color-ink: #2b2317;
+  --color-muted: #6a5c46;
+  --color-faint: #93836a;
 
   /* The one accent. Primary actions, active state, live time. */
-  --color-accent: #5b6cff;
-  --color-accent-hi: #7c89ff;
-  --color-accent-ink: #080910;
+  --color-accent: #1f6f6b;
+  --color-accent-hi: #2a8a85;
+  --color-accent-ink: #f8f3e8;
 
   /* Semantic — answer state only, never decoration */
-  --color-correct: #3fbf87;
-  --color-out: #e2574a;
+  --color-correct: #2f7a4f;
+  --color-out: #b03a2c;
 }
 
 @theme inline {
@@ -40,7 +43,7 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   html {
@@ -83,13 +86,42 @@
     text-transform: uppercase;
     color: var(--color-faint);
   }
+
+  /* The box. Every game mode, subject, unit and answer is one of
+     these — a cream panel on the brown ground, not an outline. */
+  .box {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+    transition:
+      border-color 150ms ease,
+      background-color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .box-tap {
+    cursor: pointer;
+  }
+
+  .box-tap:hover {
+    background: var(--color-surface-2);
+    border-color: var(--color-faint);
+  }
+
+  .box-on {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  }
+
+  .box-on:hover {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  }
 }
 
 /* ── Motion ───────────────────────────────────────────────
-   Only four animations exist in this product, and each one
-   reports a change of game state: a question arriving, a
-   player going out, the clock crossing into its last seconds,
-   and the round-over reveal. Nothing animates for flourish. */
+   Only what reports a change of game state: a question
+   arriving, a player going out, the clock running short. */
 
 @keyframes question-in {
   from {
@@ -104,7 +136,7 @@
 
 @keyframes eliminate {
   0% {
-    background-color: color-mix(in srgb, var(--color-out) 22%, transparent);
+    background-color: color-mix(in srgb, var(--color-out) 28%, transparent);
   }
   100% {
     background-color: transparent;
@@ -117,7 +149,19 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.45;
+    opacity: 0.4;
+  }
+}
+
+/* Whose turn it is — a slow pulse on the active seat, so you can
+   find it in the periphery without reading names. */
+@keyframes turn-pulse {
+  0%,
+  100% {
+    border-color: var(--color-accent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 }
 
@@ -131,6 +175,10 @@
 
 .animate-clock-urgent {
   animation: clock-urgent 1s steps(2, end) infinite;
+}
+
+.animate-turn {
+  animation: turn-pulse 1.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

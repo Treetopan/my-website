@@ -97,6 +97,36 @@ is what earns you read access to the room.
 Answers are write-once at the rules level (`!data.exists()`), so a player cannot
 change an answer after the reveal.
 
+## The games
+
+**Racer** — you against a bot. A correct answer moves you one length plus up to
+another for speed, so answering fast is what wins races.
+
+**Last One Standing** — played around the table, one player at a time.
+
+- On your turn you answer. Miss it and you *sit down* for the rest of the round,
+  but you are still in the game.
+- When only one player is left answering, they have won the round and choose
+  one player to **remove from the game** for good.
+- Everyone else plays on. New round, everyone still in it answers again.
+- Repeat until one player remains.
+
+Two flags per player carry this and they are not the same thing: `alive` is
+still in the game, `inRound` is still answering this round. The rules live in
+`lib/table.ts` rather than the component, and are tested.
+
+Neither game shows how many questions are left — knowing the end is coming
+changes how people play. Last One Standing wraps the question bank when it runs
+out, since a turn-based round burns a question per turn.
+
+## After a game
+
+`lib/review.ts` turns a run into something to act on: accuracy, XP, which
+concepts were missed (worst first), which were clean sweeps, and the full text
+of every question to go back to with the right answer beside what you picked.
+Questions carry a `topic` so the summary can name the idea, not just the score.
+Timed-out turns count as missed rather than vanishing. Tested.
+
 ## Content
 
 `lib/curriculum.ts` holds the tree. Difficulty is a property of a **subunit**,
@@ -111,17 +141,54 @@ curriculum is a change to this one file.
 Each subunit holds 5 questions, which makes for a short race. Ten to fifteen
 per subunit would suit the Racer better.
 
+## Answers never reach the browser
+
+Question text and options are public — a student is meant to read them — but
+the correct option is not. `lib/answers.server.ts` carries `import
+"server-only"`, so importing it from a Client Component is a **build error**,
+not a code-review question.
+
+Grading goes through two routes:
+
+- `POST /api/session` — `{subunitId, length?}` opens a session and returns the
+  question **order**. The server owns the order so grading can be keyed to a
+  position rather than a question id: a turn-based game that runs past the end
+  of the bank meets the same question at a new position, which is a new
+  grading rather than a replay of an old one.
+- `POST /api/answer` — `{sessionId, position, choice}` grades one position,
+  **once**, and returns the verdict with the correct option. A second attempt
+  at the same position is a 409.
+
+`choice: null` (the clock ran out) still consumes that position’s grading —
+otherwise "send null and read the answer back" would be a free oracle, which
+is the entire thing this design exists to prevent. Bot turns are rolled
+server-side (`bot: <accuracy>`) because picking a plausible *wrong* option
+requires knowing the right one.
+
+**Topics must not name the answer.** A question’s `topic` ships to the client.
+Twenty-one of them originally repeated the correct option verbatim, which
+handed the answer over. Keep topics at concept level — "Protein trafficking",
+not "Golgi apparatus". There is a check for this in the notes below.
+
 ## Known limitations
 
-- **The host is trusted.** Room state is resolved on the host's client. RTDB
-  rules stop a player overwriting their own answer, but a host who edits their
-  client can decide the round. Moving resolution into a Cloud Function is the
-  fix if this ever faces real students.
+- **The host still decides the round.** Grading is now the server's job, so no
+  client holds the answer key — but the host's client is still what writes who
+  is out and who won. A modified host client can win. Closing that means moving
+  room state transitions server-side too (a Route Handler with the Admin SDK,
+  or a Cloud Function on the Blaze plan).
+- **Grading sessions live in process memory.** Correct for `next dev` and a
+  single long-lived Node server. On a multi-instance platform (Vercel's
+  default) a session can land on an instance that never saw it and grading
+  fails closed with 404. Move `lib/session-store.ts` behind Redis or an
+  Admin-SDK-written `sessions/{uid}` node before deploying that way.
 - **Auth is client-side only.** Firebase keeps its session in IndexedDB, so
   `RequireAuth` decides what the UI shows, not what the server serves. The rules
   are the real boundary.
-- **Finished rooms and their codes are never cleaned up.** Nothing breaks — a
-  used code reports "already started" — but the data accumulates. A scheduled
-  Cloud Function deleting rooms older than a day is the fix.
+- **Rooms are deleted, not archived.** The host bins the room, its code and its
+  answers three seconds after a game ends; an abandoned lobby is removed by
+  `onDisconnect` when the host closes the tab. Every client snapshots the final
+  state first, so the summary survives the deletion. Nothing about a finished
+  room is worth keeping — the result already lives under `results/{uid}`.
 - **Last One Standing pays no speed bonus** — survival is the mechanic, so every
   answer scores at the subunit's base rate.

@@ -8,19 +8,20 @@ import { useAuth } from "@/lib/auth-context";
 import {
   DIFFICULTY,
   describe,
-  seededShuffle,
   type Question,
 } from "@/lib/curriculum";
 import {
-  createRoom,
   closeRoomCode,
+  createRoom,
+  deleteRoom,
   findRoomByCode,
-  readAnswers,
   joinRoom,
+  nominateTarget,
   recordSession,
   startRoom,
   submitAnswer,
   updateRoom,
+  watchAnswers,
   watchProgress,
   watchRoom,
   type Room as RoomData,
@@ -29,18 +30,28 @@ import {
 import {
   EMPTY_PROGRESS,
   xpForAnswer,
-  type AnswerRecord,
   type Progress,
 } from "@/lib/progression";
+import {
+  alive as aliveSeats,
+  answering,
+  firstSeat,
+  nextTurn,
+  seated,
+} from "@/lib/table";
 import { ClockRail, QuestionStage } from "@/components/question-stage";
-import { SessionResults } from "@/components/session-results";
+import { SessionSummary } from "@/components/session-summary";
+import { GradeError, grade, gradeBot, openSession } from "@/lib/grade";
+import type { AnswerDetail } from "@/lib/review";
 
 const SEATS = 3;
-const REVEAL_MS = 2000;
+const REVEAL_MS = 1900;
 const BOT_NAMES = ["Mara", "Dev", "Priya"];
 const BOT_ACCURACY = [0.72, 0.6];
+const BOT_THINK = [1200, 2600];
+const BOT_CHOOSE_MS = 1600;
 
-/** Firebase's clock, not the laptop's — three clients must agree on the timer. */
+/** Firebase's clock, not the laptop's — every client must agree on the timer. */
 function useServerOffset() {
   const [offset, setOffset] = useState(0);
   useEffect(() => {
@@ -66,10 +77,13 @@ export function Room({ subunitId }: { subunitId: string }) {
   const [before, setBefore] = useState<Progress | null>(null);
   const [afterP, setAfterP] = useState<Progress | null>(null);
 
-
-  // Keyed by question index, so moving on clears the current pick without an
-  // effect, and the whole run is still here at the end to score from.
-  const [myPicks, setMyPicks] = useState<Record<number, number>>({});
+  /**
+   * My own turns, keyed by question index. The answer is filled in from the
+   * reveal the host publishes — this client never had it to begin with.
+   */
+  const [myPicks, setMyPicks] = useState<
+    Record<number, { choice: number | null; answer: number }>
+  >({});
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -77,12 +91,26 @@ export function Room({ subunitId }: { subunitId: string }) {
     return watchProgress(user.uid, setProgress);
   }, [user]);
 
+  // The room is deleted as soon as it ends, so every client keeps its own
+  // copy of the final state and renders the summary from that.
+  const [finalRoom, setFinalRoom] = useState<RoomData | null>(null);
+
   useEffect(() => {
     if (!roomId) return;
-    return watchRoom(roomId, setRoom);
-  }, [roomId]);
+    return watchRoom(roomId, (r) => {
+      setRoom(r);
+      if (r?.status === "finished") setFinalRoom((prev) => prev ?? r);
 
-  // One ticker drives every clock on the screen.
+      // A turn the clock ran out on never produced a click, so capture it
+      // here or it would vanish from the summary entirely. -1 means no answer.
+      if (r?.reveal && r.reveal.uid === user?.uid) {
+        const at = r.currentIndex;
+        const entry = { choice: r.reveal.choice, answer: r.reveal.answer };
+        setMyPicks((prev) => (at in prev ? prev : { ...prev, [at]: entry }));
+      }
+    });
+  }, [roomId, user?.uid]);
+
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(id);
@@ -91,49 +119,54 @@ export function Room({ subunitId }: { subunitId: string }) {
   const difficulty = found?.subunit.difficulty ?? "medium";
   const totalMs = DIFFICULTY[difficulty].seconds * 1000;
 
-  // Every client derives the same order from the room's seed, so the question
-  // list itself never has to be broadcast.
-  const bank = found?.subunit.questions;
-  const seed = room?.seed;
-
+  // Both come from the room, which got them from the server at kick-off. The
+  // questions travel rather than being looked up locally, because a generated
+  // subunit mints fresh ones per session and no client has them otherwise.
+  // Only the answers were ever withheld, and they still are.
   const questions: Question[] = useMemo(
-    () => (bank && seed !== undefined ? seededShuffle(bank, seed) : []),
-    [bank, seed],
+    () => room?.questions ?? [],
+    [room?.questions],
   );
 
   const index = room?.currentIndex ?? 0;
   const question = questions[index];
-  const startedAt = typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
+
+  const startedAt =
+    typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
+  const reveal = room?.reveal ?? null;
   const elapsed = startedAt ? now + offset - startedAt : 0;
   const msLeft = Math.max(0, totalMs - elapsed);
-  const revealed = elapsed > totalMs;
 
   const isHost = !!user && room?.hostUid === user.uid;
-  const players = room?.players ?? {};
-  const alive = Object.entries(players).filter(([, p]) => p.alive);
+  const players = useMemo(() => room?.players ?? {}, [room?.players]);
+  const order = seated(players);
+  const aliveCount = order.filter(([, p]) => p.alive).length;
   const me = user ? players[user.uid] : undefined;
-  const meAlive = !!me?.alive;
-  const picked = myPicks[index] ?? null;
+  const myTurn = !!user && room?.turnUid === user.uid && !reveal;
+  // What I clicked on the live question, before the host has graded it.
+  const [pending, setPending] = useState<number | null>(null);
+  const picked = myPicks[index]?.choice ?? (reveal ? null : pending);
+  const correctIndex = reveal ? reveal.answer : null;
 
-  /**
-   * Scored from my own picks. Answers now live outside the room so opponents
-   * cannot read them, and there is no reason to read my own back over the
-   * network when I am the one who made them.
-   *
-   * Last One Standing pays no speed bonus — survival is the mechanic here,
-   * not pace — so every answer scores at the subunit's base rate.
-   */
-  const consumed = index + (revealed ? 1 : 0);
+  const myAnswers: AnswerDetail[] = useMemo(() => {
+    if (!questions.length) return [];
 
-  const myAnswers: AnswerRecord[] = useMemo(
-    () =>
-      questions.slice(0, consumed).map((q, i) => ({
+    return Object.entries(myPicks).map(([i, entry]) => {
+      const q = questions[Number(i) % questions.length];
+      return {
+        questionId: q.id,
+        prompt: q.prompt,
+        topic: q.topic,
+        options: q.options,
+        answer: entry.answer,
+        chosen: entry.choice,
         difficulty,
-        correct: myPicks[i] === q.answer,
+        correct: entry.choice === entry.answer,
+        // Last One Standing pays no speed bonus — survival is the mechanic.
         speed: 0,
-      })),
-    [questions, consumed, difficulty, myPicks],
-  );
+      };
+    });
+  }, [myPicks, questions, difficulty]);
 
   // ── Create / join ──────────────────────────────────────
   async function create() {
@@ -165,8 +198,6 @@ export function Room({ subunitId }: { subunitId: string }) {
         setError(hit.error);
         return;
       }
-      // Claiming a seat is what earns read access to the room, so this has
-      // to happen before we start watching it.
       await joinRoom(hit.roomId, user.uid, user.displayName ?? "You");
       setRoomId(hit.roomId);
     } catch (e) {
@@ -176,18 +207,19 @@ export function Room({ subunitId }: { subunitId: string }) {
     }
   }
 
-  /** Fill the empty seats with bots and start. Host only. */
+  /** Fill empty seats with bots, assign turn order, and start. Host only. */
   async function start() {
     if (!roomId || !room || !isHost) return;
+
     const filled: Record<string, RoomPlayer> = { ...room.players };
     let n = 0;
-
     while (Object.keys(filled).length < SEATS) {
-      const id = `bot-${n + 1}`;
-      filled[id] = {
+      filled[`bot-${n + 1}`] = {
         displayName: BOT_NAMES[n % BOT_NAMES.length],
         isBot: true,
         alive: true,
+        inRound: true,
+        seat: 0,
         score: 0,
         correct: 0,
         joinedAt: Date.now(),
@@ -195,100 +227,229 @@ export function Room({ subunitId }: { subunitId: string }) {
       n++;
     }
 
-    await startRoom(roomId, room.code, filled);
+    // Seat order is join order, with the host first.
+    const uids = Object.keys(filled).sort((a, b) =>
+      a === room.hostUid ? -1 : b === room.hostUid ? 1 : 0,
+    );
+    uids.forEach((uid, i) => {
+      filled[uid] = { ...filled[uid], seat: i, alive: true, inRound: true };
+    });
+
+    // The room carries a server grading session; the host grades every turn
+    // through it, so no client ever holds the answer key.
+    // A turn-based game burns a question per turn, so ask for more than the
+    // bank holds — the server reshuffles to fill the order.
+    let opened;
+    try {
+      opened = await openSession(subunitId, 40);
+    } catch (e) {
+      setError(
+        e instanceof GradeError ? e.message : "Could not start the game.",
+      );
+      return;
+    }
+
+    await startRoom(
+      roomId,
+      room.code,
+      filled,
+      uids[0],
+      opened.sessionId,
+      opened.order,
+      opened.questions,
+    );
   }
 
-  // ── Answering ──────────────────────────────────────────
-  async function pick(choice: number) {
-    if (!roomId || !user || picked !== null || revealed || !meAlive) return;
-    setMyPicks((prev) => ({ ...prev, [index]: choice }));
-    await submitAnswer(roomId, index, user.uid, choice);
+  // ── Host: resolve a turn, then move around the table ───
+  async function resolveTurn(choice: number | null) {
+    if (!roomId || !room || !question || !room.turnUid || !room.sessionId) return;
+
+    const turnUid = room.turnUid;
+    const player = room.players[turnUid];
+    if (!player) return;
+
+    // A bot turn is rolled by the server, because picking a plausible wrong
+    // option means knowing the right one — which this client does not.
+    const botIndex = Number(turnUid.replace("bot-", "")) - 1;
+    const accuracy = BOT_ACCURACY[botIndex % BOT_ACCURACY.length];
+
+    let verdict;
+    try {
+      verdict = player.isBot
+        ? await gradeBot(room.sessionId, index, accuracy)
+        : await grade(room.sessionId, index, choice);
+    } catch {
+      // Grading failed. Leave the turn open rather than guessing an outcome;
+      // the clock will come round again.
+      return;
+    }
+
+    const { correct, answer } = verdict;
+
+    // Show everyone what happened before the table moves on.
+    await updateRoom(roomId, {
+      reveal: { uid: turnUid, choice: verdict.choice, correct, answer },
+      players: {
+        ...room.players,
+        [turnUid]: {
+          ...player,
+          inRound: correct,
+          correct: player.correct + (correct ? 1 : 0),
+          score: player.score + (correct ? DIFFICULTY[difficulty].xp : 0),
+        },
+      },
+    });
   }
 
-  // ── Host resolves the question, then advances ──────────
-  const resolving = useRef(false);
+  // Held in a ref so the answer listener and the timeout below always call the
+  // latest version, without either of them re-subscribing on every render.
+  const resolveRef = useRef(resolveTurn);
+  useEffect(() => {
+    resolveRef.current = resolveTurn;
+  });
 
+  // Watch for the current player's answer; resolve the moment it lands.
   useEffect(() => {
     if (!isHost || !roomId || !room || room.status !== "playing") return;
-    if (!revealed || resolving.current || !question) return;
+    if (room.reveal || !room.turnUid || !question) return;
 
-    resolving.current = true;
+    const turnUid = room.turnUid;
+    const player = room.players[turnUid];
+    if (!player) return;
 
-    const timer = setTimeout(async () => {
-      const answersForQ = await readAnswers(roomId, index);
-      const next: Record<string, RoomPlayer> = {};
+    // A bot thinks for a beat, then commits.
+    if (player.isBot) {
+      const think =
+        BOT_THINK[0] + Math.random() * (BOT_THINK[1] - BOT_THINK[0]);
 
-      // Bots decide here rather than writing to the answers node, so a bot
-      // never races a real player's write.
-      let botN = 0;
-      const got: Record<string, boolean> = {};
+      // The server rolls the outcome and picks the option, since choosing a
+      // plausible wrong answer means knowing the right one.
+      const id = setTimeout(() => resolveRef.current(null), think);
 
-      for (const [uid, p] of Object.entries(room.players)) {
-        if (!p.alive) {
-          next[uid] = { ...p, alive: false };
-          continue;
-        }
-        if (p.isBot) {
-          const acc = BOT_ACCURACY[botN % BOT_ACCURACY.length];
-          botN++;
-          got[uid] = Math.random() < acc;
-        } else {
-          got[uid] = answersForQ[uid]?.choice === question.answer;
-        }
+      return () => clearTimeout(id);
+    }
+
+    // A person gets the clock, and resolves early if they commit.
+    const stop = watchAnswers(roomId, index, (answers) => {
+      const entry = answers[turnUid];
+      if (entry) resolveRef.current(entry.choice);
+    });
+
+    const deadline = startedAt ? startedAt + totalMs : null;
+    const remaining = deadline ? Math.max(0, deadline - (Date.now() + offset)) : totalMs;
+    const timeout = setTimeout(() => resolveRef.current(null), remaining + 250);
+
+    return () => {
+      stop();
+      clearTimeout(timeout);
+    };
+  }, [isHost, roomId, room, question, index, startedAt, totalMs, offset]);
+
+  // After the reveal, advance the table — or end the round.
+  useEffect(() => {
+    if (!isHost || !roomId || !room || room.status !== "playing" || !room.reveal)
+      return;
+
+    const id = setTimeout(async () => {
+      const still = answering(room.players);
+
+      // One player left answering: they won the round and now remove someone.
+      if (still.length <= 1) {
+        const winner = still[0]?.[0] ?? room.reveal?.uid ?? null;
+        await updateRoom(roomId, {
+          status: "choosing",
+          chooserUid: winner,
+          turnUid: null,
+          reveal: null,
+        });
+        return;
       }
 
-      // If nobody got it, the question is thrown out — three players all
-      // dropping on one question would end the game with no winner.
-      const anyRight = Object.values(got).some(Boolean);
+      const next = nextTurn(room.players, room.reveal!.uid);
+      await updateRoom(roomId, {
+        turnUid: next,
+        currentIndex: room.currentIndex + 1,
+        reveal: null,
+        questionStartedAt: { ".sv": "timestamp" } as unknown as number,
+      });
+    }, REVEAL_MS);
 
+    return () => clearTimeout(id);
+  }, [isHost, roomId, room]);
+
+  // ── Host: apply the round winner's choice ──────────────
+  useEffect(() => {
+    if (!isHost || !roomId || !room || room.status !== "choosing") return;
+    const chooser = room.chooserUid ? room.players[room.chooserUid] : null;
+    if (!chooser) return;
+
+    async function remove(targetUid: string) {
+      if (!roomId || !room) return;
+
+      const players: Record<string, RoomPlayer> = {};
       for (const [uid, p] of Object.entries(room.players)) {
-        if (!p.alive) {
-          next[uid] = p;
-          continue;
-        }
-        const right = got[uid];
-        next[uid] = {
+        players[uid] = {
           ...p,
-          alive: anyRight ? right : true,
-          correct: p.correct + (right ? 1 : 0),
-          score: p.score + (right ? DIFFICULTY[difficulty].xp : 0),
+          alive: uid === targetUid ? false : p.alive,
+          pendingTarget: null,
         };
       }
 
-      const stillAlive = Object.entries(next).filter(([, p]) => p.alive);
-      const lastQuestion = index >= questions.length - 1;
+      const remaining = aliveSeats(players);
 
-      if (stillAlive.length <= 1 || lastQuestion) {
-        const winner =
-          stillAlive.length === 1
-            ? stillAlive[0][0]
-            : stillAlive.sort((a, b) => b[1].score - a[1].score)[0]?.[0] ?? null;
-
+      if (remaining.length <= 1) {
         await updateRoom(roomId, {
-          players: next,
+          players,
           status: "finished",
-          winnerUid: winner,
+          winnerUid: remaining[0]?.[0] ?? null,
+          turnUid: null,
+          chooserUid: null,
         });
         await closeRoomCode(roomId, room.code);
-      } else {
-        await updateRoom(roomId, {
-          players: next,
-          currentIndex: index + 1,
-          questionStartedAt: { ".sv": "timestamp" } as unknown as number,
-        });
+        return;
       }
 
-      resolving.current = false;
-    }, REVEAL_MS);
+      // New round: everyone still in the game answers again.
+      for (const uid of Object.keys(players)) {
+        players[uid] = { ...players[uid], inRound: players[uid].alive };
+      }
 
-    return () => {
-      clearTimeout(timer);
-      resolving.current = false;
-    };
-  }, [isHost, roomId, room, revealed, question, index, questions.length, difficulty]);
+      const first = firstSeat(players);
+      await updateRoom(roomId, {
+        players,
+        status: "playing",
+        round: room.round + 1,
+        chooserUid: null,
+        turnUid: first,
+        currentIndex: room.currentIndex + 1,
+        reveal: null,
+        questionStartedAt: { ".sv": "timestamp" } as unknown as number,
+      });
+    }
+
+    // A bot picks whoever is scoring best — the only sensible threat model.
+    if (chooser.isBot) {
+      const id = setTimeout(() => {
+        const target = Object.entries(room.players)
+          .filter(([uid, p]) => p.alive && uid !== room.chooserUid)
+          .sort((a, b) => b[1].score - a[1].score)[0]?.[0];
+        if (target) remove(target);
+      }, BOT_CHOOSE_MS);
+      return () => clearTimeout(id);
+    }
+
+    if (chooser.pendingTarget) remove(chooser.pendingTarget);
+  }, [isHost, roomId, room]);
+
+  // ── Answering ──────────────────────────────────────────
+  async function pick(choice: number) {
+    if (!roomId || !user || !myTurn || picked !== null) return;
+    setPending(choice);
+    await submitAnswer(roomId, index, user.uid, choice);
+  }
 
   // ── Bank the session ───────────────────────────────────
-  const won = !!user && room?.winnerUid === user.uid;
+  const won = !!user && (finalRoom ?? room)?.winnerUid === user.uid;
   const savedRef = useRef(false);
 
   useEffect(() => {
@@ -316,35 +477,78 @@ export function Room({ subunitId }: { subunitId: string }) {
       });
   }, [room?.status, user, found, myAnswers, won, progress, subunitId]);
 
+  // Host: bin the room once it is over. The delay gives the other clients a
+  // moment to take their snapshot before the data disappears.
+  useEffect(() => {
+    if (!isHost || !roomId || !finalRoom) return;
+    const id = setTimeout(() => {
+      deleteRoom(roomId, finalRoom.code).catch(() => {});
+    }, 3000);
+    return () => clearTimeout(id);
+  }, [isHost, roomId, finalRoom]);
+
   if (!found) return <Missing />;
 
-  // ── Screens ────────────────────────────────────────────
+  const subtitle = `${found.subunit.code} · ${found.course.name}`;
+
+  // ── Finished ───────────────────────────────────────────
+  // Rendered from the local snapshot, because by now the host has deleted
+  // the room out from under every client.
+  if (finalRoom) {
+    return (
+      <Shell subtitle={subtitle}>
+        <SessionSummary
+          headline={won ? "Last one standing." : "You were removed."}
+          detail={`${found.subunit.name} · won by ${
+            finalRoom.players[finalRoom.winnerUid ?? ""]?.displayName ?? "nobody"
+          }`}
+          details={myAnswers}
+          xpEarned={
+            myAnswers.reduce((s, a) => s + xpForAnswer(a), 0) + (won ? 50 : 0)
+          }
+          before={before}
+          after={afterP}
+          onAgain={() => {
+            setRoomId(null);
+            setRoom(null);
+            setFinalRoom(null);
+            setMyPicks({});
+            savedRef.current = false;
+            setBefore(null);
+            setAfterP(null);
+          }}
+        />
+      </Shell>
+    );
+  }
+
+  // ── Entry ──────────────────────────────────────────────
   if (!roomId || !room) {
     return (
-      <Shell subtitle={`${found.subunit.code} · ${found.course.name}`}>
+      <Shell subtitle={subtitle}>
         <div className="w-full max-w-md">
           <p className="eyebrow mb-5">Last One Standing</p>
           <h1 className="text-[34px] font-semibold tracking-[-0.035em]">
-            Three players. One wrong answer each.
+            Around the table, one at a time.
           </h1>
-          <p className="mt-3 mb-9 text-[15px] text-muted">
-            {found.subunit.name} · {DIFFICULTY[difficulty].name} ·{" "}
-            {DIFFICULTY[difficulty].seconds}s a question
+          <p className="mt-3 mb-8 text-[15px] text-muted">
+            Answer on your turn. Miss and you stop answering for the round. The
+            last one still answering removes a player from the game for good.
           </p>
 
           <button
             type="button"
             onClick={create}
             disabled={busy}
-            className="w-full rounded-sm bg-accent px-4.5 py-3 text-[13px] font-medium text-accent-ink transition-colors hover:bg-accent-hi disabled:bg-surface-2 disabled:text-faint"
+            className="w-full rounded-lg bg-accent px-4.5 py-3 text-[14px] font-medium text-accent-ink transition-colors hover:bg-accent-hi disabled:bg-surface-2 disabled:text-faint"
           >
             {busy ? "Working…" : "Create a room"}
           </button>
 
           <div className="my-7 flex items-center gap-4">
-            <span className="h-px flex-1 bg-line-soft" />
+            <span className="h-px flex-1 bg-line" />
             <span className="eyebrow">or join one</span>
-            <span className="h-px flex-1 bg-line-soft" />
+            <span className="h-px flex-1 bg-line" />
           </div>
 
           <div className="flex gap-2.5">
@@ -353,13 +557,13 @@ export function Room({ subunitId }: { subunitId: string }) {
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="ROOM CODE"
               maxLength={6}
-              className="flex-1 rounded-sm border border-line bg-surface px-3.5 py-2.5 font-mono text-[14px] tracking-[0.18em] text-ink uppercase placeholder:text-faint focus:border-accent focus:outline-none"
+              className="box flex-1 px-3.5 py-2.5 font-mono text-[14px] tracking-[0.18em] text-ink uppercase placeholder:text-faint focus:border-accent focus:outline-none"
             />
             <button
               type="button"
               onClick={join}
               disabled={busy || code.length < 4}
-              className="rounded-sm border border-line px-4.5 py-2.5 text-[13px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-40"
+              className="box box-tap px-5 text-[14px] font-medium text-muted disabled:opacity-40"
             >
               Join
             </button>
@@ -375,38 +579,36 @@ export function Room({ subunitId }: { subunitId: string }) {
     );
   }
 
+  // ── Lobby ──────────────────────────────────────────────
   if (room.status === "lobby") {
     const seatsLeft = SEATS - Object.keys(players).length;
 
     return (
-      <Shell subtitle={`${found.subunit.code} · ${found.course.name}`}>
+      <Shell subtitle={subtitle}>
         <div className="w-full max-w-md">
-          <p className="eyebrow mb-5">Room open</p>
-
+          <p className="eyebrow mb-4">Room open</p>
           <p className="font-mono text-[44px] leading-none tracking-[0.14em] text-accent tnum">
             {room.code}
           </p>
-          <p className="mt-4 mb-9 text-[15px] text-muted">
+          <p className="mt-4 mb-8 text-[15px] text-muted">
             Share this code, or start now and bots take the empty seats.
           </p>
 
-          <ul className="mb-8 flex flex-col border-t border-line-soft">
+          <ul className="mb-8 flex flex-col gap-2.5">
             {Array.from({ length: SEATS }).map((_, i) => {
               const entry = Object.entries(players)[i];
               return (
                 <li
                   key={i}
-                  className="flex items-center justify-between border-b border-line-soft py-3 text-[14px]"
+                  className={`box flex items-center justify-between px-4 py-3.5 text-[14px] ${
+                    entry ? "" : "opacity-55"
+                  }`}
                 >
                   <span className={entry ? "text-ink" : "text-faint"}>
                     {entry ? entry[1].displayName : "Empty seat"}
                   </span>
                   <span className="font-mono text-[11px] text-faint">
-                    {entry
-                      ? entry[0] === room.hostUid
-                        ? "Host"
-                        : "Ready"
-                      : "Waiting"}
+                    {entry ? (entry[0] === room.hostUid ? "Host" : "Ready") : "Waiting"}
                   </span>
                 </li>
               );
@@ -417,7 +619,7 @@ export function Room({ subunitId }: { subunitId: string }) {
             <button
               type="button"
               onClick={start}
-              className="w-full rounded-sm bg-accent px-4.5 py-3 text-[13px] font-medium text-accent-ink transition-colors hover:bg-accent-hi"
+              className="w-full rounded-lg bg-accent px-4.5 py-3 text-[14px] font-medium text-accent-ink transition-colors hover:bg-accent-hi"
             >
               {seatsLeft > 0
                 ? `Start — ${seatsLeft} bot${seatsLeft === 1 ? "" : "s"} fill in`
@@ -433,76 +635,79 @@ export function Room({ subunitId }: { subunitId: string }) {
     );
   }
 
-  if (room.status === "finished") {
-    const ranked = Object.entries(players).sort(
-      (a, b) => Number(b[1].alive) - Number(a[1].alive) || b[1].score - a[1].score,
-    );
+  // ── Choosing who to remove ─────────────────────────────
+  if (room.status === "choosing") {
+    const chooser = room.chooserUid ? players[room.chooserUid] : null;
+    const mine = room.chooserUid === user?.uid;
+    const targets = order.filter(([uid, p]) => p.alive && uid !== room.chooserUid);
 
     return (
-      <Shell subtitle={`${found.subunit.code} · ${found.course.name}`}>
-        <SessionResults
-          headline={
-            won
-              ? "Last one standing."
-              : me?.alive
-                ? "Round over."
-                : "You went out."
-          }
-          detail={`${found.subunit.name} · won by ${
-            players[room.winnerUid ?? ""]?.displayName ?? "nobody"
-          }`}
-          correct={myAnswers.filter((a) => a.correct).length}
-          total={myAnswers.length}
-          xpEarned={
-            myAnswers.reduce((s, a) => s + xpForAnswer(a), 0) + (won ? 50 : 0)
-          }
-          before={before}
-          after={afterP}
-          onAgain={() => {
-            setRoomId(null);
-            setRoom(null);
-            savedRef.current = false;
-            setMyPicks({});
+      <Shell subtitle={subtitle}>
+        <div className="w-full max-w-md">
+          <p className="eyebrow mb-4">Round {room.round} over</p>
 
-            setBefore(null);
-            setAfterP(null);
-          }}
-        />
-        <ol className="mt-10 w-full max-w-md border-t border-line-soft">
-          {ranked.map(([uid, p], i) => (
-            <li
-              key={uid}
-              className="flex items-baseline gap-4 border-b border-line-soft py-3 text-[14px]"
-            >
-              <span className="font-mono text-[11px] text-faint tnum">{i + 1}</span>
-              <span className={uid === user?.uid ? "flex-1 text-ink" : "flex-1 text-muted"}>
-                {p.displayName}
-                {p.isBot && <span className="ml-2 text-faint">bot</span>}
-              </span>
-              {!p.alive && <span className="eyebrow text-out/70">Out</span>}
-              <span className="font-mono text-[12px] text-muted tnum">{p.correct}</span>
-            </li>
-          ))}
-        </ol>
+          {mine ? (
+            <>
+              <h1 className="text-[30px] font-semibold tracking-[-0.032em]">
+                You survived the round.
+              </h1>
+              <p className="mt-3 mb-7 text-[15px] text-muted">
+                Remove one player from the game. Everyone else plays on.
+              </p>
+
+              <ul className="flex flex-col gap-2.5">
+                {targets.map(([uid, p]) => (
+                  <li key={uid}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        roomId && user && nominateTarget(roomId, user.uid, uid)
+                      }
+                      className="box box-tap flex w-full items-center justify-between px-4 py-4 text-left text-[15px]"
+                    >
+                      <span>
+                        {p.displayName}
+                        {p.isBot && <span className="ml-2 text-faint">bot</span>}
+                      </span>
+                      <span className="eyebrow text-out">Remove</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <>
+              <h1 className="text-[30px] font-semibold tracking-[-0.032em]">
+                {chooser?.displayName ?? "Someone"} survived the round.
+              </h1>
+              <p className="mt-3 text-[15px] text-muted">
+                They&apos;re choosing who to remove from the game.
+              </p>
+            </>
+          )}
+        </div>
       </Shell>
     );
   }
 
   // ── Playing ────────────────────────────────────────────
+  const turnPlayer = room.turnUid ? players[room.turnUid] : null;
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-5 px-6 text-[13px]">
         <span className="font-medium">Last One Standing</span>
         <span className="font-mono text-[11px] text-faint tnum">
-          Question {index + 1} of {questions.length}
+          Round {room.round} · {aliveCount} left
         </span>
+
         <span className="ml-auto flex items-center gap-5">
           <span
             className={`font-mono text-[13px] tnum ${
-              msLeft <= 5000 && !revealed ? "animate-clock-urgent text-out" : "text-muted"
+              msLeft <= 5000 && myTurn ? "animate-clock-urgent text-out" : "text-muted"
             }`}
           >
-            0:{String(Math.ceil(msLeft / 1000)).padStart(2, "0")}
+            {reveal ? "—" : `0:${String(Math.ceil(msLeft / 1000)).padStart(2, "0")}`}
           </span>
           <Link href="/" className="text-faint transition-colors hover:text-ink">
             Leave
@@ -510,52 +715,93 @@ export function Room({ subunitId }: { subunitId: string }) {
         </span>
       </header>
 
-      <ClockRail fraction={revealed ? 0 : msLeft / totalMs} urgent={msLeft <= 5000} />
+      <ClockRail
+        fraction={reveal || !myTurn ? 0 : msLeft / totalMs}
+        urgent={msLeft <= 5000}
+      />
 
       <div className="flex flex-1 flex-col-reverse lg:flex-row">
         <main className="flex flex-1 items-center justify-center px-6 py-10">
           {!me?.alive ? (
             <div className="animate-question-in max-w-md text-center">
-              <p className="eyebrow mb-4 text-out">Eliminated</p>
+              <p className="eyebrow mb-4 text-out">Removed</p>
               <h2 className="text-2xl font-medium tracking-[-0.025em]">
-                You&apos;re out — watching the rest.
+                You&apos;re out of the game — watching the rest.
               </h2>
             </div>
           ) : (
             question && (
-              <QuestionStage
-                question={question}
-                eyebrow={found.subunit.name}
-                picked={picked}
-                revealed={revealed}
-                onPick={pick}
-              />
+              <div className="w-full max-w-3xl">
+                {/* Whose turn it is, stated once, above the question. */}
+                <p
+                  className={`mb-4 text-[14px] ${
+                    myTurn ? "text-accent" : "text-muted"
+                  }`}
+                >
+                  {myTurn
+                    ? "Your turn"
+                    : `${turnPlayer?.displayName ?? "Someone"} is answering…`}
+                </p>
+
+                <QuestionStage
+                  question={question}
+                  eyebrow={found.subunit.name}
+                  picked={
+                    reveal && reveal.uid === user?.uid ? reveal.choice : picked
+                  }
+                  correctIndex={correctIndex}
+                  disabled={!myTurn}
+                  onPick={pick}
+                />
+              </div>
             )
           )}
         </main>
 
-        <aside className="shrink-0 border-line-soft px-6 py-8 lg:w-64 lg:border-l">
-          <p className="eyebrow mb-3">In play · {alive.length}</p>
-          <ul className="flex flex-col">
-            {Object.entries(players).map(([uid, p]) => (
-              <li
-                key={uid}
-                className={`-mx-2 flex items-baseline justify-between rounded-sm px-2 py-1.5 text-[13px] ${
-                  p.alive ? "" : "text-faint line-through decoration-line"
-                }`}
-              >
-                <span className={p.alive && uid === user?.uid ? "text-ink" : ""}>
-                  {p.displayName}
-                  {p.isBot && <span className="ml-2 text-faint">bot</span>}
-                </span>
-                <span className="font-mono text-[12px] tnum">{p.correct}</span>
-              </li>
-            ))}
+        {/* ── The table ──────────────────────────────────── */}
+        <aside className="shrink-0 border-line-soft px-6 py-8 lg:w-68 lg:border-l">
+          <p className="eyebrow mb-3">The table</p>
+
+          <ul className="flex flex-col gap-2">
+            {order.map(([uid, p]) => {
+              const isTurn = room.turnUid === uid && !reveal;
+              const justOut = reveal?.uid === uid && !reveal.correct;
+
+              return (
+                <li
+                  key={uid}
+                  className={[
+                    "box flex items-center justify-between px-3 py-2.5 text-[13px]",
+                    !p.alive ? "opacity-45" : "",
+                    isTurn ? "border-accent animate-turn" : "",
+                    justOut ? "animate-eliminate" : "",
+                  ].join(" ")}
+                >
+                  <span
+                    className={
+                      !p.alive
+                        ? "text-faint line-through decoration-line"
+                        : p.inRound
+                          ? "text-ink"
+                          : "text-faint"
+                    }
+                  >
+                    {p.displayName}
+                    {p.isBot && <span className="ml-1.5 text-faint">bot</span>}
+                  </span>
+
+                  <span className="font-mono text-[11px] text-faint tnum">
+                    {!p.alive ? "out" : p.inRound ? p.correct : "sat down"}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
 
-          {picked !== null && !revealed && (
-            <p className="mt-6 font-mono text-[11px] text-accent">Answer locked</p>
-          )}
+          <p className="mt-6 text-[12px] leading-relaxed text-faint">
+            Miss and you sit down for the round. The last one answering removes a
+            player from the game.
+          </p>
         </aside>
       </div>
     </div>
@@ -572,7 +818,10 @@ function Shell({
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-5 px-6 text-[13px]">
-        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-[-0.02em]">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 font-semibold tracking-[-0.02em]"
+        >
           <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
           Roundhouse
         </Link>
@@ -596,7 +845,7 @@ function Missing() {
       </h1>
       <Link
         href="/"
-        className="rounded-sm bg-accent px-4.5 py-2.5 text-[13px] font-medium text-accent-ink transition-colors hover:bg-accent-hi"
+        className="rounded-lg bg-accent px-4.5 py-2.5 text-[14px] font-medium text-accent-ink transition-colors hover:bg-accent-hi"
       >
         Back to library
       </Link>

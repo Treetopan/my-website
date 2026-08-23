@@ -6,7 +6,9 @@ import {
   DIFFICULTY,
   SUBJECTS,
   isStocked,
-  questionCount,
+  hasContent,
+  stockLabel,
+  subunitStockLabel,
   type Course,
   type Subject,
   type Subunit,
@@ -112,9 +114,7 @@ export function Library() {
                   title={c.name}
                   body={c.blurb}
                   foot={
-                    stocked
-                      ? `${c.units.length} units · ${questionCount(c)} questions`
-                      : "No questions yet"
+                    stocked ? stockLabel(c) : `${c.units.length} units · no questions yet`
                   }
                 />
               );
@@ -126,16 +126,24 @@ export function Library() {
       {course && (
         <Step n="04" title="Choose a unit">
           <div className="flex flex-col gap-2.5">
-            {course.units.map((u) => (
+            {course.units.map((u) => {
+              const playable = u.subunits.filter(hasContent).length;
+              return (
               <Row
                 key={u.id}
                 on={unit?.id === u.id}
-                onClick={() => chooseUnit(u)}
+                disabled={playable === 0}
+                onClick={() => playable > 0 && chooseUnit(u)}
                 label={u.name}
                 lead={u.code.replace("unit-", "Unit ")}
-                meta={`${u.subunits.length} subunits`}
+                meta={
+                  playable === u.subunits.length
+                    ? `${u.subunits.length} subunits`
+                    : `${playable}/${u.subunits.length} subunits ready`
+                }
               />
-            ))}
+              );
+            })}
           </div>
         </Step>
       )}
@@ -145,14 +153,16 @@ export function Library() {
           <div className="flex flex-col gap-2.5">
             {unit.subunits.map((su) => {
               const d = DIFFICULTY[su.difficulty];
+              const ready = hasContent(su);
               return (
                 <Row
                   key={su.id}
                   on={subunit?.id === su.id}
-                  onClick={() => setSubunit(su)}
+                  disabled={!ready}
+                  onClick={() => ready && setSubunit(su)}
                   label={su.name}
                   lead={su.code}
-                  meta={`${su.questions.length} questions`}
+                  meta={ready ? subunitStockLabel(su) : "nothing to ask yet"}
                   tag={d.name}
                   tagNote={`${d.note} · ${d.seconds}s a question`}
                 />
@@ -232,12 +242,8 @@ function Card({
       disabled={disabled}
       aria-pressed={on}
       className={[
-        "flex flex-col gap-1.5 rounded-lg border p-5 text-left transition-colors",
-        disabled
-          ? "cursor-not-allowed border-line-soft bg-surface opacity-45"
-          : on
-            ? "border-accent/50 bg-accent/6"
-            : "border-line bg-surface hover:border-faint/60",
+        "box flex h-full flex-col gap-1.5 p-5 text-left",
+        disabled ? "cursor-not-allowed opacity-45" : on ? "box-on" : "box-tap",
       ].join(" ")}
     >
       <span className="text-[16px] font-medium tracking-[-0.012em] text-ink">
@@ -253,6 +259,7 @@ function Card({
 
 function Row({
   on,
+  disabled,
   onClick,
   lead,
   label,
@@ -261,6 +268,7 @@ function Row({
   tagNote,
 }: {
   on: boolean;
+  disabled?: boolean;
   onClick: () => void;
   lead: string;
   label: string;
@@ -272,12 +280,12 @@ function Row({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={on}
       className={[
-        "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border px-4 py-3.5 text-left transition-colors",
-        on
-          ? "border-accent/50 bg-accent/6"
-          : "border-line bg-surface hover:border-faint/60",
+        "box flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3.5 text-left",
+        on ? "box-on" : disabled ? "opacity-45" : "box-tap",
+        disabled ? "cursor-not-allowed" : "",
       ].join(" ")}
     >
       <span className="font-mono text-[11px] text-faint tnum">{lead}</span>

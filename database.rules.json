@@ -17,16 +17,15 @@
       }
     },
 
-    // Code -> room lookup. This is the only globally readable thing, and it
-    // holds no game data: a code, the room it points at, and whether that
-    // room is still open. Without it, joining by code would require reading
-    // every room in the project.
+    // Code -> room lookup. The only globally readable thing, and it holds no
+    // game data: a code, the room it points at, who owns it, and whether it is
+    // still open. It records its own hostUid so that creating, closing and
+    // deleting a code are all decidable without reading another node.
     "roomCodes": {
       ".read": "auth != null",
       "$code": {
-        // Only the host of the referenced room may claim or update a code.
-        ".write": "auth != null && root.child('rooms').child(newData.child('roomId').val()).child('hostUid').val() == auth.uid",
-        ".validate": "newData.hasChildren(['roomId', 'status'])"
+        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() == auth.uid)",
+        ".validate": "!newData.exists() || newData.hasChildren(['roomId', 'hostUid', 'status'])"
       }
     },
 
@@ -37,8 +36,7 @@
         // this rule true for them.
         ".read": "auth != null && (data.child('hostUid').val() == auth.uid || data.child('players').child(auth.uid).exists())",
 
-        // The host creates the room and is the only one who moves the round
-        // on. The seat rule below grants each player one exception.
+        // The host creates the room, runs it, and deletes it when it is done.
         ".write": "auth != null && (!data.exists() || data.child('hostUid').val() == auth.uid)",
 
         "players": {
@@ -57,8 +55,11 @@
     // before the reveal.
     "roomAnswers": {
       "$roomId": {
-        // The host reads the whole set, and only to resolve the question.
+        // The host reads the whole set to resolve a question, and clears it
+        // when the room is torn down. This does not widen what a bad host can
+        // do — a host that resolves rounds is already trusted with the result.
         ".read": "auth != null && root.child('rooms').child($roomId).child('hostUid').val() == auth.uid",
+        ".write": "auth != null && root.child('rooms').child($roomId).child('hostUid').val() == auth.uid",
 
         "$index": {
           "$uid": {
@@ -67,7 +68,7 @@
             // changed after the reveal.
             ".read": "auth != null && auth.uid == $uid",
             ".write": "auth != null && auth.uid == $uid && !data.exists()",
-            ".validate": "newData.hasChildren(['choice'])"
+            ".validate": "!newData.exists() || newData.hasChildren(['choice'])"
           }
         }
       }

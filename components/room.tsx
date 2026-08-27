@@ -40,6 +40,8 @@ import {
   seated,
 } from "@/lib/table";
 import { ClockRail, QuestionStage } from "@/components/question-stage";
+import { Wordmark } from "@/components/wordmark";
+import { InviteFriends } from "@/components/friends";
 import { RoomTable3D } from "@/components/room-table-3d";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, gradeBot, openSession } from "@/lib/grade";
@@ -68,14 +70,21 @@ function useServerOffset() {
   return offset;
 }
 
-export function Room({ subunitId }: { subunitId: string }) {
+export function Room({
+  subunitId,
+  joinCode,
+}: {
+  subunitId: string;
+  /** A code arrived at from a friend's invitation rather than typed in. */
+  joinCode?: string;
+}) {
   const found = describe(subunitId);
-  const { user } = useAuth();
+  const { user, username } = useAuth();
   const offset = useServerOffset();
 
   const [roomId, setRoomId] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomData | null>(null);
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(joinCode ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -220,7 +229,7 @@ export function Room({ subunitId }: { subunitId: string }) {
     try {
       const id = await createRoom({
         hostUid: user.uid,
-        displayName: user.displayName ?? "You",
+        displayName: username ?? user.displayName ?? "You",
         subunitId,
         seats: SEATS,
       });
@@ -242,7 +251,7 @@ export function Room({ subunitId }: { subunitId: string }) {
         setError(hit.error);
         return;
       }
-      await joinRoom(hit.roomId, user.uid, user.displayName ?? "You");
+      await joinRoom(hit.roomId, user.uid, username ?? user.displayName ?? "You");
       setRoomId(hit.roomId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not join that room.");
@@ -250,6 +259,40 @@ export function Room({ subunitId }: { subunitId: string }) {
       setBusy(false);
     }
   }
+
+  /**
+   * An invitation arrives with the code already in hand, so the seat is taken
+   * on arrival rather than after a press. It is still exactly the same join —
+   * write your own seat, and the room becomes readable to you — because an
+   * invitation is a shortcut through the typing, not a second way into a room.
+   *
+   * The ref is the guard rather than state: a failed join must not be retried
+   * on every render, and a successful one must not race a second seat write.
+   */
+  const invited = useRef(false);
+
+  useEffect(() => {
+    if (!joinCode || invited.current || !user || !username || roomId) return;
+    invited.current = true;
+
+    let live = true;
+    (async () => {
+      const hit = await findRoomByCode(joinCode);
+      if (!live) return;
+      if ("error" in hit) {
+        setError(hit.error);
+        return;
+      }
+      await joinRoom(hit.roomId, user.uid, username);
+      if (live) setRoomId(hit.roomId);
+    })().catch(() => {
+      if (live) setError("Could not join that room.");
+    });
+
+    return () => {
+      live = false;
+    };
+  }, [joinCode, user, username, roomId]);
 
   /** Fill empty seats with bots, assign turn order, and start. Host only. */
   async function start() {
@@ -716,6 +759,14 @@ export function Room({ subunitId }: { subunitId: string }) {
               Waiting for the host to start
             </p>
           )}
+
+          {/* Sending the code rather than reading it out. Any player can, not
+              just the host: everyone here already has the code. */}
+          <InviteFriends
+            roomId={roomId}
+            code={room.code}
+            subunitId={subunitId}
+          />
         </div>
       </Shell>
     );
@@ -817,6 +868,7 @@ export function Room({ subunitId }: { subunitId: string }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-5 px-6 text-[13px]">
+        <Wordmark />
         <span className="font-medium">Last One Standing</span>
         <span className="font-mono text-[11px] text-faint tnum">
           Round {room.round} · {aliveCount} left
@@ -923,13 +975,7 @@ function Shell({
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-5 px-6 text-[13px]">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 font-semibold tracking-[-0.02em]"
-        >
-          <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
-          Roundhouse
-        </Link>
+        <Wordmark />
         <span className="font-mono text-[11px] text-faint">{subtitle}</span>
         <Link href="/" className="ml-auto text-faint transition-colors hover:text-ink">
           Leave

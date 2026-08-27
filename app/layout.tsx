@@ -19,7 +19,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Roundhouse",
+  title: "hunat",
   description: "Learn your course by racing through it.",
 };
 

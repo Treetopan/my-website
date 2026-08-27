@@ -1,8 +1,14 @@
-# Roundhouse
+# hunat
 
 A learning-games platform. Students drill down **subject → course → unit → subunit**,
 then play that subunit as a game. Progress is personal — XP, levels and a daily
-streak — rather than a public leaderboard.
+streak — rather than a public leaderboard, and the people you play with are
+friends you added by name rather than strangers from a queue.
+
+The name sits top left on every screen. It is one component,
+`components/wordmark.tsx`, used by the library bar, both game headers and the
+sign-in page, because a wordmark that differs between screens reads as two
+different sites.
 
 ## Running it
 
@@ -102,6 +108,11 @@ firebase deploy --only database
 
 ```
 users/{uid}/progress          xp, streak, longestStreak, lastPlayedDate, played, won
+users/{uid}/username          the name its owner typed, and a lowercase key beside it
+usernames/{key}               uid — the claim, and the whole of what makes a name unique
+friends/{uid}/{friendUid}     { username, since }
+friendRequests/{uid}/{fromUid}  { username, at } — incoming, unanswered
+invites/{uid}/{fromUid}       { username, roomId, code, subunitId, at }
 results/{uid}/{id}            one record per finished session
 roomCodes/{CODE}              { roomId, status } — the only globally readable node
 rooms/{roomId}                seed, currentIndex, questionStartedAt, players
@@ -131,6 +142,69 @@ is what earns you read access to the room.
 Answers are write-once at the rules level (`!data.exists()`), so a player cannot
 change an answer after the reveal.
 
+## Usernames
+
+Everything social is keyed by a username, so `RequireAuth` gates on two things
+rather than one: signed in, and named. An account with no name can be added by
+nobody, invited by nobody, and sits at the table as a blank — there is nothing
+useful to let it through to — so a player without one meets
+`components/username-gate.tsx` instead of the app. That also catches accounts
+made before usernames existed, and the sign-up whose chosen name lost a race by
+a second.
+
+**Claiming is one write.** `usernames/{key}` may be written only when it does
+not already exist and only with the writer's own uid, so two people signing up
+at the same moment cannot both pass a read-then-write check — the loser gets a
+permission error and is asked for another name. The same condition refuses a
+delete, which makes a claim permanent: a name cannot be released and re-taken
+out from under whoever is playing under it. The index is written before the
+profile, because a claim with no profile behind it is a name held by its owner,
+while a profile with no claim is two people believing they own one.
+
+**Appropriateness is decided in `lib/username.ts`**, shared by the sign-up
+form, the gate and the friend search so that all three refuse the same things
+for the same stated reason. A name is normalised first — case folded, separators
+dropped, digits and symbols read back as the letters they stand for — and then
+matched against a flat list of words, plus a second pass over the letter-run
+collapsed form so `fuuuck` does not get through. The collapse runs only against
+words of four letters or more: collapse `ass` too and it matches the `as`
+inside Jason, which is the failure people actually meet. A list of innocent
+words — Cassie, classmate, sextant, Scunthorpe — is cut out before the search
+for the same reason. The rules cannot check a word list, so this is client-side;
+see the limitations below.
+
+## Friends, and inviting them
+
+`lib/social.ts` holds all of it, apart from `rtdb.ts`, which is about a game
+in progress: nothing there knows what a friend is, and nothing here knows what a
+question is.
+
+Each of the three nodes is keyed by the person who *reads* it — your friends,
+your requests, your invites. Read permission cascades downward in this database,
+so one shared list of every friendship would be readable in full by anyone
+allowed to read a single row of it.
+
+- **Adding.** You ask by username; they see the request and accept it. Accepting
+  is what writes the friendship, on both sides: the rules let you into somebody
+  else's list only while their request to you is standing, so your side is
+  written first and the request cleared last. Asking somebody who has already
+  asked you accepts theirs instead of filing a second one pointing the other way.
+- **Removing** clears both sides. Anyone may remove *themselves* from anyone's
+  list at any time, which is what stops half a friendship being a row nobody can
+  delete.
+- **Inviting.** In a Last One Standing lobby, every player — not just the host —
+  sees their friends with the room attached to each name. One press writes
+  `invites/{friend}/{you}`, and it arrives as a Join button on their friends
+  page and a count on the top bar. The rules check the friendship rather than
+  trusting the client, so an invitation cannot be used to reach a stranger, and
+  one row per sender means inviting somebody twice replaces the invitation
+  rather than filling their screen.
+
+An invitation carries the room code, not a seat. Joining is still the same write
+it is for somebody typing the code in — your own seat first, which is what earns
+you read access to the room — so this is a shortcut through the typing rather
+than a second way into a room.
+
 ## The games
 
 **Racer** — you against a bot. A correct answer moves you one length plus up to
@@ -141,8 +215,14 @@ ever submitted on your behalf. What the subunit's `seconds` sets is **par**:
 answer instantly and the speed half of the distance is worth all of it, answer
 at par or later and it is worth none, and in between it slides. Being slow
 costs you the bonus; it never costs you the length you earned by being right,
-and it can never end your question. The header counts up rather than down, and
-the rail under it is the bonus draining, not time running out.
+and it can never end your question.
+
+Nothing on the screen counts, either. There is no countdown, no stopwatch and no
+draining rail — an earlier version showed the elapsed time and a bar for the
+bonus, and both of them invited exactly the hurrying the design had just removed
+the reason for. Par is still measured, from a single timestamp taken when the
+question goes up and read once when you answer; it prices the bonus and is never
+displayed.
 
 **Last One Standing** — played around the table, one player at a time.
 
@@ -216,6 +296,17 @@ Two props carry the difference: `empty` for a seat nobody has taken yet, and
 under its name with `status`, because the lobby and the elimination screen are
 each describing something other than how the round is going.
 
+**The page.** The ground is a light blue washing into a light purple, fixed
+rather than scrolling so a long library page washes once instead of banding
+every screenful, and every panel is a near-white box lifted off it.
+`--color-ground` stays a single flat hex even though what you see is a
+gradient: the scenes below read the tokens back out of CSS with
+`getComputedStyle` and fill polygons with them, and a gradient is not a colour
+anything can fill with. The flat token is the middle of the wash, so a canvas
+sitting on the page belongs to it. The accent stays a deep teal — far enough
+round the wheel from a blue-purple ground that a selected box still separates
+instantly, and cool enough not to fight the page.
+
 **Colour.** Both scenes carry their own palettes, and neither takes them from
 the design tokens. A token means something — the accent is a live answer,
 `--color-out` is a wrong one — and a grandstand roof, a green baize or a
@@ -272,10 +363,20 @@ listing which subunits have generators and what each drills; the generators
 themselves sit behind `server-only`, because a generator that computes the
 answer solves every question it could ever produce.
 
-Coverage is partial on purpose. A subunit earns a generator when rolling new
-numbers makes a new question rather than the same question wearing a hat; proof
-and construction subunits need written questions instead, and the library marks
-them as having nothing to ask yet.
+Coverage is 549 of the 559 maths subunits, on 564 generators. What is left out
+is one class of subunit and not a backlog: the ten Geometry topics that are
+compass-and-straightedge construction or two-column proof — 1.6, 2.6 to 2.8,
+3.7, 5.8, 5.9, 6.8, 9.3 and 9.6. Rolling new numbers into those makes the same
+question wearing a hat, and four options about a proof is a worse question than
+no question, so the library marks them as having nothing to ask yet and they
+wait for written ones.
+
+**AB and BC share.** Units 1–5 of the two calculus courses are the same
+material, and so is most of 6 to 8. BC's subunits point at AB's generator
+arrays rather than holding a copy: `templates.ts` decides which codes are
+shared and `generators/calculus-bc.ts` reads that decision back, so the public
+manifest and the server-side generators cannot drift into disagreeing about it.
+Instance ids still carry the BC subunit, so a BC session is graded as BC.
 
 `npm run check:templates` sweeps millions of instances over fixed seeds,
 checking shape, rendering and determinism. Run it after touching a generator —
@@ -354,6 +455,13 @@ not "Golgi apparatus". There is a check for this in the notes below.
   single long-lived Node server; on a multi-instance platform a session can land
   on an instance that never saw it and grading fails closed with 404. Setting
   `FIREBASE_SERVICE_ACCOUNT` fixes it.
+- **The word list is client-side.** Shape and uniqueness are enforced by the
+  database rules, which is why two people cannot hold one name. Whether a name
+  is *acceptable* is decided in the browser, because rules cannot carry a word
+  list — so a modified client can claim a rude name that the sign-up form would
+  have refused. Closing that means minting usernames through a Route Handler
+  with the Admin SDK, at which point the rules can deny the index to clients
+  outright.
 - **Auth is client-side only.** Firebase keeps its session in IndexedDB, so
   `RequireAuth` decides what the UI shows, not what the server serves. The rules
   are the real boundary.

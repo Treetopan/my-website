@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authErrorMessage, useAuth } from "@/lib/auth-context";
+import { Wordmark } from "@/components/wordmark";
+import { USERNAME_MAX, checkUsername } from "@/lib/username";
 
 type Mode = "signin" | "signup";
 
@@ -31,7 +33,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const { user, loading, signIn, signUp } = useAuth();
 
-  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +51,19 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
     try {
       if (mode === "signup") {
-        await signUp(email.trim(), password, displayName.trim() || "Player");
+        // Judged here as well as by the gate, so the reason is stated next to
+        // the field being typed into rather than on the screen after it.
+        const checked = checkUsername(username);
+        if (!checked.ok) {
+          setError(checked.problem);
+          setBusy(false);
+          return;
+        }
+
+        // A name that was claimed a second ago by somebody else does not undo
+        // the account: it is made, it is signed in, and the gate asks again.
+        const claim = await signUp(email.trim(), password, checked.username);
+        if (!claim.ok) setError(claim.problem);
       } else {
         await signIn(email.trim(), password);
       }
@@ -63,13 +77,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
-        <Link
-          href="/"
-          className="mb-12 flex items-center gap-2.5 text-[15px] font-semibold tracking-[-0.02em]"
-        >
-          <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
-          Roundhouse
-        </Link>
+        <Wordmark className="mb-12" />
 
         <h1 className="text-[32px] font-semibold leading-tight tracking-[-0.035em]">
           {copy.title}
@@ -79,13 +87,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           {mode === "signup" && (
             <Field
-              label="Display name"
-              id="displayName"
+              label="Username"
+              id="username"
               type="text"
-              autoComplete="nickname"
-              value={displayName}
-              onChange={setDisplayName}
-              placeholder="What other players see"
+              autoComplete="username"
+              required
+              maxLength={USERNAME_MAX}
+              value={username}
+              onChange={setUsername}
+              placeholder="How friends find you"
+              hint="3–16 characters, letters, numbers and underscores"
             />
           )}
 

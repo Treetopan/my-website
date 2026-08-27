@@ -1,35 +1,46 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────
-   Roundhouse design tokens
+   hunat design tokens
 
-   Warm light theme. The page ground is a light brown, and
-   every panel is a cream box lifted off it — so the boxes
-   read as objects on a surface rather than as outlines.
+   Cool light theme. The page ground is a light blue washing
+   into a light purple, and every panel is a near-white box
+   lifted off it — so the boxes read as objects on a surface
+   rather than as outlines.
 
-   The accent is a deep teal: it sits opposite the ground's
-   warm orange-brown on the colour wheel, which is what makes
-   a selected box separate from an unselected one instantly
-   without shouting.
+   The ground is a gradient, but `--color-ground` stays a
+   single flat hex on purpose: the 3D scenes read these tokens
+   back out of CSS and fill polygons with them, and a gradient
+   is not a colour anything can fill with. The flat token is
+   the middle of the wash, so a canvas sitting on the page
+   still belongs to it.
+
+   The accent stays a deep teal. Against a blue-purple ground
+   it is the nearest hue that is still unmistakably not the
+   ground — far enough round the wheel that a selected box
+   separates instantly, and cool enough that it does not fight
+   the page the way a warm accent would.
    ───────────────────────────────────────────────────────── */
 @theme {
   /* Grounds and surfaces */
-  --color-ground: #e7d9c0;
-  --color-surface: #f8f3e8;
-  --color-surface-2: #f1e8d7;
-  --color-line: #cbbb9d;
-  --color-line-soft: #dbcdb2;
+  --color-ground: #e3e5fa;
+  --color-ground-blue: #d9e6fc;
+  --color-ground-purple: #e7dcfb;
+  --color-surface: #f9f8ff;
+  --color-surface-2: #efedfc;
+  --color-line: #c2c1e6;
+  --color-line-soft: #d8d6f1;
 
-  /* Text — warm dark brown rather than black, so it belongs
-     to the same family as the ground. */
-  --color-ink: #2b2317;
-  --color-muted: #6a5c46;
-  --color-faint: #93836a;
+  /* Text — deep indigo rather than black, so it belongs to the
+     same family as the ground. */
+  --color-ink: #221f3a;
+  --color-muted: #56517c;
+  --color-faint: #8884ad;
 
   /* The one accent. Primary actions, active state, live time. */
   --color-accent: #1f6f6b;
   --color-accent-hi: #2a8a85;
-  --color-accent-ink: #f8f3e8;
+  --color-accent-ink: #f9f8ff;
 
   /* Semantic — answer state only, never decoration */
   --color-correct: #2f7a4f;
@@ -50,8 +61,19 @@
     background: var(--color-ground);
   }
 
+  /* Blue at the top left, purple at the bottom right. Fixed rather than
+     scrolling, so a long library page washes once instead of banding every
+     screenful. The flat ground underneath it is what anything that needs an
+     actual colour — a canvas, overscroll, a print — falls back to. */
   body {
     background: var(--color-ground);
+    background-image: linear-gradient(
+      152deg,
+      var(--color-ground-blue) 0%,
+      var(--color-ground) 46%,
+      var(--color-ground-purple) 100%
+    );
+    background-attachment: fixed;
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-weight: 300;

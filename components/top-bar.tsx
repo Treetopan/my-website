@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Wordmark } from "@/components/wordmark";
 import { useAuth } from "@/lib/auth-context";
 import { watchProgress } from "@/lib/rtdb";
+import { watchFriendRequests, watchInvites } from "@/lib/social";
 import {
   EMPTY_PROGRESS,
   levelProgress,
@@ -12,26 +14,32 @@ import {
 } from "@/lib/progression";
 
 export function TopBar() {
-  const { user, signOut } = useAuth();
+  const { user, username, signOut } = useAuth();
   const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
+
+  // Two counts, one badge. What the badge means is "somebody is waiting on
+  // you", and an invitation and a request are both that — splitting them into
+  // two numbers up here would only move the reading of them off this screen.
+  const [requests, setRequests] = useState(0);
+  const [invites, setInvites] = useState(0);
 
   useEffect(() => {
     if (!user) return;
-    return watchProgress(user.uid, setProgress);
+    const stop = [
+      watchProgress(user.uid, setProgress),
+      watchFriendRequests(user.uid, (list) => setRequests(list.length)),
+      watchInvites(user.uid, (list) => setInvites(list.length)),
+    ];
+    return () => stop.forEach((off) => off());
   }, [user]);
 
   const { level, fraction } = levelProgress(progress.xp);
   const liveStreak = streakIsLive(progress, new Date());
+  const waiting = requests + invites;
 
   return (
     <header className="flex h-15 shrink-0 items-center gap-10 border-b border-line-soft px-8">
-      <Link
-        href="/"
-        className="flex items-center gap-2.5 text-[15px] font-semibold tracking-[-0.02em]"
-      >
-        <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
-        Roundhouse
-      </Link>
+      <Wordmark />
 
       <div className="ml-auto flex items-center gap-6">
         {/* Streak reads as state, not decoration: it dims the moment it is
@@ -66,10 +74,25 @@ export function TopBar() {
           </span>
         </span>
 
+        <Link
+          href="/friends"
+          className="flex items-center gap-2 text-[13px] text-faint transition-colors hover:text-ink"
+        >
+          Friends
+          {waiting > 0 && (
+            <span
+              className="grid size-4.5 place-items-center rounded-full bg-accent font-mono text-[10px] text-accent-ink tnum"
+              aria-label={`${waiting} waiting`}
+            >
+              {waiting}
+            </span>
+          )}
+        </Link>
+
         {user && (
           <span className="flex items-center gap-3">
-            <span className="grid size-6.5 place-items-center rounded-full border border-line bg-surface-2 font-mono text-[10px] text-muted">
-              {(user.displayName ?? user.email ?? "?").slice(0, 2).toUpperCase()}
+            <span className="font-mono text-[11px] text-muted">
+              {username ?? "—"}
             </span>
             <button
               type="button"

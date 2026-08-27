@@ -1,8 +1,11 @@
 import "server-only";
 
+import { GENERATED } from "../templates";
+import { CALCULUS_AB } from "./calculus-ab";
 import {
   among,
   ask,
+  fill,
   frac,
   head,
   nearMisses,
@@ -19,7 +22,7 @@ import {
  * to fix a bug. What follows is BC's own: the extra integration techniques,
  * parametric and polar calculus, and series.
  */
-export const CALCULUS_BC: Record<string, ((r: Rng) => Built)[]> = {
+const OWN: Record<string, ((r: Rng) => Built)[]> = {
   // ── 6.11 Integration by parts ──
   "math/ap-calculus-bc/unit-6/6.11": [
     (r) => {
@@ -287,4 +290,374 @@ export const CALCULUS_BC: Record<string, ((r: Rng) => Built)[]> = {
       );
     },
   ],
+  // ── 6.12 Partial fractions ──
+  "math/ap-calculus-bc/unit-6/6.12": [
+    (r) => {
+      const a = r.int(1, 6);
+      const b = a + r.int(1, 6);
+      return ask(
+        `1/((x - ${a})(x - ${b})) is written as A/(x - ${a}) + B/(x - ${b}).   What is A?`,
+        frac(1, a - b),
+        [frac(1, b - a), frac(1, a), frac(1, b), frac(1, a + b), frac(a, b)],
+        r,
+      );
+    },
+  ],
+
+  // ── 7.9 Logistic models ──
+  "math/ap-calculus-bc/unit-7/7.9": [
+    (r) => {
+      const cap = r.int(2, 40) * 100;
+      const k = r.int(2, 9);
+      return fill(
+        `dP/dt = 0.0${k}P(1 - P/${cap}).   What does P settle at?`,
+        cap,
+        { hint: "Growth stops where the bracket does" },
+      );
+    },
+  ],
+
+  // ── 9.2 Second derivatives of parametric equations ──
+  "math/ap-calculus-bc/unit-9/9.2": [
+    (r) => {
+      const a = r.int(2, 9);
+      return ask(
+        `x and y are given in terms of t. Which expression is d²y/dx²?`,
+        "(d/dt of dy/dx) ÷ (dx/dt)",
+        [
+          "(d²y/dt²) ÷ (d²x/dt²)",
+          "(d/dt of dy/dx) × (dx/dt)",
+          `(d²y/dt²) ÷ ${a}`,
+          "(dy/dt) ÷ (d²x/dt²)",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 9.3 Arc length of a parametric curve ──
+  "math/ap-calculus-bc/unit-9/9.3": [
+    (r) => {
+      const triples: [number, number, number][] = [
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [8, 15, 17],
+        [9, 12, 15],
+      ];
+      const [dx, dy, speed] = r.pick(triples);
+      const seconds = r.int(2, 9);
+      return fill(
+        `x = ${dx}t and y = ${dy}t, from t = 0 to t = ${seconds}. How long is the curve?`,
+        speed * seconds,
+        { hint: "Constant speed, so length is speed times time" },
+      );
+    },
+  ],
+
+  // ── 9.4 Differentiating a vector-valued function ──
+  "math/ap-calculus-bc/unit-9/9.4": [
+    (r) => {
+      const a = r.coefficient(6);
+      const b = r.coefficient(6);
+      return ask(
+        `Differentiate:   ⟨${head(a, "t^2")}, ${head(b, "t^3")}⟩`,
+        `⟨${head(2 * a, "t")}, ${head(3 * b, "t^2")}⟩`,
+        [
+          `⟨${head(a, "t")}, ${head(b, "t^2")}⟩`,
+          `⟨${head(2 * a, "t")}, ${head(3 * b, "t^3")}⟩`,
+          `⟨${head(3 * a, "t")}, ${head(2 * b, "t^2")}⟩`,
+          `⟨${head(2 * a, "t^2")}, ${head(3 * b, "t^3")}⟩`,
+          `⟨${head(a, "t^3")}, ${head(b, "t^4")}⟩`,
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 9.5 Integrating a vector-valued function ──
+  "math/ap-calculus-bc/unit-9/9.5": [
+    (r) => {
+      const a = r.int(2, 6);
+      const b = r.int(2, 6);
+      return ask(
+        `Integrate:   ⟨${2 * a}t, ${3 * b}t^2⟩ dt`,
+        `⟨${head(a, "t^2")}, ${head(b, "t^3")}⟩ + C`,
+        [
+          `⟨${head(2 * a, "t^2")}, ${head(3 * b, "t^3")}⟩ + C`,
+          `⟨${head(a, "t")}, ${head(b, "t^2")}⟩ + C`,
+          `⟨${2 * a}, ${6 * b}t⟩ + C`,
+          `⟨${head(a, "t^3")}, ${head(b, "t^4")}⟩ + C`,
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 9.6 Motion with vector-valued functions ──
+  "math/ap-calculus-bc/unit-9/9.6": [
+    (r) => {
+      const triples: [number, number, number][] = [
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [8, 15, 17],
+        [7, 24, 25],
+      ];
+      const [vx, vy, speed] = r.pick(triples);
+      return fill(
+        `A particle has velocity ⟨${vx}, ${vy}⟩. How fast is it going?`,
+        speed,
+        { hint: "Speed is the length of the velocity vector" },
+      );
+    },
+  ],
+
+  // ── 9.7 Differentiating in polar form ──
+  "math/ap-calculus-bc/unit-9/9.7": [
+    (r) => {
+      const a = r.int(2, 9);
+      const cosine = r.bool();
+      return ask(
+        `r = ${a} ${cosine ? "cos" : "sin"} θ.   What is dr/dθ?`,
+        cosine ? `-${a} sin θ` : `${a} cos θ`,
+        [
+          cosine ? `${a} sin θ` : `-${a} cos θ`,
+          cosine ? `${a} cos θ` : `${a} sin θ`,
+          `-${a} ${cosine ? "cos" : "sin"} θ`,
+          `${a}`,
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 9.9 Area between two polar curves ──
+  "math/ap-calculus-bc/unit-9/9.9": [
+    (r) => {
+      const inner = r.int(1, 6);
+      const outer = inner + r.int(1, 6);
+      return ask(
+        `What is the area between the circles r = ${inner} and r = ${outer}?`,
+        `${outer * outer - inner * inner}π`,
+        [
+          `${(outer - inner) ** 2}π`,
+          `${outer * outer + inner * inner}π`,
+          `${outer - inner}π`,
+          piFrac(outer * outer - inner * inner, 2),
+          `${outer * outer}π`,
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.1 Convergence and divergence ──
+  "math/ap-calculus-bc/unit-10/10.1": [
+    (r) => {
+      const n = r.int(3, 9);
+      return among(
+        `What does it mean for an infinite series to converge?`,
+        "Its sequence of partial sums has a finite limit",
+        [
+          "Its sequence of partial sums has a finite limit",
+          "Its terms tend to zero",
+          `Its first ${n} terms add to something finite`,
+          "Its terms are all positive",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.3 The nth Term Test ──
+  "math/ap-calculus-bc/unit-10/10.3": [
+    (r) => {
+      const a = r.int(2, 9);
+      const diverges = r.bool();
+      const series = diverges ? `Σ ${a}n/(n + ${a})` : `Σ ${a}/n^2`;
+      return among(
+        `What does the nth Term Test say about   ${series} ?`,
+        diverges
+          ? "It diverges — the terms do not tend to zero"
+          : "Nothing — the terms tend to zero, so the test is inconclusive",
+        [
+          "It diverges — the terms do not tend to zero",
+          "Nothing — the terms tend to zero, so the test is inconclusive",
+          "It converges, because the terms tend to zero",
+          "The test does not apply to positive series",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.4 The Integral Test ──
+  "math/ap-calculus-bc/unit-10/10.4": [
+    (r) => {
+      const p = r.pick([2, 3, 4]);
+      const converges = r.bool();
+      const shown = converges ? `Σ 1/n^${p}` : "Σ 1/n";
+      return among(
+        `The Integral Test is applied to   ${shown}.   What does the improper integral say?`,
+        converges ? "It converges, so the series converges" : "It diverges, so the series diverges",
+        [
+          "It converges, so the series converges",
+          "It diverges, so the series diverges",
+          "The test cannot be used on this series",
+          "It converges, but the series still diverges",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.6 Comparison tests ──
+  "math/ap-calculus-bc/unit-10/10.6": [
+    (r) => {
+      const a = r.int(2, 9);
+      return among(
+        `Σ 1/(n^2 + ${a}) is compared with Σ 1/n^2. What follows?`,
+        "It converges — its terms are smaller than a convergent series'",
+        [
+          "It converges — its terms are smaller than a convergent series'",
+          "It diverges — its terms are smaller than a divergent series'",
+          "Nothing — the comparison is the wrong way round",
+          "It converges only if a is even",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.7 The Alternating Series Test ──
+  "math/ap-calculus-bc/unit-10/10.7": [
+    (r) => {
+      const a = r.int(1, 9);
+      return among(
+        `Σ (-1)^n · ${a}/n satisfies which conditions of the Alternating Series Test?`,
+        "The terms shrink and tend to zero, so it converges",
+        [
+          "The terms shrink and tend to zero, so it converges",
+          "The terms grow, so it diverges",
+          "The test needs positive terms, so it does not apply",
+          "The terms tend to a non-zero limit",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.9 Absolute and conditional convergence ──
+  "math/ap-calculus-bc/unit-10/10.9": [
+    (r) => {
+      const power = r.pick([1, 2]);
+      const conditional = power === 1;
+      return among(
+        `Σ (-1)^n / n^${power} converges. Is it absolutely or conditionally convergent?`,
+        conditional ? "Conditionally" : "Absolutely",
+        [
+          "Absolutely",
+          "Conditionally",
+          "Neither — it diverges",
+          "Both at once",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.10 The alternating series error bound ──
+  "math/ap-calculus-bc/unit-10/10.10": [
+    (r) => {
+      const n = r.int(3, 9);
+      return ask(
+        `An alternating series is cut off after ${n} terms. What bounds the error?`,
+        `The size of term ${n + 1}`,
+        [
+          `The size of term ${n}`,
+          `The sum of the first ${n} terms`,
+          `The size of term ${n + 2}`,
+          "Nothing bounds it",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.12 The Lagrange error bound ──
+  "math/ap-calculus-bc/unit-10/10.12": [
+    (r) => {
+      const n = r.int(2, 6);
+      return among(
+        `A Taylor polynomial of degree ${n} is used. What does the Lagrange bound involve?`,
+        `The largest size of the ${n + 1}th derivative on the interval`,
+        [
+          `The largest size of the ${n + 1}th derivative on the interval`,
+          `The value of the ${n}th derivative at the centre`,
+          "The sum of every derivative",
+          "Only the distance from the centre",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 10.14 Taylor and Maclaurin series ──
+  "math/ap-calculus-bc/unit-10/10.14": [
+    (r) => {
+      const cases = [
+        { f: "e^x", series: "Σ x^n / n!" },
+        { f: "sin x", series: "Σ (-1)^n x^(2n+1) / (2n+1)!" },
+        { f: "cos x", series: "Σ (-1)^n x^(2n) / (2n)!" },
+        { f: "1/(1 - x)", series: "Σ x^n" },
+      ];
+      const c = r.pick(cases);
+      return ask(
+        `What is the Maclaurin series of   ${c.f} ?`,
+        c.series,
+        cases.filter((one) => one.series !== c.series).map((one) => one.series),
+        r,
+      );
+    },
+  ],
+
+  // ── 10.15 Functions as power series ──
+  "math/ap-calculus-bc/unit-10/10.15": [
+    (r) => {
+      const a = r.int(2, 9);
+      return ask(
+        `Write   1/(1 - ${a}x)   as a power series.`,
+        `Σ (${a}x)^n`,
+        [`Σ ${a}x^n`, `Σ x^n/${a}`, `Σ (x/${a})^n`, `Σ ${a}^n x`, `Σ (1 - ${a}x)^n`],
+        r,
+      );
+    },
+  ],
+};
+
+/**
+ * The generators behind the shared half of the manifest.
+ *
+ * Which subunits are shared is decided in `templates.ts` — this reads that
+ * decision back rather than restating it, so the two halves cannot drift into
+ * disagreeing about it. Pointing at AB's array rather than copying it means one
+ * place to fix a bug and one set of distractors to keep honest.
+ */
+function sharedWithAb(): Record<string, ((r: Rng) => Built)[]> {
+  const out: Record<string, ((r: Rng) => Built)[]> = {};
+
+  for (const id of Object.keys(GENERATED)) {
+    if (!id.startsWith("math/ap-calculus-bc/") || OWN[id]) continue;
+
+    const twin = CALCULUS_AB[id.replace("/ap-calculus-bc/", "/ap-calculus-ab/")];
+    if (twin) out[id] = twin;
+  }
+
+  return out;
+}
+
+export const CALCULUS_BC: Record<string, ((r: Rng) => Built)[]> = {
+  ...OWN,
+  ...sharedWithAb(),
 };

@@ -5,7 +5,77 @@
     "users": {
       "$uid": {
         ".read": "auth != null",
-        ".write": "auth != null && auth.uid == $uid"
+        ".write": "auth != null && auth.uid == $uid",
+
+        // The name has to hold its shape here as well as in the index, or a
+        // profile could show one thing while the claim held another.
+        "username": {
+          ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z][A-Za-z0-9_]{2,15}$/)"
+        }
+      }
+    },
+
+    // The username index: name -> uid, and the whole of what makes a username
+    // unique. Globally readable by signed-in users because finding a friend by
+    // name is a read of exactly one key here, and it holds nothing else.
+    //
+    // A key may be written only when it does not already exist, and only with
+    // the writer's own uid. That makes claiming a name a single write that
+    // either wins or fails — no read-then-write, which two people signing up at
+    // the same moment can both pass. It also makes a claim permanent: the same
+    // condition refuses a delete, so a name cannot be released and re-taken
+    // out from under whoever is playing under it.
+    "usernames": {
+      ".read": "auth != null",
+      "$key": {
+        ".write": "auth != null && !data.exists() && newData.val() == auth.uid",
+        ".validate": "newData.isString() && $key.matches(/^[a-z][a-z0-9_]{2,15}$/)"
+      }
+    },
+
+    // Friends, keyed by whose list it is. Read permission cascades downward in
+    // this database, so one shared list of every friendship would be readable
+    // in full by anyone allowed to read a single row of it — hence a list per
+    // player, each readable only by its owner.
+    "friends": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$other": {
+          // You may edit your own list freely. Somebody else may write
+          // themselves into it only while your request to them is standing —
+          // which is what accepting a request is — and may remove themselves
+          // from it at any time, so that ending a friendship can clear both
+          // sides rather than leaving a row nobody is able to delete.
+          ".write": "auth != null && (auth.uid == $uid || (auth.uid == $other && (!newData.exists() || root.child('friendRequests').child(auth.uid).child($uid).exists())))",
+          ".validate": "!newData.exists() || newData.hasChildren(['username'])"
+        }
+      }
+    },
+
+    // Incoming friend requests, again keyed by who receives them. The sender
+    // writes one row and can withdraw it; the receiver can read the lot and
+    // clear any of them, which is both accepting and declining.
+    "friendRequests": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$from": {
+          ".write": "auth != null && (auth.uid == $uid || auth.uid == $from)",
+          ".validate": "!newData.exists() || newData.hasChildren(['username'])"
+        }
+      }
+    },
+
+    // Room invitations. Only a friend can send one, checked here rather than
+    // trusted from the client, so an invitation cannot be used to reach a
+    // stranger. One row per sender: inviting somebody twice replaces the
+    // invitation rather than filling their screen with them.
+    "invites": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$from": {
+          ".write": "auth != null && (auth.uid == $uid || (auth.uid == $from && root.child('friends').child($uid).child($from).exists()))",
+          ".validate": "!newData.exists() || newData.hasChildren(['roomId', 'code', 'username'])"
+        }
       }
     },
 

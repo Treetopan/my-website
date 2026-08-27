@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { RequireAuth } from "@/components/require-auth";
 import { Racer } from "@/components/racer";
 
-export const metadata: Metadata = { title: "Racer · Roundhouse" };
+export const metadata: Metadata = { title: "Racer · hunat" };
 
 export default async function RacerPage({
   searchParams,

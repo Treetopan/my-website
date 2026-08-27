@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AccountMenu } from "@/components/account-menu";
 import { Wordmark } from "@/components/wordmark";
 import { useAuth } from "@/lib/auth-context";
 import { watchProgress } from "@/lib/rtdb";
@@ -14,7 +15,7 @@ import {
 } from "@/lib/progression";
 
 export function TopBar() {
-  const { user, username, signOut } = useAuth();
+  const { user } = useAuth();
   const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
 
   // Two counts, one badge. What the badge means is "somebody is waiting on
@@ -89,20 +90,7 @@ export function TopBar() {
           )}
         </Link>
 
-        {user && (
-          <span className="flex items-center gap-3">
-            <span className="font-mono text-[11px] text-muted">
-              {username ?? "—"}
-            </span>
-            <button
-              type="button"
-              onClick={() => signOut()}
-              className="text-[13px] text-faint transition-colors hover:text-ink"
-            >
-              Sign out
-            </button>
-          </span>
-        )}
+        {user && <AccountMenu />}
       </div>
     </header>
   );

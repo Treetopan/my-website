@@ -1,8 +1,65 @@
 {
   "rules": {
+    // Who may see the admin area.
+    //
+    // Two ways in, and they differ on purpose. One address — the owner's — is
+    // written into the rules, because admin is stored in the database and a
+    // rule that only ever consults the database can never grant the first one.
+    // Everybody else is a row here, written by somebody who already has it.
+    //
+    // Verification is not required of that address. Firebase Auth will not
+    // issue two accounts for one email, so it can only belong to whoever
+    // registered it first, and requiring a verified token would lock the owner
+    // out until they clicked a link that email/password sign-up never sends.
+    //
+    // Adding an admin is open to any admin; removing one is the owner's alone.
+    // Otherwise somebody let in could turn round and shut out the people who
+    // let them in. The owner holds admin by email rather than by a row, so
+    // there is no row to delete and no way to lock the last person out.
+    "admins": {
+      ".read": "auth != null && (auth.token.email == 'alexleyvalp@gmail.com' || root.child('admins').child(auth.uid).exists())",
+      "$uid": {
+        // Each player may read their own row and no other — which is how a
+        // client finds out whether to offer the door at all, without being
+        // able to enumerate who else holds it.
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && (auth.token.email == 'alexleyvalp@gmail.com' || (newData.exists() && root.child('admins').child(auth.uid).exists()))",
+        ".validate": "newData.hasChildren(['username', 'at'])"
+      }
+    },
+
+    // First-run survey answers, one record per player.
+    //
+    // They are kept here rather than on the profile because a profile is
+    // readable by every signed-in user — that is what lets a room show names —
+    // and what somebody said about their school year and their goals is not.
+    // Read by its owner, read in full by an admin, written by nobody else.
+    //
+    // A record may be rewritten: somebody who skipped can come back and answer
+    // it from their profile, and there is nothing here worth freezing.
+    "surveys": {
+      ".read": "auth != null && (auth.token.email == 'alexleyvalp@gmail.com' || root.child('admins').child(auth.uid).exists())",
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChild('at')",
+        "at": { ".validate": "newData.isNumber()" },
+        "skipped": { ".validate": "newData.isBoolean()" },
+        "answers": {
+          // A ceiling on the free-text field, so the one place a player can
+          // type freely cannot be used to store something else entirely.
+          "$question": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500"
+          }
+        }
+      }
+    },
+
     // A player's profile and progress: readable by any signed-in user so
-    // rooms can show names, writable only by its owner.
+    // rooms can show names, writable only by its owner. An admin may read the
+    // node whole, which is the only way to count accounts or list them.
     "users": {
+      ".read": "auth != null && (auth.token.email == 'alexleyvalp@gmail.com' || root.child('admins').child(auth.uid).exists())",
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null && auth.uid == $uid",

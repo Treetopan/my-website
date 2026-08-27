@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onValue, ref } from "firebase/database";
 import { realtimeDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
@@ -157,11 +157,36 @@ export function Room({ subunitId }: { subunitId: string }) {
   const me = user ? players[user.uid] : undefined;
   const myTurn = !!user && room?.turnUid === user.uid && !reveal;
   // What I have entered on the live question, before the host has graded it.
-  const [draft, setDraft] = useState<Answered>({ kind: "choice", choice: null });
+  // Both of these are stamped with the question they belong to rather than
+  // being cleared when the turn moves on: a plain boolean stayed true after
+  // the first answer and locked every turn after it, and a draft that was
+  // never re-kinded left non-choice questions with nothing to answer with.
+  const [entered, setEntered] = useState<{ id: string; response: Answered } | null>(
+    null,
+  );
+  const [submittedFor, setSubmittedFor] = useState<string | null>(null);
+
+  const draft: Answered = useMemo(
+    () =>
+      !question
+        ? { kind: "choice", choice: null }
+        : entered?.id === question.id
+          ? entered.response
+          : emptyResponse(question.kind),
+    [question, entered],
+  );
+
+  const setDraft = useCallback(
+    (response: Answered) => {
+      if (question) setEntered({ id: question.id, response });
+    },
+    [question],
+  );
+
   // Locked once submitted: the answer is write-once at the rules level, so
   // letting the input keep moving would only promise something it cannot keep.
-  const [submitted, setSubmitted] = useState(false);
-  const answered = myPicks[index] !== undefined || submitted;
+  const answered =
+    myPicks[index] !== undefined || (!!question && submittedFor === question.id);
 
   const myAnswers: AnswerDetail[] = useMemo(() => {
     if (!questions.length) return [];
@@ -484,8 +509,8 @@ export function Room({ subunitId }: { subunitId: string }) {
 
   // ── Answering ──────────────────────────────────────────
   async function commit(response: Answered) {
-    if (!roomId || !user || !myTurn || answered) return;
-    setSubmitted(true);
+    if (!roomId || !user || !myTurn || answered || !question) return;
+    setSubmittedFor(question.id);
     setDraft(response);
     await submitAnswer(roomId, index, user.uid, response);
   }

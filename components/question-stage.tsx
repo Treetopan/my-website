@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import type { Question } from "@/lib/curriculum";
-import type { Point, Response, Reveal } from "@/lib/questions";
+import { emptyResponse, type Point, type Response, type Reveal } from "@/lib/questions";
 import {
   FillAnswer,
   LineAnswer,
@@ -49,6 +49,13 @@ export function QuestionStage({
   const revealed = reveal !== null;
   const locked = revealed || !!disabled;
 
+  // A draft of the wrong kind is treated as an empty one of the right kind.
+  // Each input below only renders when the draft matches the question, so
+  // without this a mismatch renders the prompt and then nothing at all —
+  // which is what a question looks like when it is broken rather than hard.
+  const answer: Response =
+    draft.kind === question.kind ? draft : emptyResponse(question.kind);
+
   // Number keys pick an option, for anyone who wants them. They are no longer
   // advertised on each option — the answer itself is the target — and they only
   // apply to the one kind that has numbered answers.
@@ -74,55 +81,55 @@ export function QuestionStage({
         {question.prompt}
       </h1>
 
-      {question.kind === "choice" && draft.kind === "choice" && (
+      {question.kind === "choice" && answer.kind === "choice" && (
         <Options
           options={question.options}
-          picked={draft.choice}
+          picked={answer.choice}
           correctIndex={reveal?.kind === "choice" ? reveal.index : null}
           locked={locked}
           onPick={(choice) => onSubmit({ kind: "choice", choice })}
         />
       )}
 
-      {question.kind === "fill" && draft.kind === "fill" && (
+      {question.kind === "fill" && answer.kind === "fill" && (
         <FillAnswer
           question={question}
-          draft={draft.text}
+          draft={answer.text}
           locked={locked}
           reveal={reveal}
           onDraft={(text) => onDraft({ kind: "fill", text })}
-          onSubmit={() => onSubmit(draft)}
+          onSubmit={() => onSubmit(answer)}
         />
       )}
 
-      {question.kind === "slider" && draft.kind === "slider" && (
+      {question.kind === "slider" && answer.kind === "slider" && (
         <SliderAnswer
           question={question}
-          draft={draft.value}
+          draft={answer.value}
           locked={locked}
           reveal={reveal}
           score={score}
           onDraft={(value) => onDraft({ kind: "slider", value })}
-          onSubmit={() => onSubmit(draft)}
+          onSubmit={() => onSubmit(answer)}
         />
       )}
 
-      {question.kind === "point" && draft.kind === "point" && (
+      {question.kind === "point" && answer.kind === "point" && (
         <PointAnswer
           question={question}
-          draft={draft.at}
+          draft={answer.at}
           locked={locked}
           reveal={reveal}
           score={score}
           onDraft={(at: Point) => onDraft({ kind: "point", at })}
-          onSubmit={() => onSubmit(draft)}
+          onSubmit={() => onSubmit(answer)}
         />
       )}
 
-      {question.kind === "line" && draft.kind === "line" && (
+      {question.kind === "line" && answer.kind === "line" && (
         <LineAnswer
           question={question}
-          draft={draft.through}
+          draft={answer.through}
           locked={locked}
           reveal={reveal}
           score={score}
@@ -131,8 +138,8 @@ export function QuestionStage({
             onSubmit(
               // A line never submitted still has the starting handles on the
               // grid, and grading what is drawn is fairer than grading nothing.
-              draft.through
-                ? draft
+              answer.through
+                ? answer
                 : {
                     kind: "line",
                     through: [

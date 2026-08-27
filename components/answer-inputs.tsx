@@ -156,8 +156,13 @@ export function SliderAnswer({
           step={question.step}
           value={value}
           disabled={locked}
+          // The value is committed on release as well as on change, so a
+          // student who wants the value the handle already sits on can grab it
+          // and let go rather than having to move away and back.
           onChange={(e) => onDraft(Number(e.target.value))}
-          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-surface-2 accent-accent disabled:cursor-default"
+          onPointerUp={() => !locked && onDraft(value)}
+          onKeyUp={() => !locked && onDraft(value)}
+          className="range"
         />
 
         <div className="mt-2 flex justify-between font-mono text-[11px] text-faint tnum">

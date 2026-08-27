@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DIFFICULTY,
   describe,
@@ -56,7 +56,14 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("asking");
-  const [draft, setDraft] = useState<Answered>({ kind: "choice", choice: null });
+  // The draft is stamped with the question it belongs to and read back only
+  // for that question, rather than being reset when the question changes.
+  // Resetting meant the very first question kept a draft of the wrong kind —
+  // and every input renders only when the two agree, so question one showed
+  // its prompt and nothing underneath it.
+  const [entered, setEntered] = useState<{ id: string; response: Answered } | null>(
+    null,
+  );
   const [msLeft, setMsLeft] = useState(totalMs);
   const [you, setYou] = useState(0);
   const [bot, setBot] = useState(0);
@@ -71,6 +78,23 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
   const total = questions.length;
   const question = questions[index];
+
+  const draft: Answered = useMemo(
+    () =>
+      !question
+        ? { kind: "choice", choice: null }
+        : entered?.id === question.id
+          ? entered.response
+          : emptyResponse(question.kind),
+    [question, entered],
+  );
+
+  const setDraft = useCallback(
+    (response: Answered) => {
+      if (question) setEntered({ id: question.id, response });
+    },
+    [question],
+  );
 
   const resolve = useCallback(
     async (response: Answered, msRemaining: number) => {
@@ -126,7 +150,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
         setBot((d) => d + 1 + (1 - botSpeed));
       }
     },
-    [question, index, totalMs, difficulty, sessionId],
+    [question, index, totalMs, difficulty, sessionId, setDraft],
   );
 
   const resolveRef = useRef(resolve);
@@ -193,7 +217,6 @@ export function Racer({ subunitId }: { subunitId: string }) {
         setPhase("over");
         return;
       }
-      setDraft(emptyResponse(questions[index + 1]?.kind ?? "choice"));
       setReveal(null);
       setScore(null);
       setLastGain(null);
@@ -203,7 +226,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
     }, REVEAL_MS);
 
     return () => clearTimeout(id);
-  }, [phase, index, total, totalMs, questions]);
+  }, [phase, index, total, totalMs]);
 
   const won = you > bot;
 
@@ -305,7 +328,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
             after={after}
             onAgain={() => {
               setIndex(0);
-              setDraft({ kind: "choice", choice: null });
+              setEntered(null);
               setYou(0);
               setBot(0);
               setAnswers([]);

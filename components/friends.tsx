@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import type { GameId } from "@/lib/rtdb";
 import {
   acceptFriend,
   declineFriend,
@@ -226,10 +227,13 @@ export function InviteFriends({
   roomId,
   code,
   subunitId,
+  game,
 }: {
   roomId: string;
   code: string;
   subunitId: string;
+  /** Which game the room is running, so the invitation leads to it. */
+  game: GameId;
 }) {
   const { user, username } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -260,6 +264,7 @@ export function InviteFriends({
                   roomId,
                   code,
                   subunitId,
+                  game,
                 });
                 setSent((prev) => ({ ...prev, [friend.uid]: true }));
               }}

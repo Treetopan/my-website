@@ -232,6 +232,7 @@ export function Room({
         displayName: username ?? user.displayName ?? "You",
         subunitId,
         seats: SEATS,
+        game: "last-one-standing",
       });
       setRoomId(id);
     } catch (e) {
@@ -766,6 +767,7 @@ export function Room({
             roomId={roomId}
             code={room.code}
             subunitId={subunitId}
+            game="last-one-standing"
           />
         </div>
       </Shell>

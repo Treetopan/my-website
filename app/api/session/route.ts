@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getSubunit, type Question } from "@/lib/curriculum";
 import { createSession, mintAllowed } from "@/lib/session-store";
+import { hasSpatial, spatialGenerators } from "@/lib/templates";
 import { hasGenerators, mintInstances } from "@/lib/templates.server";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +38,10 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Expected a JSON body." }, { status: 400 });
   }
 
-  const { subunitId, length } = (body ?? {}) as {
+  const { subunitId, length, spatial } = (body ?? {}) as {
     subunitId?: unknown;
     length?: unknown;
+    spatial?: unknown;
   };
 
   if (typeof subunitId !== "string") {
@@ -53,6 +55,17 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Unknown subunit." }, { status: 400 });
   }
 
+  // A duel asks for placed answers only, because it is settled on which of
+  // two answers was closer. Refused here as well as hidden in the library:
+  // the library is a convenience, and this is the rule.
+  const placed = spatial === true;
+  if (placed && !hasSpatial(subunitId)) {
+    return Response.json(
+      { error: "Nothing here is answered on a grid." },
+      { status: 400 },
+    );
+  }
+
   const want =
     typeof length === "number" && Number.isInteger(length) && length > 0
       ? Math.min(length, MAX_LENGTH)
@@ -61,12 +74,17 @@ export async function POST(req: NextRequest) {
   // Generated questions are minted here rather than derived on the client,
   // because building the options means knowing the answer. The browser gets
   // finished questions and cannot tell them from bank ones.
-  const questions: Question[] = generated ? mintInstances(subunitId, want) : [];
+  const questions: Question[] = generated
+    ? mintInstances(subunitId, want, placed ? spatialGenerators(subunitId) : undefined)
+    : [];
 
   // Reshuffle each time the bank is exhausted, so a long game does not repeat
   // in the same order it just played. Minted questions are already unique and
   // already in a random order, so they only need topping up.
-  while (questions.length < want && subunit.questions.length > 0) {
+  //
+  // Never for a duel: a bank question is answered by choosing, so topping up
+  // from one would fill a placed-answer game with questions it cannot settle.
+  while (!placed && questions.length < want && subunit.questions.length > 0) {
     questions.push(...shuffle(subunit.questions));
   }
   questions.length = Math.min(want, questions.length);

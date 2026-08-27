@@ -62,7 +62,14 @@ function split(built: Built, id: string, topic: string): Resolved {
   switch (built.kind) {
     case "choice":
       return {
-        question: { kind: "choice", id, topic, prompt: built.prompt, options: built.options },
+        question: {
+          kind: "choice",
+          id,
+          topic,
+          prompt: built.prompt,
+          options: built.options,
+          figure: built.figure,
+        },
         answer: { kind: "choice", index: built.answer },
       };
 
@@ -75,6 +82,7 @@ function split(built: Built, id: string, topic: string): Resolved {
           prompt: built.prompt,
           unit: built.unit,
           hint: built.hint,
+          figure: built.figure,
         },
         answer: {
           kind: "fill",
@@ -95,6 +103,7 @@ function split(built: Built, id: string, topic: string): Resolved {
           max: built.max,
           step: built.step,
           unit: built.unit,
+          figure: built.figure,
         },
         answer: {
           kind: "slider",
@@ -106,13 +115,27 @@ function split(built: Built, id: string, topic: string): Resolved {
 
     case "point":
       return {
-        question: { kind: "point", id, topic, prompt: built.prompt, span: built.span },
+        question: {
+          kind: "point",
+          id,
+          topic,
+          prompt: built.prompt,
+          span: built.span,
+          figure: built.figure,
+        },
         answer: { kind: "point", at: built.at, full: built.full, zero: built.zero },
       };
 
     case "line":
       return {
-        question: { kind: "line", id, topic, prompt: built.prompt, span: built.span },
+        question: {
+          kind: "line",
+          id,
+          topic,
+          prompt: built.prompt,
+          span: built.span,
+          figure: built.figure,
+        },
         answer: {
           kind: "line",
           slope: built.slope,
@@ -155,16 +178,31 @@ export function resolveInstance(id: string): Resolved | null {
  * samples across the topics rather than leaning on one generator, and every
  * instance gets its own seed — two students on the same subunit, or the same
  * student twice, never see the same numbers.
+ *
+ * `only` narrows the deal to particular generators, which is how a duel asks
+ * for the questions it can settle. Dealing round-robin within that shorter
+ * list rather than rejecting what it does not want keeps the spread even: a
+ * subunit with two placed-answer generators gives four of each across eight
+ * rounds, with fresh numbers every time.
  */
-export function mintInstances(subunitId: string, want: number): Question[] {
+export function mintInstances(
+  subunitId: string,
+  want: number,
+  only?: number[],
+): Question[] {
   const generators = GENERATORS[subunitId];
   if (!generators?.length) return [];
 
-  const offset = Math.floor(Math.random() * generators.length);
+  const pool = only
+    ? only.filter((i) => Number.isInteger(i) && i >= 0 && i < generators.length)
+    : generators.map((_, i) => i);
+  if (!pool.length) return [];
+
+  const offset = Math.floor(Math.random() * pool.length);
   const out: Question[] = [];
 
   for (let i = 0; i < want; i++) {
-    const generator = (offset + i) % generators.length;
+    const generator = pool[(offset + i) % pool.length];
     const seed = Math.floor(Math.random() * 0xffffffff);
     const made = build({ subunitId, generator, seed });
     if (made) out.push(made.question);

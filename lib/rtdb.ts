@@ -26,7 +26,7 @@ import {
   type Progress,
 } from "@/lib/progression";
 
-export type GameId = "racer" | "last-one-standing";
+export type GameId = "racer" | "last-one-standing" | "mirror";
 
 export type RoomPlayer = {
   displayName: string;
@@ -60,6 +60,36 @@ export type Reveal = {
   answer: Answer;
 };
 
+/** One player's half of a mirrored question, once the round has settled. */
+export type DuelResult = {
+  response: Response;
+  correct: boolean;
+  /** How much of it was right, 0–1. This is what the duel is decided on. */
+  score: number;
+  /** What they took off the other player. Non-zero only for the closest. */
+  gap: number;
+  /** Score plus gap, in points, added to their running total. */
+  points: number;
+};
+
+/**
+ * A whole mirrored question, settled.
+ *
+ * Published in one write, after everybody has committed, because publishing
+ * one player's result first would tell the other where the answer is — on a
+ * proximity question a score of 40% narrows the target to a ring. Everything
+ * arrives at once or not at all.
+ */
+export type DuelReveal = {
+  /** The position this settles, so a late listener cannot show it twice. */
+  index: number;
+  /** The right answer, said once for the table. */
+  answer: Answer;
+  results: Record<string, DuelResult>;
+  /** Who was strictly closest, or null on a dead heat. */
+  closestUid: string | null;
+};
+
 export type Room = {
   code: string;
   game: GameId;
@@ -79,8 +109,20 @@ export type Room = {
   questions: Question[];
   /** Rounds within the game. Each one ends with somebody being removed. */
   round: number;
-  /** Whose turn it is to answer. */
+  /** Whose turn it is to answer. Always null in a duel — everybody answers. */
   turnUid: string | null;
+  /**
+   * Who has locked an answer in on the question showing now.
+   *
+   * The answers themselves live outside the room and are readable only by the
+   * player who wrote them and by the host, which is what keeps a duel honest.
+   * That somebody has *finished* is a different fact from what they said, and
+   * it is the one that makes answering at the same time feel like answering
+   * at the same time — so it is published, and nothing else is.
+   */
+  committed?: Record<string, true> | null;
+  /** The last mirrored question, settled. Duels only. */
+  duel?: DuelReveal | null;
   /** Who won the round and must now remove a player. */
   chooserUid: string | null;
   /** Server grading session, opened by the host at kick-off. */
@@ -162,13 +204,15 @@ export async function createRoom(opts: {
   displayName: string;
   subunitId: string;
   seats: number;
+  /** Stated rather than defaulted: two games run out of this one node now. */
+  game: GameId;
 }): Promise<string> {
   const roomRef = push(ref(realtimeDb, "rooms"));
   const roomId = roomRef.key!;
 
   const room: Room = {
     code: makeRoomCode(),
-    game: "last-one-standing",
+    game: opts.game,
     subunitId: opts.subunitId,
     hostUid: opts.hostUid,
     status: "lobby",
@@ -182,6 +226,8 @@ export async function createRoom(opts: {
     currentIndex: 0,
     questionStartedAt: null,
     reveal: null,
+    committed: null,
+    duel: null,
     players: {
       [opts.hostUid]: {
         displayName: opts.displayName,
@@ -269,6 +315,24 @@ export function watchRoom(roomId: string, cb: (room: Room | null) => void) {
       const answer = parseReveal(reveal.answer);
       room.reveal =
         response && answer ? { ...reveal, response, answer } : null;
+    }
+
+    // The same for a settled duel, which travels the same way and loses the
+    // same fields. A result whose response will not parse is dropped rather
+    // than shown, but the rest of the table still gets its reveal — one
+    // player's unreadable answer is not a reason to hide the right answer
+    // from everybody.
+    const duel = room.duel;
+    if (duel) {
+      const answer = parseReveal(duel.answer);
+      const results: Record<string, DuelResult> = {};
+      for (const [uid, result] of Object.entries(duel.results ?? {})) {
+        const response = parseResponse(result?.response);
+        if (response) results[uid] = { ...result, response };
+      }
+      room.duel = answer
+        ? { ...duel, answer, results, closestUid: duel.closestUid ?? null }
+        : null;
     }
 
     cb(room);
@@ -380,9 +444,69 @@ export async function startRoom(
     status: "playing",
   });
 
-  // The room is live now — it should survive the host briefly dropping.
+  await goLive(roomId, code);
+}
+
+/**
+ * Kick-off for a duel.
+ *
+ * Separate from `startRoom` because the two games disagree about the shape of
+ * a turn: one goes round the table and the other has no turns at all. Sharing
+ * the function would mean a `turnUid` that means something in one game and
+ * has to be remembered to be null in the other.
+ */
+export async function startDuel(
+  roomId: string,
+  code: string,
+  players: Record<string, RoomPlayer>,
+  sessionId: string,
+  order: string[],
+  questions: Question[],
+) {
+  await update(ref(realtimeDb, `rooms/${roomId}`), {
+    players,
+    status: "playing",
+    round: 1,
+    turnUid: null,
+    chooserUid: null,
+    sessionId,
+    order,
+    questions,
+    currentIndex: 0,
+    reveal: null,
+    committed: null,
+    duel: null,
+    questionStartedAt: serverTimestamp(),
+  });
+
+  await update(ref(realtimeDb, `roomCodes/${code}`), {
+    roomId,
+    status: "playing",
+  });
+
+  await goLive(roomId, code);
+}
+
+/**
+ * A room that has started should survive the host briefly dropping, so the
+ * disconnect handlers that clean up an abandoned lobby are stood down.
+ */
+async function goLive(roomId: string, code: string) {
   await onDisconnect(ref(realtimeDb, `rooms/${roomId}`)).cancel();
   await onDisconnect(ref(realtimeDb, `roomCodes/${code}`)).cancel();
+}
+
+/**
+ * Host only: publishes who has locked in, without publishing what they said.
+ * Written as the whole set each time rather than one key at a time, so a
+ * question that nobody has answered yet clears the last one's marks.
+ */
+export async function markCommitted(roomId: string, uids: string[]) {
+  const committed: Record<string, true> = {};
+  for (const uid of uids) committed[uid] = true;
+  await update(ref(realtimeDb, `rooms/${roomId}`), {
+    committed: uids.length ? committed : null,
+  });
 }
 
 export async function closeRoomCode(roomId: string, code: string) {

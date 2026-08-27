@@ -8,8 +8,6 @@ import {
   fill,
   frac,
   head,
-  nearMisses,
-  piFrac,
   type Built,
   type Rng,
 } from "./kit";
@@ -51,18 +49,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
       // ∫ from L to ∞ of x^-p dx converges to L^(1-p) / (p - 1).
       const converges = r.bool();
       if (converges) {
-        return ask(
+        return fill(
           `Evaluate: ∫ from ${lower} to ∞ of x^(-${p}) dx`,
           `${frac(1, (p - 1) * lower ** (p - 1))}`,
-          [
-            frac(1, p - 1),
-            frac(1, p * lower ** p),
-            "It diverges",
-            frac(lower, p - 1),
-            "0",
-            frac(2, (p - 1) * lower ** (p - 1)),
-          ],
-          r,
+          { hint: "a number or fraction" },
         );
       }
       return among(
@@ -89,17 +79,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
       const step = r.pick([1, 2]);
       // dy/dx = slope (constant), so one Euler step is exact.
       const next = y0 + slope * step;
-      return ask(
+      return fill(
         `For dy/dx = ${slope}, with y(0) = ${y0}, what does one Euler step of size ${step} give for y(${step})?`,
         next,
-        [
-          y0 + slope, // ignored the step size
-          y0 - slope * step,
-          y0 * slope * step,
-          slope * step,
-          ...nearMisses(next),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -136,18 +119,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
       const at = r.nonzero(-4, 4);
       // x = a t², y = b t³, so dy/dx = 3b t² / (2a t) = 3b t / (2a).
       const value = frac(3 * b * at, 2 * a);
-      return ask(
+      return fill(
         `If x = ${head(a, "t^2")} and y = ${head(b, "t^3")}, what is dy/dx at t = ${at}?`,
         value,
-        [
-          frac(2 * a * at, 3 * b * at * at), // inverted the ratio
-          frac(3 * b * at * at, 2 * a), // forgot to cancel a t
-          frac(b, a), // divided the coefficients only
-          frac(3 * b, 2 * a),
-          frac(-3 * b * at, 2 * a),
-          frac(3 * b * at, a), // dropped the 2 from the x-derivative
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -158,17 +133,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
       const a = r.int(2, 9);
       // Area inside r = a is πa², and the polar formula ½∫r² dθ over 0..2π
       // agrees — which is the check the question is really asking for.
-      return ask(
-        `Using A = ½∫r² dθ, what is the area enclosed by r = ${a} for 0 ≤ θ ≤ 2π?`,
-        piFrac(a * a, 1),
-        [
-          piFrac(2 * a, 1), // used the circumference
-          piFrac(a * a, 2), // kept the half without integrating 2π
-          piFrac(a, 1),
-          piFrac(a * a * 2, 1),
-          piFrac(a, 2),
-        ],
-        r,
+      return fill(
+        `Using A = ½∫r² dθ, what is the area enclosed by r = ${a} for 0 ≤ θ ≤ 2π? Give the multiple of π.`,
+        a * a,
+        { unit: "π units²", hint: "It had better agree with πr²" },
       );
     },
   ],
@@ -180,17 +148,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
       const den = r.int(2, 7);
       const num = r.nonzero(-(den - 1), den - 1);
       // |r| < 1, so the series converges to a / (1 - r).
-      return ask(
+      return fill(
         `What does the geometric series with first term ${first} and ratio ${frac(num, den)} converge to?`,
         frac(first * den, den - num),
-        [
-          frac(first * den, den + num), // sign slip in the denominator
-          frac(den - num, first * den),
-          String(first),
-          frac(first, den),
-          "It diverges",
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -262,17 +223,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
         return out;
       };
       // The Maclaurin series for e^x has coefficient 1/n! on x^n.
-      return ask(
+      return fill(
         `In the Maclaurin series for e^x, what is the coefficient of x^${n}?`,
         frac(1, factorial(n)),
-        [
-          frac(1, n), // used n rather than n!
-          String(factorial(n)), // did not invert
-          frac(1, factorial(n - 1)),
-          frac(1, factorial(n + 1)),
-          "1",
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -282,11 +236,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const a = r.int(2, 9);
       // Σ (x/a)^n converges for |x| < a, so the radius is a.
-      return ask(
+      return fill(
         `What is the radius of convergence of Σ x^n / ${a}^n?`,
         a,
-        [frac(1, a), a * a, 1, frac(a, 2), 0],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -295,11 +248,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const a = r.int(1, 6);
       const b = a + r.int(1, 6);
-      return ask(
+      return fill(
         `1/((x - ${a})(x - ${b})) is written as A/(x - ${a}) + B/(x - ${b}).   What is A?`,
         frac(1, a - b),
-        [frac(1, b - a), frac(1, a), frac(1, b), frac(1, a + b), frac(a, b)],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -437,17 +389,10 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const inner = r.int(1, 6);
       const outer = inner + r.int(1, 6);
-      return ask(
-        `What is the area between the circles r = ${inner} and r = ${outer}?`,
-        `${outer * outer - inner * inner}π`,
-        [
-          `${(outer - inner) ** 2}π`,
-          `${outer * outer + inner * inner}π`,
-          `${outer - inner}π`,
-          piFrac(outer * outer - inner * inner, 2),
-          `${outer * outer}π`,
-        ],
-        r,
+      return fill(
+        `What is the area between the circles r = ${inner} and r = ${outer}? Give the multiple of π.`,
+        outer * outer - inner * inner,
+        { unit: "π units²", hint: "Outer area minus inner area" },
       );
     },
   ],

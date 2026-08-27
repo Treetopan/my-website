@@ -21,7 +21,7 @@ import {
   PRECALCULUS,
   type UnitSpec,
 } from "./curriculum-math";
-import { generatorCount } from "./templates";
+import { generatorCount, hasSpatial } from "./templates";
 
 export type Difficulty = "easy" | "medium" | "hard";
 
@@ -412,6 +412,24 @@ export function isStocked(course: Course) {
 /** Whether one subunit can be played, from a bank or from generators. */
 export function hasContent(subunit: Subunit) {
   return subunit.questions.length > 0 || generatorCount(subunit.id) > 0;
+}
+
+/**
+ * Whether one subunit can host a mirror duel.
+ *
+ * Stricter than `hasContent`, and for a reason rather than for tidiness: a
+ * duel is won by whichever answer was closer, and closeness only exists where
+ * the question is answered on a grid or a scale. On a typed or a chosen
+ * answer both players are simply right, every round is a dead heat, and the
+ * game never moves.
+ */
+export function canDuel(subunit: Subunit) {
+  return hasSpatial(subunit.id);
+}
+
+/** Every subunit in a course, for callers that want to count them their way. */
+export function subunitsOf(course: Course) {
+  return subunits(course);
 }
 
 export function questionCount(course: Course) {

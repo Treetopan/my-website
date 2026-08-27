@@ -3,12 +3,20 @@ import "server-only";
 import {
   among,
   ask,
+  dot,
   frac,
+  graph,
   head,
   fill,
-  nearMisses,
+  line,
+  plot,
+  point,
   poly,
   signed,
+  slider,
+  slopeField,
+  stroke,
+  vertical,
   type Built,
   type Rng,
 } from "./kit";
@@ -20,6 +28,22 @@ import {
  * generator can roll coefficients freely and still be sure the derivative, the
  * antiderivative and the definite integral all come out exact — which is what
  * lets the question be about the rule rather than about the arithmetic.
+ *
+ * Two things govern which kind a question takes. The first is that this is a
+ * subject about pictures: an inflection point, a jump, an interval where f
+ * falls, the shape of f' — every one of those is something to see, and four
+ * lines of text describing a graph is a worse question than the graph. So the
+ * spatial kinds carry a fifth of the course, and about as many again are asked
+ * over a figure the student has to read.
+ *
+ * The second is that multiple choice is a poor fit for a game against a clock.
+ * Four visible options reward elimination, which is a real exam skill and not
+ * the skill this is meant to build — under time pressure it is the *only*
+ * skill, because working the answer out is slower than ruling three out. So
+ * choice is kept for the questions whose answer really is a statement: which
+ * theorem applies, what kind of discontinuity, which rule to reach for first.
+ * Everything whose answer is a number the student ought to be able to produce
+ * is typed, dragged or placed instead.
  */
 export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.6 Determining limits using algebraic manipulation ──
@@ -28,54 +52,53 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const root = r.nonzero(-6, 6);
       let other = r.nonzero(-6, 6);
       while (other === root) other = r.nonzero(-6, 6);
-      // A 0/0 form that cancels to (x - other).
-      return ask(
-        `Evaluate: lim(x→${root}) (${poly([[1, 2], [-(root + other), 1], [root * other, 0]])}) / (x${signed(-root)})`,
+      // A 0/0 form that cancels to (x - other), so the limit is a number the
+      // student produces by cancelling rather than one they spot in a list.
+      return fill(
+        `Evaluate:   lim(x→${root}) (${poly([[1, 2], [-(root + other), 1], [root * other, 0]])}) / (x${signed(-root)})`,
         root - other,
-        ["The limit does not exist", 0, root + other, other - root, root * other],
-        r,
+        { hint: "Factor and cancel first" },
       );
     },
   ],
 
   // ── 1.15 Limits at infinity and horizontal asymptotes ──
   "math/ap-calculus-ab/unit-1/1.15": [
+    // No figure here, deliberately. The grid is square, so a horizontal
+    // asymptote at 3/8 is drawn a third of a unit above the axis and reads as
+    // "zero" — the picture would teach the wrong answer. The limit at infinity
+    // is one of the few things about a function that a window this size cannot
+    // show.
     (r) => {
       const a = r.coefficient(8);
       const b = r.coefficient(8);
-      const degree = r.pick(["same", "top", "bottom"] as const);
-      const top = degree === "top" ? 3 : 2;
-      const bottom = degree === "bottom" ? 3 : 2;
-      const answer =
-        degree === "same" ? frac(a, b) : degree === "top" ? "∞ (no limit)" : "0";
-      return ask(
-        `Evaluate: lim(x→∞) (${head(a, `x^${top}`)} + 1) / (${head(b, `x^${bottom}`)} + 1)`,
-        answer,
-        [frac(a, b), "0", "∞ (no limit)", frac(b, a), String(a - b), frac(-a, b)],
-        r,
+      // Only the two cases with a finite answer, so the answer is a number the
+      // student writes down rather than a phrase they pick out.
+      const bottomBigger = r.bool();
+      const bottom = bottomBigger ? 3 : 2;
+      return fill(
+        `Evaluate:   lim(x→∞) (${head(a, "x^2")} + 1) / (${head(b, `x^${bottom}`)} + 1)`,
+        bottomBigger ? "0" : frac(a, b),
+        { hint: "Compare the top and bottom degrees" },
       );
     },
   ],
 
   // ── 2.5 The Power Rule ──
   "math/ap-calculus-ab/unit-2/2.5": [
+    // Asked at a point rather than as an expression: reading "12x^3 - 6x" off a
+    // list of four is a matching exercise, and producing f'(2) is not.
     (r) => {
-      const a = r.coefficient(9);
-      const n = r.int(3, 8);
-      const b = r.coefficient(9);
+      const a = r.coefficient(5);
+      const n = r.int(2, 4);
+      const b = r.coefficient(5);
       const m = r.int(1, n - 1);
       const c = r.nonzero(-9, 9);
-      return ask(
-        `Differentiate: f(x) = ${poly([[a, n], [b, m], [c, 0]])}`,
-        poly([[a * n, n - 1], [b * m, m - 1]]),
-        [
-          poly([[a * n, n - 1], [b * m, m - 1], [c, 0]]), // kept the constant
-          poly([[a * n, n], [b * m, m]]), // did not drop the exponent
-          poly([[a, n - 1], [b, m - 1]]), // dropped the exponent but never multiplied
-          poly([[a * (n - 1), n - 1], [b * (m - 1), m - 1]]),
-          poly([[a * n, n - 1]]),
-        ],
-        r,
+      const at = r.pick([1, 2]);
+      return fill(
+        `f(x) = ${poly([[a, n], [b, m], [c, 0]])}.   What is f'(${at})?`,
+        a * n * at ** (n - 1) + b * m * at ** (m - 1),
+        { hint: "Differentiate, then substitute" },
       );
     },
   ],
@@ -90,17 +113,11 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
         r.nonzero(-8, 8),
       ];
       // (ax+b)(cx+d) differentiates to 2acx + ad + bc.
-      return ask(
-        `Differentiate: f(x) = (${head(a, "x")}${signed(b)})(${head(c, "x")}${signed(d)})`,
-        poly([[2 * a * c, 1], [a * d + b * c, 0]]),
-        [
-          poly([[a * c, 0]]), // multiplied the derivatives
-          poly([[a * c, 1], [a * d + b * c, 0]]),
-          poly([[2 * a * c, 1], [a * d - b * c, 0]]),
-          poly([[a * c, 2], [a * d + b * c, 1], [b * d, 0]]), // never differentiated
-          poly([[2 * a * c, 1]]),
-        ],
-        r,
+      const at = r.pick([0, 1]);
+      return fill(
+        `f(x) = (${head(a, "x")}${signed(b)})(${head(c, "x")}${signed(d)}).   What is f'(${at})?`,
+        2 * a * c * at + a * d + b * c,
+        { hint: "Product rule, then substitute" },
       );
     },
   ],
@@ -136,23 +153,15 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   "math/ap-calculus-ab/unit-3/3.1": [
     (r) => {
       const a = r.coefficient(6);
-      const b = r.nonzero(-9, 9);
       const n = r.int(2, 6);
-      // d/dx (ax + b)^n = n·a·(ax + b)^(n-1)
-      const inner = `(${head(a, "x")}${signed(b)})`;
-      const showPower = (coefficient: number, exponent: number) =>
-        exponent === 1 ? head(coefficient, inner) : `${head(coefficient, "")}${inner}^${exponent}`;
-      return ask(
-        `Differentiate: f(x) = ${inner}^${n}`,
-        showPower(n * a, n - 1),
-        [
-          showPower(n, n - 1), // forgot the inner derivative
-          showPower(n * a, n), // did not drop the exponent
-          showPower(a, n - 1),
-          showPower(n * a, n - 2),
-          showPower((n - 1) * a, n - 1),
-        ],
-        r,
+      const at = r.int(-3, 3);
+      // b is chosen so the inside is exactly 1 at the point asked about, which
+      // leaves n·a — the chain rule and nothing else.
+      const b = 1 - a * at;
+      return fill(
+        `f(x) = (${head(a, "x")}${signed(b)})^${n}.   What is f'(${at})?`,
+        n * a,
+        { hint: "Work out the inside first" },
       );
     },
   ],
@@ -161,20 +170,14 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   "math/ap-calculus-ab/unit-3/3.6": [
     (r) => {
       const a = r.coefficient(6);
-      const n = r.int(4, 8);
+      const n = r.int(3, 5);
       const b = r.coefficient(6);
-      // The second derivative of ax^n + bx^2 is a·n(n-1)x^(n-2) + 2b.
-      return ask(
-        `What is f''(x) for f(x) = ${poly([[a, n], [b, 2]])}?`,
-        poly([[a * n * (n - 1), n - 2], [2 * b, 0]]),
-        [
-          poly([[a * n, n - 1], [2 * b, 1]]), // stopped at the first derivative
-          poly([[a * n * (n - 1), n - 1], [2 * b, 0]]),
-          poly([[a * n * n, n - 2], [2 * b, 0]]),
-          poly([[a * n * (n - 1) * (n - 2), n - 3], [0, 0]]),
-          poly([[a * n * (n - 1), n - 2], [b, 0]]),
-        ],
-        r,
+      const at = r.pick([1, 2]);
+      // f = ax^n + bx², so f'' = a·n(n-1)x^(n-2) + 2b.
+      return fill(
+        `f(x) = ${poly([[a, n], [b, 2]])}.   What is f''(${at})?`,
+        a * n * (n - 1) * at ** (n - 2) + 2 * b,
+        { hint: "Differentiate twice" },
       );
     },
   ],
@@ -186,21 +189,13 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const b = r.coefficient(6);
       const c = r.nonzero(-9, 9);
       const at = r.int(1, 5);
-      // Position s(t) = at² + bt + c, so velocity is 2at + b.
-      const velocity = 2 * a * at + b;
-      const acceleration = 2 * a;
       const wantVelocity = r.bool();
-      return ask(
+      // Position s(t) = at² + bt + c, so velocity is 2at + b and acceleration
+      // is the constant 2a.
+      return fill(
         `A particle has position s(t) = ${poly([[a, 2], [b, 1], [c, 0]], "t")}. What is its ${wantVelocity ? "velocity" : "acceleration"} at t = ${at}?`,
-        wantVelocity ? velocity : acceleration,
-        [
-          wantVelocity ? acceleration : velocity, // differentiated the wrong number of times
-          a * at * at + b * at + c, // gave the position
-          a * at + b,
-          2 * a * at,
-          ...nearMisses(wantVelocity ? velocity : acceleration),
-        ],
-        r,
+        wantVelocity ? 2 * a * at + b : 2 * a,
+        { hint: wantVelocity ? "Differentiate once" : "Differentiate twice" },
       );
     },
   ],
@@ -211,17 +206,10 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const rate = r.int(2, 9);
       const radius = r.int(2, 12);
       // A = πr², so dA/dt = 2πr·dr/dt.
-      return ask(
-        `A circle's radius grows at ${rate} units per second. How fast is its area growing when r = ${radius}, in terms of π?`,
-        `${2 * radius * rate}π`,
-        [
-          `${radius * rate}π`, // dropped the factor of two
-          `${radius * radius * rate}π`, // differentiated nothing
-          `${2 * radius}π`, // forgot the rate
-          `${rate}π`,
-          `${2 * radius * radius * rate}π`,
-        ],
-        r,
+      return fill(
+        `A circle's radius grows at ${rate} units per second. How fast is its area growing when r = ${radius}? Give the multiple of π.`,
+        2 * radius * rate,
+        { unit: "π units² per second", hint: "dA/dt = 2πr · dr/dt" },
       );
     },
   ],
@@ -232,22 +220,14 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const a = r.coefficient(6);
       const b = r.coefficient(6);
       const n = r.int(2, 4);
-      // lim(x→0) (ax^n + ...) — built so both parts vanish at zero and the
-      // ratio of the linear coefficients is the answer.
       const c = r.coefficient(6);
       const d = r.coefficient(6);
-      return ask(
-        `Evaluate: lim(x→0) (${poly([[a, n], [c, 1]])}) / (${poly([[b, n], [d, 1]])})`,
+      // Both parts vanish at zero, and the ratio of the linear coefficients is
+      // what survives one round of differentiating.
+      return fill(
+        `Evaluate:   lim(x→0) (${poly([[a, n], [c, 1]])}) / (${poly([[b, n], [d, 1]])})`,
         frac(c, d),
-        [
-          frac(a, b), // differentiated too many times
-          frac(d, c),
-          "0",
-          "The limit does not exist",
-          frac(a + c, b + d),
-          frac(-c, d), // sign slip after differentiating
-        ],
-        r,
+        { hint: "a fraction is fine" },
       );
     },
   ],
@@ -255,23 +235,31 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.3 Increasing and decreasing intervals ──
   "math/ap-calculus-ab/unit-5/5.3": [
     (r) => {
+      const span = 8;
       const p = r.nonzero(-6, 6);
       let q = r.nonzero(-6, 6);
       while (q === p) q = r.nonzero(-6, 6);
       const low = Math.min(p, q);
       const high = Math.max(p, q);
-      // f'(x) = (x - p)(x - q), positive outside the roots.
-      return ask(
-        `f'(x) = ${poly([[1, 2], [-(p + q), 1], [p * q, 0]])}. On which interval is f decreasing?`,
-        `(${low}, ${high})`,
-        [
-          `(${high}, ∞)`,
-          `(-∞, ${low})`,
-          `(-∞, ${low}) ∪ (${high}, ∞)`, // where it increases
-          `(${-high}, ${-low})`,
-          `(${low - 1}, ${high + 1})`,
-        ],
-        r,
+      // f' = (x - p)(x - q) dips below the axis between its roots, so f falls
+      // on exactly that interval. Both endpoints are asked for at once: the
+      // grid is the closest thing here to dragging the ends of an interval,
+      // and producing both beats recognising one.
+      return point(
+        `The graph of f' is drawn. f is decreasing on exactly one interval (a, b) — place the point (a, b).`,
+        {
+          span,
+          x: low,
+          y: high,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => (x - p) * (x - q), { span, label: "f'" }),
+            ],
+            caption: "The curve drawn is f', not f. Left endpoint across, right endpoint up.",
+          }),
+        },
       );
     },
   ],
@@ -279,15 +267,25 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.2 Critical points ──
   "math/ap-calculus-ab/unit-5/5.2": [
     // Typed, because a critical point is a number the student finds rather
-    // than one they spot among four.
+    // than one they spot among four — and read off f', because that is the
+    // graph the answer is actually visible on.
     (r) => {
-      const root = r.nonzero(-6, 6);
+      const span = 8;
+      const root = r.nonzero(-5, 5);
       const a = r.coefficient(4);
-      // f'(x) = 2a(x - root), so the only critical point is at root.
       return fill(
-        `f'(x) = ${poly([[2 * a, 1], [-2 * a * root, 0]])}. At what x does f have its only critical point?`,
+        `The graph of f' is drawn. At what x does f have its only critical point?`,
         root,
-        { hint: "a number" },
+        {
+          hint: "a number",
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => 2 * a * (x - root), { span, label: "f'" }),
+            ],
+            caption: `f'(x) = ${poly([[2 * a, 1], [-2 * a * root, 0]])}`,
+          }),
+        },
       );
     },
   ],
@@ -316,20 +314,16 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 6.8 Antiderivatives ──
   "math/ap-calculus-ab/unit-6/6.8": [
     (r) => {
-      const n = r.int(2, 6);
+      const n = r.int(2, 4);
       const a = (n + 1) * r.coefficient(4); // divides evenly by n + 1
       const b = r.coefficient(6) * 2;
-      return ask(
-        `Find the general antiderivative of f(x) = ${poly([[a, n], [b, 1]])}.`,
-        `${poly([[a / (n + 1), n + 1], [b / 2, 2]])} + C`,
-        [
-          `${poly([[a * n, n - 1], [b, 0]])} + C`, // differentiated instead
-          `${poly([[a, n + 1], [b, 2]])} + C`, // raised the power but never divided
-          `${poly([[a / (n + 1), n + 1], [b, 2]])} + C`,
-          `${poly([[a / n, n + 1], [b / 2, 2]])} + C`,
-          `${poly([[a / (n + 1), n], [b / 2, 1]])} + C`,
-        ],
-        r,
+      const at = r.pick([1, 2]);
+      // Pinning F(0) = 0 turns "+ C" from something to remember into
+      // something to use, and turns the answer into a number.
+      return fill(
+        `F is the antiderivative of f(x) = ${poly([[a, n], [b, 1]])} with F(0) = 0.   What is F(${at})?`,
+        (a / (n + 1)) * at ** (n + 1) + (b / 2) * at ** 2,
+        { hint: "Raise the power, divide by the new one" },
       );
     },
   ],
@@ -341,18 +335,10 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const b = r.coefficient(5) * 2;
       const upper = r.int(1, 4);
       // ∫₀^u (a x² + b x) dx = (a/3)u³ + (b/2)u²
-      const value = (a / 3) * upper ** 3 + (b / 2) * upper ** 2;
-      return ask(
-        `Evaluate: ∫ from 0 to ${upper} of (${poly([[a, 2], [b, 1]])}) dx`,
-        value,
-        [
-          a * upper * upper + b * upper, // evaluated the integrand
-          a * upper ** 3 + b * upper ** 2, // never divided by the new powers
-          (a / 3) * upper ** 3,
-          2 * a * upper + b, // differentiated
-          ...nearMisses(value),
-        ],
-        r,
+      return fill(
+        `Evaluate:   ∫ from 0 to ${upper} of (${poly([[a, 2], [b, 1]])}) dx`,
+        (a / 3) * upper ** 3 + (b / 2) * upper ** 2,
+        { hint: "Antidifferentiate, then take the ends" },
       );
     },
   ],
@@ -386,18 +372,10 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const upper = r.pick([2, 3, 4, 6]);
       const a = 3 * r.coefficient(4);
       // Average of ax² on [0, u] is (a/3)u³ / u = a u² / 3.
-      const average = (a * upper * upper) / 3;
-      return ask(
+      return fill(
         `What is the average value of f(x) = ${head(a, "x^2")} on [0, ${upper}]?`,
-        average,
-        [
-          a * upper * upper, // gave f at the endpoint
-          (a / 3) * upper ** 3, // gave the integral without dividing by the width
-          frac(a * upper, 3),
-          average * 2,
-          -average,
-        ],
-        r,
+        (a * upper * upper) / 3,
+        { hint: "The integral, divided by the width" },
       );
     },
   ],
@@ -408,26 +386,23 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const m = r.int(2, 8);
       // Between y = mx and y = x² the curves meet at 0 and m, and the area is
       // m³/6.
-      const area = frac(m ** 3, 6);
-      return ask(
+      return fill(
         `What is the area enclosed between y = ${head(m, "x")} and y = x²?`,
-        area,
-        [
-          frac(m ** 3, 3), // integrated only one of the curves
-          frac(m ** 3, 2),
-          frac(m ** 2, 6),
-          String(m ** 3),
-          frac(m ** 3, 12),
-        ],
-        r,
+        frac(m ** 3, 6),
+        { hint: "a fraction is fine" },
       );
     },
   ],
   // ── 1.1 Change at an instant ──
   "math/ap-calculus-ab/unit-1/1.1": [
     (r) => {
-      const distance = r.int(20, 200);
-      const time = r.int(2, 10);
+      const span = 8;
+      const time = r.int(3, 7);
+      const distance = r.int(2, 8);
+      // s climbs as a parabola, so the chord across the interval and the
+      // steepness at any single instant genuinely differ — which is the whole
+      // distinction the question is drawing, and the reason it is drawn.
+      const s = (t: number) => (distance / (time * time)) * t * t;
       return among(
         `A car covers ${distance} m in ${time} s. What does ${frac(distance, time)} m/s describe?`,
         "Its average speed over the interval",
@@ -438,6 +413,22 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
           "Its acceleration over the interval",
         ],
         r,
+        graph({
+          span,
+          xLabel: "t",
+          yLabel: "s",
+          curves: [
+            plot(s, { span, from: 0, to: time, label: "s" }),
+            stroke(
+              [
+                { x: 0, y: 0 },
+                { x: time, y: distance },
+              ],
+              { tone: "guide", dashed: true },
+            ),
+          ],
+          caption: "The dashed chord spans the whole interval.",
+        }),
       );
     },
   ],
@@ -464,13 +455,23 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.3 Limits from a graph ──
   "math/ap-calculus-ab/unit-1/1.3": [
     (r) => {
-      const at = r.nonzero(-5, 5);
-      const limit = r.nonzero(-9, 9);
-      const hole = limit + r.nonzero(1, 5);
+      const span = 8;
+      const at = r.int(-4, 4);
+      const limit = r.int(-4, 4);
+      const hole = limit + r.pick([-3, -2, 2, 3]);
+      const slope = r.sign();
       return fill(
-        `A graph approaches ${limit} from both sides of x = ${at}, but the point drawn there is (${at}, ${hole}). What is the limit as x → ${at}?`,
+        `Read the limit off the graph:   lim as x → ${at} of f(x)`,
         limit,
-        { hint: "The limit does not look at the point itself" },
+        {
+          hint: "The limit does not look at the point itself",
+          figure: graph({
+            span,
+            curves: [plot((x) => limit + slope * (x - at), { span, label: "f" })],
+            marks: [dot(at, limit, { open: true }), dot(at, hole)],
+            caption: `f(${at}) is defined, and it is not where the curve is heading.`,
+          }),
+        },
       );
     },
   ],
@@ -537,19 +538,38 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.9 Representations of a limit ──
   "math/ap-calculus-ab/unit-1/1.9": [
     (r) => {
-      const at = r.nonzero(-5, 5);
-      const left = r.nonzero(-9, 9);
-      const right = left + r.int(1, 6);
-      return among(
-        `As x → ${at}, f approaches ${left} from the left and ${right} from the right. What is the limit?`,
-        "It does not exist",
-        [
-          "It does not exist",
-          `It is ${left}`,
-          `It is ${right}`,
-          `It is ${frac(left + right, 2)}`,
-        ],
-        r,
+      const span = 8;
+      const at = r.int(-4, 4);
+      const left = r.int(-4, 4);
+      const step = r.pick([3, 4]);
+      // Away from zero, so the two levels never coincide and both stay on the
+      // grid whichever way the roll goes.
+      const right = left > 0 ? left - step : left + step;
+      return point(
+        `The graph jumps at x = ${at}. Place the point f approaches as x → ${at} from the left.`,
+        {
+          span,
+          x: at,
+          y: left,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              stroke([
+                { x: -span, y: left },
+                { x: at, y: left },
+              ]),
+              stroke(
+                [
+                  { x: at, y: right },
+                  { x: span, y: right },
+                ],
+                { label: "f" },
+              ),
+            ],
+            caption: "A one-sided limit is read off one side only.",
+          }),
+        },
       );
     },
   ],
@@ -557,7 +577,8 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.10 Types of discontinuity ──
   "math/ap-calculus-ab/unit-1/1.10": [
     (r) => {
-      const at = r.nonzero(-6, 6);
+      const span = 8;
+      const at = r.nonzero(-3, 3);
       const kind = r.int(0, 2);
       const shown = [
         `f(x) = (x^2 - ${at * at})/(x${signed(-at)})`,
@@ -565,11 +586,47 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
         `f(x) = ${at} for x < ${at} and ${at + 1} for x ≥ ${at}`,
       ][kind];
       const names = ["Removable", "Infinite", "Jump", "None — it is continuous"];
+
+      // Each kind is drawn as what it actually looks like, because "removable"
+      // and "infinite" are names for two pictures before they are names for
+      // two algebraic forms.
+      const drawn = [
+        graph({
+          span,
+          curves: [plot((x) => x + at, { span, label: "f" })],
+          marks: [dot(at, 2 * at, { open: true })],
+        }),
+        graph({
+          span,
+          curves: [
+            plot((x) => 1 / (x - at), { span, label: "f" }),
+            vertical(at, span),
+          ],
+        }),
+        graph({
+          span,
+          curves: [
+            stroke([
+              { x: -span, y: at },
+              { x: at, y: at },
+            ]),
+            stroke(
+              [
+                { x: at, y: at + 1 },
+                { x: span, y: at + 1 },
+              ],
+              { label: "f" },
+            ),
+          ],
+        }),
+      ][kind];
+
       return among(
         `What kind of discontinuity does this have at x = ${at}?   ${shown}`,
         names[kind],
         names,
         r,
+        drawn,
       );
     },
   ],
@@ -577,14 +634,22 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.11 Continuity at a point ──
   "math/ap-calculus-ab/unit-1/1.11": [
     (r) => {
-      const at = r.int(1, 6);
-      const a = r.coefficient(5);
-      const b = r.nonzero(-9, 9);
+      const span = 10;
+      const at = r.int(1, 3);
+      const a = r.nonzero(-2, 2);
+      const b = r.nonzero(-4, 4);
       // f(x) = ax + b for x < at, and k for x ≥ at. Continuity fixes k.
       return fill(
         `f(x) = ${head(a, "x")}${signed(b)} for x < ${at}, and f(x) = k for x ≥ ${at}. What k makes f continuous?`,
         a * at + b,
-        { hint: "The two pieces have to meet" },
+        {
+          hint: "The two pieces have to meet",
+          figure: graph({
+            span,
+            curves: [plot((x) => a * x + b, { span, to: at, label: "f" })],
+            caption: "Only the left-hand piece is drawn. The right-hand piece is the constant k.",
+          }),
+        },
       );
     },
   ],
@@ -610,12 +675,27 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.13 Removing a discontinuity ──
   "math/ap-calculus-ab/unit-1/1.13": [
     (r) => {
-      const hole = r.nonzero(-6, 6);
-      const other = hole + r.int(1, 6);
-      return fill(
-        `f(x) = ((x${signed(-hole)})(x${signed(-other)}))/(x${signed(-hole)}) has a hole at x = ${hole}. What value there would remove it?`,
-        hole - other,
-        { hint: "Cancel first, then substitute" },
+      const span = 8;
+      const hole = r.int(-4, 4);
+      const other = hole + r.int(1, 4);
+      // The gap is drawn but the point is not, so filling it means extending
+      // the line rather than reading a dot off the picture.
+      return point(
+        `f(x) = ((x${signed(-hole)})(x${signed(-other)}))/(x${signed(-hole)}) has a hole at x = ${hole}. Place the point that would fill it.`,
+        {
+          span,
+          x: hole,
+          y: hole - other,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => x - other, { span, to: hole - 0.4 }),
+              plot((x) => x - other, { span, from: hole + 0.4, label: "f" }),
+            ],
+            caption: "The break in the line is the hole.",
+          }),
+        },
       );
     },
   ],
@@ -623,12 +703,25 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.14 Infinite limits ──
   "math/ap-calculus-ab/unit-1/1.14": [
     (r) => {
-      const pole = r.nonzero(-6, 6);
-      return ask(
-        `Where does   f(x) = 1/(x${signed(-pole)})^2   have a vertical asymptote?`,
-        `x = ${pole}`,
-        [`x = ${-pole}`, "y = 0", `y = ${pole}`, "There is none", `x = ${pole * 2}`],
-        r,
+      const span = 6;
+      const pole = r.nonzero(-4, 4);
+      return slider(
+        `Drag to the x where   f(x) = 1/(x${signed(-pole)})^2   has its vertical asymptote.`,
+        {
+          min: -span,
+          max: span,
+          step: 1,
+          value: pole,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => 1 / ((x - pole) * (x - pole)), { span, label: "f" }),
+            ],
+            caption: "Both branches run off the top of the grid.",
+          }),
+        },
       );
     },
   ],
@@ -694,10 +787,16 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const step = r.pick([1, 2]);
       const slope = r.coefficient(9);
       const value = r.int(-20, 20);
-      return fill(
-        `A table gives f(${at - step}) = ${value - slope * step} and f(${at + step}) = ${value + slope * step}. Estimate f'(${at}).`,
-        slope,
-        { hint: "Use the symmetric difference" },
+      return slider(
+        `A table gives f(${at - step}) = ${value - slope * step} and f(${at + step}) = ${value + slope * step}. Drag to f'(${at}).`,
+        {
+          min: -10,
+          max: 10,
+          step: 1,
+          value: slope,
+          full: 0.25,
+          zero: 2,
+        },
       );
     },
   ],
@@ -705,7 +804,8 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 2.4 Differentiability and continuity ──
   "math/ap-calculus-ab/unit-2/2.4": [
     (r) => {
-      const at = r.nonzero(-6, 6);
+      const span = 8;
+      const at = r.nonzero(-4, 4);
       return among(
         `f(x) = |x${signed(-at)}| is continuous at x = ${at}. Is it differentiable there?`,
         "No — the graph has a corner",
@@ -716,6 +816,10 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
           "Only from the right",
         ],
         r,
+        graph({
+          span,
+          curves: [plot((x) => Math.abs(x - at), { span, label: "f" })],
+        }),
       );
     },
   ],
@@ -726,17 +830,11 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const a = r.coefficient(6);
       const b = r.coefficient(6);
       const c = r.nonzero(-9, 9);
-      return ask(
-        `Differentiate:   ${poly([[a, 3], [b, 2], [c, 0]])}`,
-        poly([[3 * a, 2], [2 * b, 1]]),
-        [
-          poly([[3 * a, 2], [2 * b, 1], [c, 0]]),
-          poly([[a, 2], [b, 1]]),
-          poly([[3 * a, 3], [2 * b, 2]]),
-          poly([[a * 3, 2], [b, 1]]),
-          poly([[3 * a, 2], [2 * b, 1], [1, 0]]),
-        ],
-        r,
+      const at = r.pick([1, 2]);
+      return fill(
+        `f(x) = ${poly([[a, 3], [b, 2], [c, 0]])}.   What is f'(${at})?`,
+        3 * a * at * at + 2 * b * at,
+        { hint: "The constant contributes nothing" },
       );
     },
   ],
@@ -745,18 +843,16 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   "math/ap-calculus-ab/unit-2/2.7": [
     (r) => {
       const cases = [
-        { f: "sin x", d: "cos x" },
-        { f: "cos x", d: "-sin x" },
-        { f: "e^x", d: "e^x" },
-        { f: "ln x", d: "1/x" },
+        { f: "sin x", d: "cos x", accept: ["cos(x)"] },
+        { f: "cos x", d: "-sin x", accept: ["-sin(x)"] },
+        { f: "e^x", d: "e^x", accept: ["e^(x)", "exp(x)"] },
+        { f: "ln x", d: "1/x", accept: ["x^-1", "x^(-1)"] },
       ];
       const c = r.pick(cases);
-      return ask(
-        `Differentiate:   ${c.f}`,
-        c.d,
-        cases.filter((one) => one.d !== c.d).map((one) => one.d).concat(["-cos x", "x·e^x"]),
-        r,
-      );
+      return fill(`Differentiate:   ${c.f}`, c.d, {
+        accept: c.accept,
+        hint: "an expression in x",
+      });
     },
   ],
 
@@ -782,12 +878,41 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 3.2 Implicit differentiation ──
   "math/ap-calculus-ab/unit-3/3.2": [
     (r) => {
-      const radius = r.int(2, 12);
-      return ask(
-        `x² + y² = ${radius * radius}.   What is dy/dx?`,
-        "-x/y",
-        ["x/y", "-y/x", "y/x", "-2x/y", `${radius}/y`],
-        r,
+      // Pythagorean points, so the slope is a fraction the student can write
+      // rather than a decimal they have to round.
+      const [px, py, radius] = r.pick([
+        [3, 4, 5],
+        [4, 3, 5],
+        [6, 8, 10],
+        [8, 6, 10],
+        [5, 12, 13],
+        [12, 5, 13],
+      ]);
+      const x = px * r.sign();
+      const y = py * r.sign();
+      const span = radius + 2;
+      return fill(
+        `x² + y² = ${radius * radius}.   What is dy/dx at (${x}, ${y})?`,
+        frac(-x, y),
+        {
+          hint: "Differentiate both sides first",
+          figure: graph({
+            span,
+            curves: [
+              plot((t) => Math.sqrt(radius * radius - t * t), {
+                span,
+                from: -radius,
+                to: radius,
+              }),
+              plot((t) => -Math.sqrt(radius * radius - t * t), {
+                span,
+                from: -radius,
+                to: radius,
+              }),
+            ],
+            marks: [dot(x, y)],
+          }),
+        },
       );
     },
   ],
@@ -795,22 +920,13 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 3.3 Derivatives of inverse functions ──
   "math/ap-calculus-ab/unit-3/3.3": [
     (r) => {
-      const slope = r.int(2, 9);
+      const slope = r.int(2, 9) * r.sign();
       const at = r.nonzero(-6, 6);
       const image = r.nonzero(-6, 6);
-      return ask(
-        `f(${at}) = ${image} and f'(${at}) = ${slope}. What is (f⁻¹)'(${image})?`,
+      return fill(
+        `f(${at}) = ${image} and f'(${at}) = ${slope}.   What is (f⁻¹)'(${image})?`,
         frac(1, slope),
-        [
-          `${slope}`,
-          frac(1, at),
-          `${-slope}`,
-          frac(-1, slope),
-          frac(1, image),
-          frac(1, slope + 1),
-          frac(slope, image),
-        ],
-        r,
+        { hint: "a fraction is fine" },
       );
     },
   ],
@@ -891,14 +1007,33 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 4.6 Linearisation ──
   "math/ap-calculus-ab/unit-4/4.6": [
     (r) => {
-      const at = r.int(1, 6);
-      const value = r.int(-9, 9);
-      const slope = r.coefficient(6);
+      const span = 8;
+      const at = r.int(-3, 3);
+      const value = r.int(-4, 4);
+      const slope = r.pick([-2, -1, 1, 2]);
       const step = r.pick([1, 2]);
+      // A gentle curvature, so the tangent and the curve visibly part company
+      // and the estimate is visibly an estimate.
+      const f = (x: number) => value + slope * (x - at) + 0.25 * (x - at) ** 2;
       return fill(
-        `f(${at}) = ${value} and f'(${at}) = ${slope}. Use the tangent line to estimate f(${at + step}).`,
+        `Use the tangent line drawn at x = ${at} to estimate f(${at + step}).`,
         value + slope * step,
-        { hint: "Value plus slope times step" },
+        {
+          hint: "Value plus slope times step",
+          figure: graph({
+            span,
+            curves: [
+              plot(f, { span, label: "f" }),
+              plot((x) => value + slope * (x - at), {
+                span,
+                tone: "guide",
+                dashed: true,
+              }),
+            ],
+            marks: [dot(at, value)],
+            caption: "The dashed line is the tangent at the marked point.",
+          }),
+        },
       );
     },
   ],
@@ -906,13 +1041,36 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.1 The Mean Value Theorem ──
   "math/ap-calculus-ab/unit-5/5.1": [
     (r) => {
-      const a = r.int(0, 4);
-      const b = a + 2 * r.int(1, 4);
-      // For x², the MVT point is the midpoint of the interval.
-      return fill(
-        `f(x) = x^2 on [${a}, ${b}]. At what c does f'(c) equal the average rate of change?`,
-        (a + b) / 2,
-        { hint: "Set 2c equal to the average rate" },
+      const span = 10;
+      const at = r.pick([-4, -2, 0, 2, 4]);
+      const reach = r.pick([1, 2]);
+      const a = at - reach;
+      const b = at + reach;
+      // f = x²/4, whose mean-value point is the midpoint of the interval — and
+      // whose values stay on the grid, which x² does not.
+      const f = (x: number) => (x * x) / 4;
+      return point(
+        `The chord over [${a}, ${b}] is drawn. Place the point on the curve where the tangent is parallel to it.`,
+        {
+          span,
+          x: at,
+          y: (at * at) / 4,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot(f, { span, label: "f" }),
+              stroke(
+                [
+                  { x: a, y: f(a) },
+                  { x: b, y: f(b) },
+                ],
+                { tone: "guide", dashed: true },
+              ),
+            ],
+            caption: "The Mean Value Theorem says such a point exists.",
+          }),
+        },
       );
     },
   ],
@@ -953,15 +1111,26 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.6 Concavity ──
   "math/ap-calculus-ab/unit-5/5.6": [
     (r) => {
-      const a = r.coefficient(4);
-      const b = 3 * r.nonzero(-4, 4);
-      const c = r.nonzero(-9, 9);
-      // f = ax³ + bx² + cx has f'' = 6ax + 2b, zero at -b/(3a).
-      return ask(
-        `Where does   ${poly([[a, 3], [b, 2], [c, 1]])}   change concavity?`,
-        `x = ${frac(-b, 3 * a)}`,
-        [`x = ${frac(b, 3 * a)}`, `x = ${frac(-b, a)}`, "x = 0", `x = ${frac(-c, b)}`, `x = ${frac(-b, 6 * a)}`],
-        r,
+      const span = 8;
+      const at = r.int(-4, 4);
+      const height = r.int(-4, 4);
+      // A cubic with a turning point either side, so the change of concavity
+      // is the visible middle of the S rather than something to take on trust.
+      const f = (x: number) =>
+        (x - at) ** 3 / 6 - 1.5 * (x - at) + height;
+      return point(
+        `Place the point of inflection.`,
+        {
+          span,
+          x: at,
+          y: height,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [plot(f, { span, label: "f" })],
+            caption: "Concavity changes exactly once.",
+          }),
+        },
       );
     },
   ],
@@ -969,17 +1138,26 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.8 Sketching a function and its derivative ──
   "math/ap-calculus-ab/unit-5/5.8": [
     (r) => {
-      const at = r.nonzero(-6, 6);
-      return among(
-        `The graph of f has a horizontal tangent at x = ${at}. What does the graph of f' do there?`,
-        "It crosses or touches the x-axis",
-        [
-          "It crosses or touches the x-axis",
-          "It has a vertical asymptote",
-          "It has a maximum",
-          "It is undefined",
-        ],
-        r,
+      const span = 8;
+      const a = r.pick([-2, -1, 1, 2]);
+      const at = r.int(-2, 2);
+      const height = r.int(-4, 4);
+      // f is a parabola, so f' is a line — the one derivative a student can
+      // actually draw, and the one sketch worth grading.
+      return line(
+        `The graph of f is drawn. Draw the graph of f'.`,
+        {
+          span,
+          slope: 2 * a,
+          intercept: -2 * a * at,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => a * (x - at) ** 2 + height, { span, label: "f" }),
+            ],
+            caption: "Where f turns, f' crosses zero.",
+          }),
+        },
       );
     },
   ],
@@ -987,18 +1165,29 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.9 Connecting f, f' and f'' ──
   "math/ap-calculus-ab/unit-5/5.9": [
     (r) => {
-      const at = r.nonzero(-6, 6);
-      const positive = r.bool();
-      return among(
-        `f'(${at}) = 0 and f''(${at}) is ${positive ? "positive" : "negative"}. What is at x = ${at}?`,
-        positive ? "A relative minimum" : "A relative maximum",
-        [
-          "A relative minimum",
-          "A relative maximum",
-          "A point of inflection",
-          "The test says nothing",
-        ],
-        r,
+      const span = 8;
+      const at = r.nonzero(-5, 5);
+      const steep = r.int(1, 3);
+      // f' crosses from positive to negative at `at`, which is a maximum of f
+      // — and is the sort of thing that is obvious on the graph of f' and
+      // invisible in a list of four phrases.
+      return slider(
+        `The graph of f' is drawn. At what x does f have a relative maximum?`,
+        {
+          min: -6,
+          max: 6,
+          step: 1,
+          value: at,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => steep * (at - x), { span, label: "f'" }),
+            ],
+            caption: "This is f', not f.",
+          }),
+        },
       );
     },
   ],
@@ -1030,12 +1219,33 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.12 Behaviour of implicit relations ──
   "math/ap-calculus-ab/unit-5/5.12": [
     (r) => {
-      const radius = r.int(2, 12);
-      return ask(
-        `On x² + y² = ${radius * radius}, where is the tangent horizontal?`,
-        `At (0, ±${radius})`,
-        [`At (±${radius}, 0)`, "At the origin", `At (${radius}, ${radius})`, `At (0, ${radius * radius})`],
-        r,
+      const span = 8;
+      const radius = r.int(2, 4);
+      const cx = r.int(-3, 3);
+      const cy = r.int(-3, 3);
+      return point(
+        `(x${signed(-cx)})² + (y${signed(-cy)})² = ${radius * radius}. Place the point where the tangent is horizontal and y is greatest.`,
+        {
+          span,
+          x: cx,
+          y: cy + radius,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((t) => cy + Math.sqrt(Math.max(0, radius * radius - (t - cx) ** 2)), {
+                span,
+                from: cx - radius,
+                to: cx + radius,
+              }),
+              plot((t) => cy - Math.sqrt(Math.max(0, radius * radius - (t - cx) ** 2)), {
+                span,
+                from: cx - radius,
+                to: cx + radius,
+              }),
+            ],
+          }),
+        },
       );
     },
   ],
@@ -1057,14 +1267,32 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 6.2 Riemann sums ──
   "math/ap-calculus-ab/unit-6/6.2": [
     (r) => {
-      const a = r.int(1, 5);
+      const span = 8;
+      const a = r.int(1, 2);
       const n = r.int(2, 4);
       // Left sum for f = ax on [0, n] with unit widths: a(0 + 1 + … + n-1).
-      const sum = (a * (n - 1) * n) / 2;
+      const strips = Array.from({ length: n }, (_, i) =>
+        stroke(
+          [
+            { x: i, y: 0 },
+            { x: i, y: a * i },
+            { x: i + 1, y: a * i },
+            { x: i + 1, y: 0 },
+          ],
+          { tone: "guide" },
+        ),
+      );
       return fill(
         `Estimate the area under   y = ${a === 1 ? "" : a}x   from 0 to ${n} with ${n} left-hand rectangles of width 1.`,
-        sum,
-        { hint: "Height at the left edge of each strip" },
+        (a * (n - 1) * n) / 2,
+        {
+          hint: "Height at the left edge of each strip",
+          figure: graph({
+            span,
+            curves: [plot((x) => a * x, { span, label: "y" }), ...strips],
+            caption: "The first rectangle has no height at all.",
+          }),
+        },
       );
     },
   ],
@@ -1104,13 +1332,26 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 6.5 Reading an accumulation function ──
   "math/ap-calculus-ab/unit-6/6.5": [
     (r) => {
-      const at = r.int(1, 8);
-      const positive = r.bool();
-      return among(
-        `F(x) = ∫ from 0 to x of f(t) dt, and f is ${positive ? "positive" : "negative"} on [0, ${at}]. What is F doing there?`,
-        positive ? "Increasing" : "Decreasing",
-        ["Increasing", "Decreasing", "Constant", "Changing direction"],
-        r,
+      const span = 8;
+      const at = r.nonzero(-5, 5);
+      const steep = r.int(1, 2);
+      // F accumulates f, so F stops climbing exactly where f stops being
+      // positive. The graph shown is f; the question is about F.
+      return slider(
+        `F(x) = ∫ from 0 to x of f(t) dt, and the graph of f is drawn. At what x is F greatest?`,
+        {
+          min: -6,
+          max: 6,
+          step: 1,
+          value: at,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [plot((x) => steep * (at - x), { span, label: "f" })],
+            caption: "F climbs while f is above the axis.",
+          }),
+        },
       );
     },
   ],
@@ -1189,17 +1430,26 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 7.3 Slope fields ──
   "math/ap-calculus-ab/unit-7/7.3": [
     (r) => {
-      const at = r.nonzero(-5, 5);
-      return among(
-        `For   dy/dx = x,   what do the slope marks along the line x = ${at} look like?`,
-        `All of slope ${at}`,
-        [
-          `All of slope ${at}`,
-          "All horizontal",
-          "All vertical",
-          `All of slope ${-at}`,
-        ],
-        r,
+      const span = 6;
+      const slope = r.pick([-2, -1, 1, 2]);
+      const through = r.int(-4, 4);
+      // A constant slope field, so every solution is a line and the one asked
+      // for is the line the student can actually draw. Reading the field is
+      // the skill; the initial condition picks out which solution.
+      return line(
+        `The slope field for   dy/dx = ${slope}   is drawn. Draw the solution through (0, ${through}).`,
+        {
+          span,
+          slope,
+          intercept: through,
+          figure: graph({
+            span,
+            // A uniform field reads the same at seven dashes across as at
+            // twelve, and every one of them is written to the room.
+            curves: [slopeField(() => slope, { span, step: 1.5 })],
+            marks: [dot(0, through)],
+          }),
+        },
       );
     },
   ],
@@ -1207,12 +1457,24 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
   // ── 7.4 Reading a slope field ──
   "math/ap-calculus-ab/unit-7/7.4": [
     (r) => {
-      const value = r.nonzero(-6, 6);
-      return among(
-        `A slope field for   dy/dx = y   is horizontal along one line. Which?`,
-        "y = 0",
-        [`y = ${value}`, `x = ${value}`, "y = 0", "x = 0"],
-        r,
+      const span = 5;
+      const level = r.nonzero(-4, 4);
+      // dy/dx = y - level is flat along one horizontal line and steepens away
+      // from it, which is a thing to see rather than a thing to be told.
+      return slider(
+        `A slope field for   dy/dx = y${signed(-level)}   is drawn. The marks are horizontal along one line, y = ?`,
+        {
+          min: -5,
+          max: 5,
+          step: 1,
+          value: level,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [slopeField((_x, y) => y - level, { span })],
+          }),
+        },
       );
     },
   ],
@@ -1356,19 +1618,10 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const radius = r.int(2, 9);
       const height = r.int(2, 9);
-      return ask(
-        `Rotating the rectangle under y = ${radius} from x = 0 to x = ${height} about the x-axis gives what volume?`,
-        `${radius * radius * height}π`,
-        [
-          `${radius * height}π`,
-          `${radius * radius * height}`,
-          `${2 * radius * height}π`,
-          `${radius * radius}π`,
-          `${radius * height * height}π`,
-          `${radius * radius * height + 1}π`,
-          `${2 * radius * radius * height}π`,
-        ],
-        r,
+      return fill(
+        `Rotating the rectangle under y = ${radius} from x = 0 to x = ${height} about the x-axis gives what volume? Give the multiple of π.`,
+        radius * radius * height,
+        { unit: "π units³", hint: "A cylinder, radius times radius times length" },
       );
     },
   ],
@@ -1378,19 +1631,10 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const shift = r.int(1, 6);
       const radius = r.int(2, 9);
-      return ask(
+      return fill(
         `The region under y = ${radius + shift} from x = 0 to x = 1 is rotated about y = ${shift}. What radius does the disc have?`,
-        `${radius}`,
-        [
-          `${radius + shift}`,
-          `${shift}`,
-          `${radius + 2 * shift}`,
-          `${radius * shift}`,
-          `${radius + 1}`,
-          `${2 * radius}`,
-          `${radius + shift + 1}`,
-        ],
-        r,
+        radius,
+        { hint: "Distance from the curve to the axis" },
       );
     },
   ],
@@ -1401,17 +1645,10 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const outer = r.int(4, 12);
       const inner = r.int(1, outer - 1);
       const length = r.int(2, 6);
-      return ask(
-        `Rotating the strip between y = ${inner} and y = ${outer}, from x = 0 to x = ${length}, about the x-axis gives what volume?`,
-        `${(outer * outer - inner * inner) * length}π`,
-        [
-          `${(outer - inner) ** 2 * length}π`,
-          `${(outer * outer + inner * inner) * length}π`,
-          `${(outer - inner) * length}π`,
-          `${outer * outer * length}π`,
-          `${(outer * outer - inner * inner) * length}`,
-        ],
-        r,
+      return fill(
+        `Rotating the strip between y = ${inner} and y = ${outer}, from x = 0 to x = ${length}, about the x-axis gives what volume? Give the multiple of π.`,
+        (outer * outer - inner * inner) * length,
+        { unit: "π units³", hint: "Outer disc minus inner disc" },
       );
     },
   ],

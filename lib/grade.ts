@@ -39,11 +39,18 @@ export class GradeError extends Error {}
 export async function openSession(
   subunitId: string,
   length?: number,
+  options: {
+    /**
+     * Ask only for questions answered on a grid or a scale. A duel is settled
+     * on which answer was closer, so it can only be played on those.
+     */
+    spatial?: boolean;
+  } = {},
 ): Promise<OpenedSession> {
   const res = await fetch("/api/session", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ subunitId, length }),
+    body: JSON.stringify({ subunitId, length, spatial: options.spatial }),
   });
 
   if (!res.ok) throw new GradeError(await reason(res, "Could not start the game."));
@@ -59,7 +66,7 @@ export async function grade(
   position: number,
   response: Response,
 ): Promise<Verdict> {
-  return post({ sessionId, position, response });
+  return post<Verdict>({ sessionId, position, response });
 }
 
 /** Asks the server to play a bot's turn at the given accuracy. */
@@ -68,10 +75,39 @@ export async function gradeBot(
   position: number,
   accuracy: number,
 ): Promise<Verdict> {
-  return post({ sessionId, position, bot: accuracy });
+  return post<Verdict>({ sessionId, position, bot: accuracy });
 }
 
-async function post(body: Record<string, unknown>): Promise<Verdict> {
+/** One seat at a mirrored question: a person's answer, or a bot to roll. */
+export type Seat = { uid: string; response?: Response; bot?: number };
+
+export type TableVerdict = {
+  results: Record<
+    string,
+    { score: number; correct: boolean; response: Response }
+  >;
+  /** The right answer, said once for the whole table. */
+  reveal: Reveal;
+  pass: number;
+};
+
+/**
+ * Grades everybody's answer to the same question, in one request.
+ *
+ * One request rather than one per player, because the position may only be
+ * graded once: the answer comes back with the verdict, and a second call
+ * would be somebody asking about a question whose answer is already on the
+ * screen. The host sends this after everybody has committed.
+ */
+export async function gradeTable(
+  sessionId: string,
+  position: number,
+  table: Seat[],
+): Promise<TableVerdict> {
+  return post<TableVerdict>({ sessionId, position, table });
+}
+
+async function post<T>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch("/api/answer", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -79,7 +115,7 @@ async function post(body: Record<string, unknown>): Promise<Verdict> {
   });
 
   if (!res.ok) throw new GradeError(await reason(res, "Could not grade that."));
-  return (await res.json()) as Verdict;
+  return (await res.json()) as T;
 }
 
 async function reason(res: Response_, fallback: string) {

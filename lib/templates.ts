@@ -570,14 +570,17 @@ const BC_SUBUNITS = new Set(
  * repeating the rule, so the manifest and the generators cannot disagree about
  * which subunits are shared.
  */
-function sharedWithAb(source: Record<string, string[]>): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
+function sharedWithAb<T>(values: Record<string, T>): Record<string, T> {
+  const out: Record<string, T> = {};
 
-  for (const [id, topics] of Object.entries(source)) {
+  for (const [id, value] of Object.entries(values)) {
     if (!id.startsWith("math/ap-calculus-ab/")) continue;
 
     const twin = id.replace("/ap-calculus-ab/", "/ap-calculus-bc/");
-    if (BC_SUBUNITS.has(twin) && !source[twin]) out[twin] = topics;
+    // Checked against the manifest rather than against whatever is being
+    // mirrored: a BC subunit that brings its own generators brings its own
+    // answer kinds with them, and must not inherit AB's either way.
+    if (BC_SUBUNITS.has(twin) && !OWN[twin]) out[twin] = value;
   }
 
   return out;
@@ -591,6 +594,104 @@ export const GENERATED: Record<string, string[]> = {
 /** How many generators back a subunit. Zero for an ordinary question bank. */
 export function generatorCount(subunitId: string): number {
   return GENERATED[subunitId]?.length ?? 0;
+}
+
+// ─── Where an answer is placed rather than typed ─────────
+
+/**
+ * The generators that ask for their answer on a grid or a scale — a point, a
+ * slider, a drawn line — rather than for one typed or chosen from four.
+ * Subunit id → positions in that subunit's list above.
+ *
+ * This is here, on the public side, because the mirror duel is settled on how
+ * close two answers were, which only means anything when closeness is what
+ * the question measures. The library has to know that before a game starts,
+ * and the generators themselves are server-only. It gives nothing away:
+ * knowing that a question will ask you to place a point says nothing at all
+ * about where the point goes.
+ *
+ * A generator belongs here only if it asks for a placed answer on *every*
+ * seed. One that sometimes asks for a typed one would quietly seed a duel
+ * with questions it cannot settle. `npm run check:templates` checks both
+ * directions of that against what the generators actually produce, so this
+ * list cannot drift away from them.
+ */
+const SPATIAL_OWN: Record<string, number[]> = {
+  // ─── Algebra 1 ─────────────────────────────────────────
+  "math/algebra-1/unit-3/3.1": [0, 1],
+  "math/algebra-1/unit-3/3.5": [0],
+  "math/algebra-1/unit-4/4.3": [0, 1],
+  "math/algebra-1/unit-4/4.4": [0],
+  "math/algebra-1/unit-4/4.7": [0],
+  "math/algebra-1/unit-5/5.1": [0],
+  "math/algebra-1/unit-5/5.2": [0],
+  "math/algebra-1/unit-7/7.1": [0],
+  "math/algebra-1/unit-7/7.2": [0],
+  "math/algebra-1/unit-8/8.4": [0],
+
+  // ─── Geometry ──────────────────────────────────────────
+  "math/geometry/unit-1/1.2": [0],
+  "math/geometry/unit-1/1.5": [0],
+  "math/geometry/unit-3/3.6": [0],
+  "math/geometry/unit-4/4.1": [0],
+  "math/geometry/unit-4/4.2": [0],
+  "math/geometry/unit-4/4.3": [0],
+  "math/geometry/unit-4/4.4": [0],
+  "math/geometry/unit-4/4.6": [0],
+
+  // ─── Algebra 2 ─────────────────────────────────────────
+  "math/algebra-2/unit-1/1.2": [0],
+  "math/algebra-2/unit-2/2.1": [0],
+  "math/algebra-2/unit-4/4.6": [0],
+  "math/algebra-2/unit-9/9.2": [0],
+  "math/algebra-2/unit-9/9.3": [0],
+  "math/algebra-2/unit-10/10.2": [0],
+
+  // ─── Precalculus ───────────────────────────────────────
+  "math/precalculus/unit-2/2.6": [0],
+  "math/precalculus/unit-2/2.7": [0],
+  "math/precalculus/unit-2/2.8": [0],
+  "math/precalculus/unit-4/4.15": [0],
+  "math/precalculus/unit-5/5.6": [0],
+  "math/precalculus/unit-5/5.10": [0],
+  "math/precalculus/unit-6/6.1": [0],
+
+  // ─── AP Calculus AB ────────────────────────────────────
+  "math/ap-calculus-ab/unit-1/1.9": [0],
+  "math/ap-calculus-ab/unit-1/1.13": [0],
+  "math/ap-calculus-ab/unit-1/1.14": [0],
+  "math/ap-calculus-ab/unit-2/2.3": [0],
+  "math/ap-calculus-ab/unit-5/5.1": [0],
+  "math/ap-calculus-ab/unit-5/5.3": [0],
+  "math/ap-calculus-ab/unit-5/5.6": [0],
+  "math/ap-calculus-ab/unit-5/5.8": [0],
+  "math/ap-calculus-ab/unit-5/5.9": [0],
+  "math/ap-calculus-ab/unit-5/5.12": [0],
+  "math/ap-calculus-ab/unit-6/6.5": [0],
+  "math/ap-calculus-ab/unit-7/7.3": [0],
+  "math/ap-calculus-ab/unit-7/7.4": [0],
+};
+
+export const SPATIAL: Record<string, number[]> = {
+  ...SPATIAL_OWN,
+  ...sharedWithAb(SPATIAL_OWN),
+};
+
+/** Which of a subunit's generators ask for a placed answer. Usually none. */
+export function spatialGenerators(subunitId: string): number[] {
+  return SPATIAL[subunitId] ?? [];
+}
+
+/**
+ * Whether a subunit can host a duel.
+ *
+ * A duel is decided by which answer was closer, so it needs questions where
+ * closeness exists. On a typed or chosen answer two right answers are equally
+ * right, every round between two good players is a dead heat, and the game
+ * has nothing to say.
+ */
+export function hasSpatial(subunitId: string): boolean {
+  return spatialGenerators(subunitId).length > 0;
 }
 
 /**

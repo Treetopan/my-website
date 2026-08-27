@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   FillQuestion,
   LineQuestion,
@@ -9,6 +9,7 @@ import type {
   Reveal,
   SliderQuestion,
 } from "@/lib/questions";
+import { Axes, Drawn, VIEW, useGrid } from "@/components/graph";
 
 /**
  * The answer inputs for the kinds that are not multiple choice.
@@ -184,100 +185,6 @@ export function SliderAnswer({
   );
 }
 
-// ─── The coordinate grid, shared by point and line ───────
-
-const VIEW = 100;
-const MARGIN = 8;
-
-function useGrid(span: number) {
-  const svg = useRef<SVGSVGElement>(null);
-  const half = VIEW / 2;
-  const unit = (half - MARGIN) / span;
-
-  const toView = useCallback(
-    (p: Point) => ({ x: half + p.x * unit, y: half - p.y * unit }),
-    [half, unit],
-  );
-
-  /** Screen coordinates back to whole grid units, clamped to the grid. */
-  const toGrid = useCallback(
-    (clientX: number, clientY: number): Point | null => {
-      const box = svg.current?.getBoundingClientRect();
-      if (!box || !box.width) return null;
-
-      const vx = ((clientX - box.left) / box.width) * VIEW;
-      const vy = ((clientY - box.top) / box.height) * VIEW;
-
-      const clamp = (n: number) => Math.max(-span, Math.min(span, n));
-      return {
-        x: clamp(Math.round((vx - half) / unit)),
-        y: clamp(Math.round((half - vy) / unit)),
-      };
-    },
-    [half, span, unit],
-  );
-
-  return { svg, toView, toGrid };
-}
-
-function Axes({ span }: { span: number }) {
-  const half = VIEW / 2;
-  const unit = (half - MARGIN) / span;
-  const ticks = Array.from({ length: span * 2 + 1 }, (_, i) => i - span);
-  const reach = half - MARGIN;
-
-  return (
-    <g>
-      {ticks.map((t) => (
-        <g key={t}>
-          <line
-            x1={half + t * unit}
-            y1={half - reach}
-            x2={half + t * unit}
-            y2={half + reach}
-            className="stroke-line-soft"
-            strokeWidth={t === 0 ? 0 : 0.3}
-          />
-          <line
-            x1={half - reach}
-            y1={half + t * unit}
-            x2={half + reach}
-            y2={half + t * unit}
-            className="stroke-line-soft"
-            strokeWidth={t === 0 ? 0 : 0.3}
-          />
-        </g>
-      ))}
-
-      <line
-        x1={half - reach}
-        y1={half}
-        x2={half + reach}
-        y2={half}
-        className="stroke-line"
-        strokeWidth={0.6}
-      />
-      <line
-        x1={half}
-        y1={half - reach}
-        x2={half}
-        y2={half + reach}
-        className="stroke-line"
-        strokeWidth={0.6}
-      />
-
-      {/* Only the extremes are labelled. A number on every gridline turns the
-          grid into a table, and the point is to read position, not to read. */}
-      <text x={half + reach - 1} y={half + 4.5} textAnchor="end" className="fill-faint" fontSize={3.4}>
-        {span}
-      </text>
-      <text x={half + 1.5} y={half - reach + 3.6} className="fill-faint" fontSize={3.4}>
-        {span}
-      </text>
-    </g>
-  );
-}
-
 // ─── Plot a point ────────────────────────────────────────
 
 export function PointAnswer({
@@ -321,7 +228,11 @@ export function PointAnswer({
           onPointerDown={place}
           onPointerMove={(e) => e.buttons === 1 && place(e)}
         >
-          <Axes span={question.span} />
+          <Axes span={question.span} figure={question.figure} />
+
+          {/* The figure goes down before the answer markers: what you were
+              given sits under what you did, never over it. */}
+          {question.figure && <Drawn figure={question.figure} toView={toView} />}
 
           {/* Drawn before the student's marker so theirs stays on top when the
               two land close together. */}
@@ -363,6 +274,11 @@ export function PointAnswer({
         </svg>
 
         <div className="flex flex-col gap-3">
+          {question.figure?.caption && (
+            <p className="max-w-[200px] text-[13px] text-muted">
+              {question.figure.caption}
+            </p>
+          )}
           <p className="font-mono text-[15px] text-ink tnum">
             {draft ? `(${draft.x}, ${draft.y})` : "Tap the grid"}
           </p>
@@ -452,7 +368,9 @@ export function LineAnswer({
           onPointerUp={() => setDragging(null)}
           onPointerLeave={() => setDragging(null)}
         >
-          <Axes span={span} />
+          <Axes span={span} figure={question.figure} />
+
+          {question.figure && <Drawn figure={question.figure} toView={toView} />}
 
           {answerEdge && (
             <line
@@ -492,6 +410,11 @@ export function LineAnswer({
         </svg>
 
         <div className="flex flex-col gap-3">
+          {question.figure?.caption && (
+            <p className="max-w-[200px] text-[13px] text-muted">
+              {question.figure.caption}
+            </p>
+          )}
           <p className="font-mono text-[15px] text-ink tnum">{describe(through)}</p>
           {right && (
             <p className="font-mono text-[13px] text-muted tnum">

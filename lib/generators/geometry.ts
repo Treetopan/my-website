@@ -3,11 +3,13 @@ import "server-only";
 import {
   among,
   ask,
+  dot,
   fill,
   frac,
-  head,
-  nearMisses,
+  graph,
+  line,
   piFrac,
+  plot,
   point,
   signed,
   slider,
@@ -30,11 +32,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const ab = r.int(4, 30);
       const bc = r.int(4, 30);
-      return ask(
+      return fill(
         `B lies between A and C. If AB = ${ab} and BC = ${bc}, what is AC?`,
         ab + bc,
-        [Math.abs(ab - bc), ab * bc, frac(ab + bc, 2), ab, bc],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -44,17 +45,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const angle = r.int(15, 75);
       const complement = r.bool();
-      return ask(
+      return fill(
         `What is the measure of the ${complement ? "complement" : "supplement"} of a ${angle}° angle?`,
         `${complement ? 90 - angle : 180 - angle}°`,
-        [
-          `${complement ? 180 - angle : 90 - angle}°`, // did the other one
-          `${angle}°`,
-          `${90 + angle}°`,
-          `${360 - angle}°`,
-          `${2 * angle}°`,
-        ],
-        r,
+        { hint: "in degrees" },
       );
     },
   ],
@@ -79,28 +73,29 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
 
   // ── 1.5 Distance and midpoint on the coordinate plane ──
   "math/geometry/unit-1/1.5": [
-    // Midpoint. Kept on odd sums half the time so halving is a real step.
+    // Midpoint, placed rather than picked. Rolled from the midpoint outwards
+    // so it lands on a grid point, and drawn as two loose ends rather than as
+    // a segment — with the segment there the answer is its middle, which the
+    // eye finds without doing any of the arithmetic.
     (r) => {
-      const x1 = r.int(-9, 9);
-      const x2 = r.int(-9, 9);
-      const y1 = r.int(-9, 9);
-      let y2 = r.int(-9, 9);
-      while (x1 === x2 && y1 === y2) y2 = r.int(-9, 9);
-      const mid = `(${frac(x1 + x2, 2)}, ${frac(y1 + y2, 2)})`;
-      return ask(
-        `What is the midpoint of the segment from (${x1}, ${y1}) to (${x2}, ${y2})?`,
-        mid,
-        [
-          `(${frac(x2 - x1, 2)}, ${frac(y2 - y1, 2)})`, // halved the difference
-          `(${x1 + x2}, ${y1 + y2})`, // never halved
-          `(${frac(x1 + y1, 2)}, ${frac(x2 + y2, 2)})`, // paired the wrong coordinates
-          `(${x2 - x1}, ${y2 - y1})`,
-          `(${frac(y1 + y2, 2)}, ${frac(x1 + x2, 2)})`,
-          `(${x1}, ${y1})`, // an endpoint
-          `(${x2}, ${y2})`,
-          `(${x2}, ${y1})`, // coordinates paired across the points
-        ],
-        r,
+      const span = 9;
+      const mx = r.int(-6, 6);
+      const my = r.int(-6, 6);
+      const across = r.nonzero(-3, 3);
+      const up = r.nonzero(-3, 3);
+      const x1 = mx - across;
+      const y1 = my - up;
+      const x2 = mx + across;
+      const y2 = my + up;
+      return point(
+        `Place the midpoint of the segment from (${x1}, ${y1}) to (${x2}, ${y2}).`,
+        {
+          span,
+          x: mx,
+          y: my,
+          zero: 2,
+          figure: graph({ span, curves: [], marks: [dot(x1, y1), dot(x2, y2)] }),
+        },
       );
     },
     // Distance, over Pythagorean triples so the root comes out whole.
@@ -115,12 +110,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       ]);
       const x1 = r.int(-6, 6);
       const y1 = r.int(-6, 6);
-      const c = Math.round(Math.sqrt(a * a + b * b));
-      return ask(
+      return fill(
         `What is the distance from (${x1}, ${y1}) to (${x1 + a}, ${y1 + b})?`,
-        c,
-        [a + b, Math.abs(b - a), a * b, c * c, frac(a + b, 2)],
-        r,
+        Math.round(Math.sqrt(a * a + b * b)),
+        { hint: "a number" },
       );
     },
   ],
@@ -131,17 +124,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const first = r.int(20, 90);
       const second = r.int(20, 150 - first);
       const third = 180 - first - second;
-      return ask(
+      return fill(
         `Two angles of a triangle measure ${first}° and ${second}°. What is the third?`,
         `${third}°`,
-        [
-          `${360 - first - second}°`, // used 360 instead of 180
-          `${first + second}°`,
-          `${180 - first}°`,
-          `${90 - Math.min(first, second)}°`,
-          `${third + 10}°`,
-        ],
-        r,
+        { hint: "in degrees" },
       );
     },
   ],
@@ -151,17 +137,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const a = r.int(25, 80);
       const b = r.int(25, 80);
-      return ask(
+      return fill(
         `Two remote interior angles of a triangle measure ${a}° and ${b}°. What is the exterior angle at the third vertex?`,
         `${a + b}°`,
-        [
-          `${180 - a - b}°`, // gave the third interior angle
-          `${180 - a}°`,
-          `${180 - b}°`,
-          `${Math.abs(a - b)}°`,
-          `${360 - a - b}°`,
-        ],
-        r,
+        { hint: "in degrees" },
       );
     },
   ],
@@ -170,11 +149,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
   "math/geometry/unit-6/6.5": [
     (r) => {
       const base = r.int(6, 40) * 2;
-      return ask(
+      return fill(
         `The midsegment of a triangle is parallel to a side of length ${base}. How long is the midsegment?`,
         base / 2,
-        [base, base * 2, frac(base, 3), frac(base, 4), base - 2],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -203,11 +181,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const k = r.int(2, 5);
       const side = r.int(3, 12);
-      return ask(
+      return fill(
         `Two similar figures have a scale factor of ${k}. If a side of the smaller is ${side}, what is the matching side of the larger?`,
         side * k,
-        [frac(side, k), side + k, side * k * k, side, side * (k + 1)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -218,17 +195,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const a = r.int(2, 7);
       let b = r.int(2, 9);
       while (b === a) b = r.int(2, 9);
-      return ask(
+      return fill(
         `Two similar figures have sides in the ratio ${a}:${b}. What is the ratio of their areas?`,
         `${a * a}:${b * b}`,
-        [
-          `${a}:${b}`, // never squared
-          `${2 * a}:${2 * b}`, // doubled instead of squaring
-          `${a ** 3}:${b ** 3}`, // cubed, which is the volume ratio
-          `${b * b}:${a * a}`,
-          `${a + a}:${b + b}`,
-        ],
-        r,
+        { hint: "e.g. 9:16" },
       );
     },
   ],
@@ -248,17 +218,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const k = r.pick([1, 1, 1, 2]);
       const legs = [a * k, b * k];
       const c = Math.round(Math.sqrt(legs[0] ** 2 + legs[1] ** 2));
-      return ask(
+      return fill(
         `A right triangle has legs ${legs[0]} and ${legs[1]}. How long is the hypotenuse?`,
         c,
-        [
-          legs[0] + legs[1], // added the legs
-          Math.abs(legs[1] - legs[0]),
-          c * c,
-          Math.round(Math.sqrt(Math.abs(legs[1] ** 2 - legs[0] ** 2))), // solved for a leg
-          c + 1,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -321,11 +284,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       // θ is the angle opposite the side of length a.
       const correct =
         ratio === "sin" ? frac(a, c) : ratio === "cos" ? frac(b, c) : frac(a, b);
-      return ask(
+      return fill(
         `A right triangle has legs ${a} and ${b} and hypotenuse ${c}. If θ is opposite the leg of length ${a}, what is ${ratio} θ?`,
         correct,
-        [frac(a, c), frac(b, c), frac(a, b), frac(b, a), frac(c, a), frac(c, b)],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -335,15 +297,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const n = r.int(5, 14);
       const wantInterior = r.bool();
-      return ask(
+      return fill(
         wantInterior
           ? `What is the sum of the interior angles of a ${n}-gon?`
           : `What is the measure of one exterior angle of a regular ${n}-gon?`,
         wantInterior ? `${180 * (n - 2)}°` : `${frac(360, n)}°`,
-        wantInterior
-          ? [`${180 * n}°`, `${360 * (n - 2)}°`, `${frac(180 * (n - 2), n)}°`, `360°`, `${180 * (n - 1)}°`]
-          : [`${frac(180 * (n - 2), n)}°`, `${frac(360, n - 2)}°`, `${360 / 2}°`, `${180 * (n - 2)}°`, `${frac(180, n)}°`],
-        r,
+        { hint: "in degrees" },
       );
     },
   ],
@@ -353,19 +312,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const central = r.int(20, 160);
       const inscribed = r.bool();
-      return ask(
+      return fill(
         inscribed
           ? `An inscribed angle subtends an arc of ${2 * central}°. What is the inscribed angle?`
           : `A central angle measures ${central}°. What is the measure of its intercepted arc?`,
         `${central}°`,
-        [
-          `${2 * central}°`, // doubled rather than halved, or vice versa
-          `${frac(central, 2)}°`,
-          `${180 - central}°`,
-          `${360 - central}°`,
-          `${90 - central}°`,
-        ],
-        r,
+        { hint: "in degrees" },
       );
     },
   ],
@@ -416,36 +368,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
 
   // ── 11.7 Volume of prisms and cylinders ──
   "math/geometry/unit-11/11.7": [
+    // Both branches are typed. π is asked for as a multiple rather than as a
+    // symbol, because the answer box is a keyboard and π is not on it.
     (r) => {
       const radius = r.int(2, 9);
       const height = r.int(3, 15);
       if (r.bool()) {
-        return ask(
-          `What is the volume of a cylinder with radius ${radius} and height ${height}, in terms of π?`,
-          `${radius * radius * height}π`,
-          [
-            `${radius * height}π`, // radius not squared
-            `${2 * radius * height}π`, // lateral surface area
-            piFrac(radius * radius * height, 3), // the cone formula
-            `${radius * radius}π`,
-            `${2 * radius * radius * height}π`,
-          ],
-          r,
+        return fill(
+          `What is the volume of a cylinder with radius ${radius} and height ${height}? Give the multiple of π.`,
+          radius * radius * height,
+          { unit: "π units³", hint: "radius squared, times the height" },
         );
       }
       const w = r.int(2, 12);
       const l = r.int(2, 12);
-      return ask(
+      return fill(
         `What is the volume of a rectangular prism ${l} by ${w} by ${height}?`,
         l * w * height,
-        [
-          2 * (l * w + l * height + w * height), // surface area
-          l + w + height,
-          l * w,
-          frac(l * w * height, 3),
-          ...nearMisses(l * w * height),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -495,17 +435,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const k = r.int(2, 5);
       const wantVolume = r.bool();
-      return ask(
+      return fill(
         `Two similar solids have corresponding edges in the ratio 1:${k}. What is the ratio of their ${wantVolume ? "volumes" : "surface areas"}?`,
         wantVolume ? `1:${k ** 3}` : `1:${k * k}`,
-        [
-          wantVolume ? `1:${k * k}` : `1:${k ** 3}`, // used the other power
-          `1:${k}`, // never raised it at all
-          `1:${3 * k}`,
-          `1:${2 * k}`,
-          `1:${k ** 4}`,
-        ],
-        r,
+        { hint: "e.g. 1:8" },
       );
     },
   ],
@@ -528,19 +461,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const ordered = r.bool();
       const p = permutation(n, k);
       const c = p / factorial(k);
-      return ask(
+      return fill(
         ordered
           ? `In how many ways can ${k} of ${n} people be arranged in order?`
           : `In how many ways can ${k} of ${n} people be chosen, when order does not matter?`,
         ordered ? p : c,
-        [
-          ordered ? c : p, // used the other one
-          n ** k,
-          n * k,
-          factorial(n) / factorial(k),
-          p + c,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -555,19 +481,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const correct = withReplacement
         ? frac(red * red, total * total)
         : frac(red * (red - 1), total * (total - 1));
-      return ask(
+      return fill(
         `A bag holds ${red} red and ${blue} blue marbles. Two are drawn ${withReplacement ? "with" : "without"} replacement. What is the probability both are red?`,
         correct,
-        [
-          withReplacement
-            ? frac(red * (red - 1), total * (total - 1))
-            : frac(red * red, total * total), // ignored the replacement rule
-          frac(red, total), // only one draw
-          frac(2 * red, total),
-          frac(red * red, total),
-          frac(red + red, total + total),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -576,11 +493,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const n = r.int(4, 9);
       const lines = (n * (n - 1)) / 2;
-      return ask(
+      return fill(
         `No three of ${n} points are collinear. How many different lines do they determine?`,
         lines,
-        [n, n * (n - 1), n - 1, lines + n, ...nearMisses(lines)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -593,13 +509,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const wantArea = r.bool();
       const area = w * h;
       const perimeter = 2 * (w + h);
-      return ask(
+      return fill(
         `A rectangle is ${w} by ${h}. What is its ${wantArea ? "area" : "perimeter"}?`,
         wantArea ? area : perimeter,
-        wantArea
-          ? [perimeter, w + h, 2 * area, ...nearMisses(area)]
-          : [area, w + h, 4 * (w + h), ...nearMisses(perimeter)],
-        r,
+        { hint: "a number" },
       );
     },
     (r) => {
@@ -744,11 +657,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { name: "linear pair", value: 180 - angle },
       ];
       const kind = r.pick(kinds);
-      return ask(
+      return fill(
         `One angle measures ${angle}°. What is its ${kind.name} partner?`,
         kind.value,
-        [180 - kind.value, 90 - angle, 360 - angle, angle / 2, ...nearMisses(kind.value)],
-        r,
+        { hint: "in degrees" },
       );
     },
   ],
@@ -793,19 +705,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const rise = r.nonzero(-8, 8);
       const run = r.int(2, 8);
       const parallel = r.bool();
-      return ask(
+      return fill(
         `A line has slope ${frac(rise, run)}. What is the slope of a line ${parallel ? "parallel" : "perpendicular"} to it?`,
         parallel ? frac(rise, run) : frac(-run, rise),
-        [
-          parallel ? frac(-run, rise) : frac(rise, run),
-          frac(run, rise),
-          frac(-rise, run),
-          frac(rise + run, run),
-          frac(run, -rise),
-          frac(2 * rise, run),
-          frac(rise, 2 * run),
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -813,19 +716,27 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
   // ── 3.6 Equations of parallel and perpendicular lines ──
   "math/geometry/unit-3/3.6": [
     (r) => {
-      const m = r.coefficient(5);
-      const b = r.nonzero(-9, 9);
-      const c = r.nonzero(-9, 9);
-      return ask(
-        `Which line is parallel to   y = ${head(m, "x")}${signed(b)} ?`,
-        `y = ${head(m, "x")}${signed(b + c)}`,
-        [
-          `y = ${head(-m, "x")}${signed(b)}`,
-          `y = ${head(m + 1, "x")}${signed(b)}`,
-          `y = ${head(b, "x")}${signed(m)}`,
-          `y = ${head(m + 2, "x")}${signed(b + c)}`,
-        ],
-        r,
+      const span = 8;
+      const m = r.pick([-2, -1, 1, 2]);
+      const b = r.nonzero(-4, 4);
+      const px = r.nonzero(-3, 3);
+      const py = r.int(-3, 3);
+      // Parallel is a fact about direction, so it is answered by drawing one.
+      // Matching a slope across four written equations is a reading exercise.
+      return line(
+        `Draw the line through (${px}, ${py}) parallel to the one drawn.`,
+        {
+          span,
+          slope: m,
+          intercept: py - m * px,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => m * x + b, { span, tone: "second", label: "given" }),
+            ],
+            marks: [dot(px, py)],
+          }),
+        },
       );
     },
   ],
@@ -1192,11 +1103,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { ratio: "tan", value: "√3", angle: 60 },
       ];
       const c = r.pick(cases);
-      return ask(
+      return fill(
         `In a right triangle, ${c.ratio} θ = ${c.value}. What is θ?`,
         `${c.angle}°`,
-        ["30°", "45°", "60°", "90°", "15°"],
-        r,
+        { hint: "in degrees" },
       );
     },
   ],
@@ -1324,11 +1234,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
   "math/geometry/unit-10/10.1": [
     (r) => {
       const radius = r.int(2, 30);
-      return ask(
+      return fill(
         `A circle has radius ${radius}. What is its diameter?`,
         2 * radius,
-        [radius, radius * radius, 4 * radius, frac(radius, 2), ...nearMisses(2 * radius)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -1431,11 +1340,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const base = r.int(2, 20) * 2;
       const height = r.int(2, 18);
-      return ask(
+      return fill(
         `A triangle has base ${base} and height ${height}. What is its area?`,
         (base * height) / 2,
-        [base * height, base + height, 2 * base * height, ...nearMisses((base * height) / 2)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -1490,17 +1398,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const a = r.int(2, 10);
       const b = r.int(2, 10);
       const c = r.int(2, 10);
-      return ask(
+      return fill(
         `What is the surface area of a ${a} by ${b} by ${c} box?`,
         2 * (a * b + b * c + a * c),
-        [
-          a * b * c,
-          a * b + b * c + a * c,
-          4 * (a + b + c),
-          2 * a * b * c,
-          ...nearMisses(2 * (a * b + b * c + a * c)),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -1563,16 +1464,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const shirts = r.int(2, 9);
       const trousers = r.int(2, 9);
       const shoes = r.int(2, 5);
-      return ask(
+      return fill(
         `${shirts} shirts, ${trousers} pairs of trousers and ${shoes} pairs of shoes. How many outfits?`,
         shirts * trousers * shoes,
-        [
-          shirts + trousers + shoes,
-          shirts * trousers,
-          shirts * trousers + shoes,
-          ...nearMisses(shirts * trousers * shoes),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -1582,11 +1477,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const trials = r.int(2, 20) * 10;
       const hits = r.int(1, 9) * (trials / 10);
-      return ask(
+      return fill(
         `A coin lands heads ${hits} times in ${trials} throws. What is the experimental probability of heads?`,
         frac(hits, trials),
-        ["1/2", frac(trials, hits), frac(hits, trials - hits), frac(trials - hits, trials), `${hits}`],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1596,19 +1490,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const side = r.int(4, 12);
       const inner = r.int(1, side - 1);
-      return ask(
+      return fill(
         `A dart lands at random on a ${side} by ${side} board. What is the chance it lands in a ${inner} by ${inner} square drawn on it?`,
         frac(inner * inner, side * side),
-        [
-          frac(inner, side),
-          frac(inner * inner, side),
-          frac(inner, side * side),
-          frac(side * side, inner * inner),
-          frac(inner * inner, side * side - inner * inner),
-          frac(2 * inner, side),
-          frac(side, inner + side),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1618,17 +1503,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const both = r.int(2, 12);
       const firstOnly = r.int(2, 12);
-      return ask(
+      return fill(
         `${both + firstOnly} students play football, and ${both} of those also play chess. Given a student plays football, what is the chance they play chess?`,
         frac(both, both + firstOnly),
-        [
-          frac(firstOnly, both + firstOnly),
-          frac(both, firstOnly),
-          frac(both + firstOnly, both),
-          frac(both, both + firstOnly + 1),
-          "1/2",
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1641,11 +1519,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const both = r.int(2, 12);
       const neither = r.int(1, 15);
       const total = onlyA + onlyB + both + neither;
-      return ask(
+      return fill(
         `Of ${total} people, ${onlyA} like tea only, ${onlyB} coffee only, ${both} like both and ${neither} like neither. How many like tea?`,
         onlyA + both,
-        [onlyA, both, onlyA + onlyB, total - neither, ...nearMisses(onlyA + both)],
-        r,
+        { hint: "a number" },
       );
     },
   ],

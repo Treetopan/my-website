@@ -4,10 +4,12 @@ import {
   among,
   ask,
   frac,
+  graph,
   head,
   fill,
-  nearMisses,
   piFrac,
+  plot,
+  point,
   slider,
   poly,
   signed,
@@ -15,7 +17,15 @@ import {
   type Rng,
 } from "./kit";
 
-/** Algebra 2 generators. */
+/**
+ * Algebra 2 generators.
+ *
+ * The same rule as everywhere else: multiple choice is kept for the questions
+ * whose answer really is a statement — which sampling method is random, what
+ * the induction step is, which identity is the right one — and everything with
+ * a numeric answer is typed, dragged or placed. A vertex, a centre and the
+ * solution of a system are all points, so they are answered on a grid.
+ */
 export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.5 Matrix multiplication ──
   "math/algebra-2/unit-1/1.5": [
@@ -23,18 +33,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const m = [r.int(-5, 5), r.int(-5, 5), r.int(-5, 5), r.int(-5, 5)];
       const v = [r.nonzero(-5, 5), r.nonzero(-5, 5)];
       const top = m[0] * v[0] + m[1] * v[1];
-      const bottom = m[2] * v[0] + m[3] * v[1];
-      return ask(
+      return fill(
         `Multiply [[${m[0]}, ${m[1]}], [${m[2]}, ${m[3]}]] by the column vector (${v[0]}, ${v[1]}). What is the top entry?`,
         top,
-        [
-          bottom, // read the wrong row
-          m[0] * v[0] + m[2] * v[1], // went down the column instead of along the row
-          m[0] * v[0],
-          m[0] * v[0] * m[1] * v[1],
-          ...nearMisses(top),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -48,18 +50,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
         r.nonzero(-8, 8),
         r.nonzero(-8, 8),
       ];
-      return ask(
+      return fill(
         `What is the determinant of [[${a}, ${b}], [${c}, ${d}]]?`,
         a * d - b * c,
-        [
-          a * d + b * c, // added the products
-          b * c - a * d, // subtracted the wrong way round
-          a * b - c * d, // paired rows instead of diagonals
-          a + d - b - c,
-          a * c - b * d,
-          ...nearMisses(a * d - b * c),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -108,17 +102,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const a = r.nonzero(-9, 9);
       const b = r.nonzero(-9, 9);
       // (a + bi)(a - bi) = a² + b², which is the point: the product is real.
-      return ask(
+      return fill(
         `What is (${a}${signed(b, "i")})(${a}${signed(-b, "i")})?`,
         a * a + b * b,
-        [
-          a * a - b * b, // treated i² as +1
-          `${a * a}${signed(b * b, "i")}`,
-          a * a,
-          2 * a * b,
-          -(a * a + b * b),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -130,17 +117,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const [a, b, c] = [r.coefficient(5), r.nonzero(-9, 9), r.nonzero(-9, 9)];
       // Dividing by (x - root) leaves this remainder, by the Remainder Theorem.
       const remainder = a * root * root + b * root + c;
-      return ask(
+      return fill(
         `What is the remainder when ${poly([[a, 2], [b, 1], [c, 0]])} is divided by (x${signed(-root)})?`,
         remainder,
-        [
-          a * root * root - b * root + c, // sign slip on the root
-          a * (-root) ** 2 + b * -root + c,
-          c, // read off the constant term
-          a + b + c, // evaluated at 1
-          ...nearMisses(remainder),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -205,17 +185,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const [index, root] = roots[base];
       const numerator = r.int(2, 3);
       const value = root ** numerator;
-      return ask(
+      return fill(
         `Evaluate: ${base}^(${numerator}/${index})`,
         value,
-        [
-          root, // took the root and stopped
-          base * numerator,
-          base ** numerator,
-          root ** index,
-          root * numerator,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -233,17 +206,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       // f(g(x)) where f(x) = ax + b and g(x) = cx + d.
       const g = c * at + d;
       const fg = a * g + b;
-      return ask(
+      return fill(
         `If f(x) = ${head(a, "x")}${signed(b)} and g(x) = ${head(c, "x")}${signed(d)}, what is f(g(${at}))?`,
         fg,
-        [
-          c * (a * at + b) + d, // composed the other way round
-          (a * at + b) * (c * at + d), // multiplied instead of composing
-          a * at + b,
-          g,
-          ...nearMisses(fg),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -276,12 +242,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const p = r.int(2, 4);
       const q = r.int(2, 4);
       // log_b(base^p · base^q) = p + q.
-      return ask(
+      return fill(
         `Simplify: log_${base}(${base ** p}) + log_${base}(${base ** q})`,
         p + q,
-        // Not base^(p+q): that is 10,000,000 next to an answer of 7.
-        [p * q, Math.abs(p - q), p + q + 1, p + q - 1, base * (p + q)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -305,11 +269,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       let shift = r.nonzero(-3, 3);
       while (x + shift < 1) shift = r.nonzero(-3, 3);
       const value = base ** (x + shift);
-      return ask(
+      return fill(
         `Solve for x:  ${base}^(x${signed(shift)}) = ${value}`,
         x,
-        [x + shift, x - shift, value, frac(value, base), ...nearMisses(x)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -399,18 +362,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const step = r.nonzero(-9, 9);
       const n = r.int(6, 20);
       const nth = first + step * (n - 1);
-      return ask(
+      return fill(
         `An arithmetic sequence has first term ${first} and common difference ${step}. What is the ${n}th term?`,
         nth,
-        [
-          first + step * n, // counted from term zero
-          step * (n - 1), // dropped the first term
-          first * n + step,
-          first + step,
-          nth - step,
-          -nth,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -423,17 +378,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const n = r.int(5, 15);
       const last = first + step * (n - 1);
       const sum = (n * (first + last)) / 2;
-      return ask(
+      return fill(
         `What is the sum of the first ${n} terms of the arithmetic sequence starting ${first} with common difference ${step}?`,
         sum,
-        [
-          n * (first + last), // forgot to halve
-          last, // gave the last term
-          frac(n * (first + last), 4),
-          n * first,
-          ...nearMisses(sum),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -446,17 +394,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const num = r.nonzero(-(den - 1), den - 1);
       // |ratio| < 1, so the series converges to a / (1 - ratio).
       const sum = frac(first * den, den - num);
-      return ask(
+      return fill(
         `What is the sum of the infinite geometric series with first term ${first} and common ratio ${frac(num, den)}?`,
         sum,
-        [
-          frac(first * den, den + num), // sign slip in the denominator
-          frac(den - num, first * den),
-          String(first),
-          frac(first, den),
-          "It diverges",
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -469,17 +410,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       while (b >= a) b = r.int(2, 11);
       // c² = a² - b² for an ellipse.
       const cSquared = a * a - b * b;
-      return ask(
+      return fill(
         `For the ellipse x²/${a * a} + y²/${b * b} = 1, what is c², where c is the focal distance?`,
         cSquared,
-        [
-          a * a + b * b, // the hyperbola relation
-          b * b - a * a,
-          a - b,
-          (a - b) ** 2,
-          a * b,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -512,17 +446,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const sd = r.pick([2, 4, 5, 10]);
       const z = r.nonzero(-3, 3);
       const value = mean + z * sd;
-      return ask(
+      return fill(
         `A distribution has mean ${mean} and standard deviation ${sd}. What is the z-score of ${value}?`,
         z,
-        [
-          -z, // subtracted the wrong way round
-          value - mean, // never divided by the deviation
-          frac(value, sd),
-          frac(mean - value, sd),
-          ...nearMisses(z),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -542,6 +469,7 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.2 Systems in two variables ──
   "math/algebra-2/unit-1/1.2": [
     (r) => {
+      const span = 8;
       const x = r.nonzero(-7, 7);
       const y = r.nonzero(-7, 7);
       const a = r.coefficient(5);
@@ -551,11 +479,9 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       // Nudging by one always breaks the tie: a·(d ± 1) differs from a·d by a,
       // which is never zero.
       const d = a * rolled === b * c ? rolled + (rolled > 0 ? 1 : -1) : rolled;
-      return ask(
-        `Solve:   ${head(a, "x")}${signed(b, "y")} = ${a * x + b * y}   and   ${head(c, "x")}${signed(d, "y")} = ${c * x + d * y}`,
-        `(${x}, ${y})`,
-        [`(${y}, ${x})`, `(${-x}, ${y})`, `(${x}, ${-y})`, `(${x + 1}, ${y})`, `(${x}, ${y - 1})`],
-        r,
+      return point(
+        `Solve, and place the solution:   ${head(a, "x")}${signed(b, "y")} = ${a * x + b * y}   and   ${head(c, "x")}${signed(d, "y")} = ${c * x + d * y}`,
+        { span, x, y, zero: 2 },
       );
     },
   ],
@@ -584,11 +510,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const take = r.bool();
       const s = take ? -1 : 1;
       const entry = a[0] + s * b[0];
-      return ask(
+      return fill(
         `[[${a[0]}, ${a[1]}], [${a[2]}, ${a[3]}]] ${take ? "-" : "+"} [[${b[0]}, ${b[1]}], [${b[2]}, ${b[3]}]].   What is the top-left entry?`,
         entry,
-        [a[0] - s * b[0], a[0] * b[0], a[1] + s * b[1], a[3] + s * b[3], ...nearMisses(entry)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -604,20 +529,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       // one value that would make the determinant vanish.
       const d = a * rolled === b * c ? rolled + (rolled > 0 ? 1 : -1) : rolled;
       const det = a * d - b * c;
-      return ask(
+      return fill(
         `A⁻¹ = (1/det)·[[d, -b], [-c, a]].   What is the top-left entry of the inverse of [[${a}, ${b}], [${c}, ${d}]]?`,
         frac(d, det),
-        [
-          frac(a, det),
-          frac(det, d),
-          frac(-d, det),
-          frac(d, a * d + b * c),
-          frac(1, det),
-          frac(b, det),
-          frac(c, det),
-          frac(d, det + 1),
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -646,16 +561,18 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
 
   // ── 2.1 Quadratic forms and transformations ──
   "math/algebra-2/unit-2/2.1": [
+    // Placed, not picked. Vertex form hands the vertex over in the equation,
+    // so the parabola is deliberately not drawn — with it on the grid this
+    // would be a question about looking rather than about reading the form.
     (r) => {
+      const span = 8;
       const a = r.coefficient(4);
       const h = r.nonzero(-6, 6);
       const k = r.nonzero(-6, 6);
       const inside = h > 0 ? `x - ${h}` : `x + ${-h}`;
-      return ask(
-        `What is the vertex of   y = ${head(a, "")}(${inside})^2${signed(k)} ?`,
-        `(${h}, ${k})`,
-        [`(${-h}, ${k})`, `(${h}, ${-k})`, `(${-h}, ${-k})`, `(${k}, ${h})`, `(${h + 1}, ${k})`],
-        r,
+      return point(
+        `Place the vertex of   y = ${head(a, "")}(${inside})^2${signed(k)}`,
+        { span, x: h, y: k, zero: 2 },
       );
     },
   ],
@@ -854,17 +771,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
         [b - a * root, 1],
         [-b * root, 0],
       ];
-      return ask(
+      return fill(
         `Divide:   (${poly(terms)}) ÷ (x${signed(-root)})`,
         `${head(a, "x")}${signed(b)}`,
-        [
-          `${head(a, "x")}${signed(-b)}`,
-          `${head(b, "x")}${signed(a)}`,
-          `${head(a, "x")}${signed(b - a * root)}`,
-          `${head(a, "x")}${signed(b + 1)}`,
-          `${head(a + 1, "x")}${signed(b)}`,
-        ],
-        r,
+        { hint: "an expression in x" },
       );
     },
   ],
@@ -881,17 +791,16 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
         [b - a * root, 1],
         [-b * root, 0],
       ];
-      return ask(
-        `Which is a factor of   ${poly(terms)} ?`,
+      // Both factors count. Asking for "a" factor and then accepting only the
+      // monic one would mark a correct factorisation wrong, which is a worse
+      // failure than the question being slightly easier.
+      return fill(
+        `Give a linear factor of   ${poly(terms)}`,
         `x${signed(-root)}`,
-        [
-          `x${signed(root)}`,
-          `x${signed(-root - 1)}`,
-          `x${signed(-b)}`,
-          `x${signed(b)}`,
-          `x${signed(-root + 1)}`,
-        ],
-        r,
+        {
+          accept: [`${head(a, "x")}${signed(b)}`],
+          hint: "e.g. x - 3",
+        },
       );
     },
   ],
@@ -913,11 +822,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const real = r.nonzero(-6, 6);
       const imaginary = r.int(2, 6);
-      return ask(
+      return fill(
         `A polynomial with real coefficients has zeros ${real} and ${imaginary}i. Which zero must it also have?`,
         `${-imaginary}i`,
-        [`${-real}`, `${imaginary}`, `${real}i`, `${-real}i`, `${imaginary * 2}i`],
-        r,
+        { hint: "e.g. -4i" },
       );
     },
   ],
@@ -996,11 +904,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
   "math/algebra-2/unit-4/4.1": [
     (r) => {
       const a = r.nonzero(-8, 8);
-      return ask(
+      return fill(
         `Simplify:   (x^2 - ${a * a}) / (x${signed(-a)})`,
         `x${signed(a)}`,
-        [`x${signed(-a)}`, `x${signed(a * a)}`, `x^2${signed(a)}`, head(a, "x"), `x${signed(-a * a)}`],
-        r,
+        { hint: "an expression in x" },
       );
     },
   ],
@@ -1053,17 +960,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const b = r.int(2, 9);
       const k = r.int(2, 5);
       const a = b * k;
-      return ask(
+      return fill(
         `Simplify:   (${a}/x) ÷ (${b}/x^2)`,
         head(k, "x"),
-        [
-          `x/${k}`,
-          head(k, "x^2"),
-          `${k}/x`,
-          head(k * k, "x"),
-          `${k}`,
-        ],
-        r,
+        { hint: "an expression in x" },
       );
     },
   ],
@@ -1071,13 +971,28 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
   // ── 4.6 Holes ──
   "math/algebra-2/unit-4/4.6": [
     (r) => {
-      const hole = r.nonzero(-7, 7);
+      const span = 8;
+      const hole = r.nonzero(-5, 5);
       const other = hole + r.int(1, 6);
-      return ask(
-        `Where is the hole in   y = ((x${signed(-hole)})(x${signed(-other)})) / (x${signed(-hole)}) ?`,
-        `x = ${hole}`,
-        [`x = ${other}`, `x = ${-hole}`, "There is no hole", `x = ${hole + other}`],
-        r,
+      // The break in the line is drawn but the missing point is not, so the
+      // hole is something to find rather than something to spot.
+      return slider(
+        `Drag to the x where   y = ((x${signed(-hole)})(x${signed(-other)})) / (x${signed(-hole)})   has its hole.`,
+        {
+          min: -8,
+          max: 8,
+          step: 1,
+          value: hole,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => x - other, { span, to: hole - 0.4 }),
+              plot((x) => x - other, { span, from: hole + 0.4, label: "y" }),
+            ],
+          }),
+        },
       );
     },
   ],
@@ -1113,11 +1028,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const zero = r.nonzero(-7, 7);
       const pole = zero + r.int(1, 6);
-      return ask(
+      return fill(
         `Where does   y = (x${signed(-zero)}) / (x${signed(-pole)})   cross the x-axis?`,
         `x = ${zero}`,
-        [`x = ${pole}`, `x = ${-zero}`, "y = 1", "It never does"],
-        r,
+        { hint: "e.g. x = 3" },
       );
     },
   ],
@@ -1170,11 +1084,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const base = r.int(2, 5);
       const n = r.pick([2, 3, 4]);
-      return ask(
+      return fill(
         `Evaluate:   the ${n === 2 ? "square" : n === 3 ? "cube" : "fourth"} root of ${base ** n}`,
         base,
-        [base ** n, base * n, base ** (n - 1), ...nearMisses(base)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -1290,17 +1203,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const rate = r.pick([5, 10, 20, 25, 50]);
       const growth = r.bool();
       const factor = growth ? 100 + rate : 100 - rate;
-      return ask(
+      return fill(
         `A population ${growth ? "grows" : "falls"} by ${rate}% a year. What is the yearly multiplier?`,
         frac(factor, 100),
-        [
-          frac(growth ? 100 - rate : 100 + rate, 100),
-          frac(rate, 100),
-          `${rate}`,
-          frac(100, factor),
-          frac(factor, 10),
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -1440,17 +1346,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       ];
       const [opposite, adjacent, hypotenuse] = r.pick(triples);
       const wantSin = r.bool();
-      return ask(
+      return fill(
         `A right triangle has legs ${opposite} and ${adjacent} with hypotenuse ${hypotenuse}. What is ${wantSin ? "sin" : "cos"} θ for the angle opposite the side of ${opposite}?`,
         frac(wantSin ? opposite : adjacent, hypotenuse),
-        [
-          frac(wantSin ? adjacent : opposite, hypotenuse),
-          frac(opposite, adjacent),
-          frac(adjacent, opposite),
-          frac(hypotenuse, wantSin ? opposite : adjacent),
-          frac(wantSin ? opposite : adjacent, opposite + adjacent),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1533,7 +1432,9 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
         { call: "arccos(0)", angle: 90 },
       ];
       const c = r.pick(cases);
-      return ask(`Evaluate:   ${c.call}`, `${c.angle}°`, ["0°", "30°", "45°", "60°", "90°"], r);
+      return fill(`Evaluate:   ${c.call}`, `${c.angle}°`,
+        { hint: "in degrees" },
+      );
     },
   ],
 
@@ -1568,17 +1469,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
         [7, 24, 25],
       ];
       const [opposite, adjacent, hypotenuse] = r.pick(triples);
-      return ask(
+      return fill(
         `sin θ = ${frac(opposite, hypotenuse)} and θ is acute. What is cos θ?`,
         frac(adjacent, hypotenuse),
-        [
-          frac(opposite, hypotenuse),
-          frac(opposite, adjacent),
-          frac(adjacent, opposite),
-          frac(hypotenuse, adjacent),
-          frac(adjacent, hypotenuse + opposite),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1634,17 +1528,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       ];
       const [opposite, adjacent, hypotenuse] = r.pick(triples);
       const square = hypotenuse * hypotenuse;
-      return ask(
+      return fill(
         `sin θ = ${frac(opposite, hypotenuse)} and cos θ = ${frac(adjacent, hypotenuse)}. What is sin 2θ?`,
         frac(2 * opposite * adjacent, square),
-        [
-          frac(opposite * adjacent, square),
-          frac(2 * opposite, hypotenuse),
-          frac(opposite + adjacent, hypotenuse),
-          frac(adjacent * adjacent - opposite * opposite, square),
-          frac(2 * opposite * adjacent, hypotenuse),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1766,11 +1653,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const [dx, dy, distance] = r.pick(triples);
       const x = r.int(-6, 2);
       const y = r.int(-6, 2);
-      return ask(
+      return fill(
         `How far is (${x}, ${y}) from (${x + dx}, ${y + dy})?`,
         distance,
-        [dx + dy, dx * dy, Math.abs(dx - dy), 2 * distance, ...nearMisses(distance)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -1778,49 +1664,49 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
   // ── 9.2 Parabolas ──
   "math/algebra-2/unit-9/9.2": [
     (r) => {
+      const span = 8;
       const p = r.int(1, 6);
-      return ask(
-        `Where is the focus of   x^2 = ${4 * p}y ?`,
-        `(0, ${p})`,
-        [`(0, ${-p})`, `(${p}, 0)`, `(0, ${4 * p})`, `(0, ${2 * p})`, `(${-p}, 0)`],
-        r,
-      );
+      // The parabola is drawn, because the focus is not visible on it — the
+      // picture says which way the curve opens and how wide, and the student
+      // still has to know that 4p is where the focus lives.
+      return point(`Place the focus of   x^2 = ${4 * p}y`, {
+        span,
+        x: 0,
+        y: p,
+        zero: 2,
+        figure: graph({
+          span,
+          curves: [plot((x) => (x * x) / (4 * p), { span, label: "y" })],
+        }),
+      });
     },
   ],
 
   // ── 9.3 Circles ──
   "math/algebra-2/unit-9/9.3": [
     (r) => {
-      const h = r.nonzero(-8, 8);
-      const k = r.nonzero(-8, 8);
+      const span = 8;
+      const h = r.nonzero(-6, 6);
+      const k = r.nonzero(-6, 6);
       const radius = r.int(2, 9);
-      return ask(
-        `What is the centre of   (x${signed(-h)})^2 + (y${signed(-k)})^2 = ${radius * radius} ?`,
-        `(${h}, ${k})`,
-        [`(${-h}, ${-k})`, `(${k}, ${h})`, `(${-h}, ${k})`, `(${h}, ${-k})`, `(${h}, ${radius})`],
-        r,
+      return point(
+        `Place the centre of   (x${signed(-h)})^2 + (y${signed(-k)})^2 = ${radius * radius}`,
+        { span, x: h, y: k, zero: 2 },
       );
     },
   ],
 
   // ── 9.5 Hyperbolas ──
   "math/algebra-2/unit-9/9.5": [
+    // The pair of slopes is ±b/a, but only the positive one is asked for: the
+    // answer box is a keyboard, and ± is not on it.
     (r) => {
       const a = r.int(2, 8);
       const b = r.int(2, 8);
-      return ask(
-        `What are the asymptote slopes of   x²/${a * a} - y²/${b * b} = 1 ?`,
-        `±${frac(b, a)}`,
-        [
-          `±${frac(a, b)}`,
-          `±${frac(b * b, a * a)}`,
-          `±${a * b}`,
-          `±${frac(a + b, a)}`,
-          "±1",
-          `±${frac(b, 2 * a)}`,
-          `±${frac(2 * b, a)}`,
-        ],
-        r,
+      return fill(
+        `The asymptotes of   x²/${a * a} - y²/${b * b} = 1   have slopes ±m. What is m?`,
+        frac(b, a),
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -1883,17 +1769,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const red = r.int(2, 9);
       const blue = r.int(2, 9);
       const total = red + blue;
-      return ask(
+      return fill(
         `A bag holds ${red} red and ${blue} blue counters. Two are drawn without replacement. What is the chance both are red?`,
         frac(red * (red - 1), total * (total - 1)),
-        [
-          frac(red * red, total * total),
-          frac(red, total),
-          frac(red * (red - 1), total * total),
-          frac(red * blue, total * (total - 1)),
-          frac(2 * red, total),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1905,17 +1784,10 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const k = r.int(1, n - 1);
       let choose = 1;
       for (let i = 0; i < k; i++) choose = (choose * (n - i)) / (i + 1);
-      return ask(
+      return fill(
         `A fair coin is thrown ${n} times. What is the chance of exactly ${k} heads?`,
         frac(choose, 2 ** n),
-        [
-          frac(1, 2 ** n),
-          frac(k, n),
-          frac(choose, 2 ** k),
-          frac(choose * 2, 2 ** n),
-          frac(1, n),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],

@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { Curve, Figure, Mark, Point } from "../questions";
+
 /**
  * The shared kit every question generator is built from.
  *
@@ -74,7 +76,13 @@ export function rng(seed: number): Rng {
  * generator written before the other kinds existed still works as it did.
  */
 export type Built =
-  | { kind: "choice"; prompt: string; options: string[]; answer: number }
+  | {
+      kind: "choice";
+      prompt: string;
+      options: string[];
+      answer: number;
+      figure?: Figure;
+    }
   | {
       kind: "fill";
       prompt: string;
@@ -83,6 +91,7 @@ export type Built =
       accept: string[];
       show: string;
       tolerance?: number;
+      figure?: Figure;
     }
   | {
       kind: "slider";
@@ -94,6 +103,7 @@ export type Built =
       value: number;
       full: number;
       zero: number;
+      figure?: Figure;
     }
   | {
       kind: "point";
@@ -102,6 +112,7 @@ export type Built =
       at: { x: number; y: number };
       full: number;
       zero: number;
+      figure?: Figure;
     }
   | {
       kind: "line";
@@ -111,6 +122,7 @@ export type Built =
       intercept: number;
       full: number;
       zero: number;
+      figure?: Figure;
     };
 
 /**
@@ -126,6 +138,7 @@ export function ask(
   correct: number | string,
   distractors: (number | string)[],
   r: Rng,
+  figure?: Figure,
 ): Built {
   const right = String(correct);
   const wrong: string[] = [];
@@ -148,7 +161,13 @@ export function ask(
     [options[i], options[j]] = [options[j], options[i]];
   }
 
-  return { kind: "choice", prompt, options, answer: options.indexOf(right) };
+  return {
+    kind: "choice",
+    prompt,
+    options,
+    answer: options.indexOf(right),
+    figure,
+  };
 }
 
 // ─── The other kinds ─────────────────────────────────────
@@ -170,6 +189,7 @@ export function fill(
     hint?: string;
     /** Numeric answers within this count. Default: exact. */
     tolerance?: number;
+    figure?: Figure;
   } = {},
 ): Built {
   const show = String(answer);
@@ -181,6 +201,7 @@ export function fill(
     accept: [show, ...(options.accept ?? []).map(String)],
     show,
     tolerance: options.tolerance,
+    figure: options.figure,
   };
 }
 
@@ -203,6 +224,7 @@ export function slider(
     unit?: string;
     full?: number;
     zero?: number;
+    figure?: Figure;
   },
 ): Built {
   const range = spec.max - spec.min;
@@ -216,6 +238,7 @@ export function slider(
     value: spec.value,
     full: spec.full ?? spec.step,
     zero: spec.zero ?? range / 10,
+    figure: spec.figure,
   };
 }
 
@@ -233,6 +256,7 @@ export function point(
     y: number;
     full?: number;
     zero?: number;
+    figure?: Figure;
   },
 ): Built {
   return {
@@ -244,6 +268,7 @@ export function point(
     // by at least one, and a near miss is a real miss.
     full: spec.full ?? 0.25,
     zero: spec.zero ?? 4,
+    figure: spec.figure,
   };
 }
 
@@ -259,6 +284,7 @@ export function line(
     intercept: number;
     full?: number;
     zero?: number;
+    figure?: Figure;
   },
 ): Built {
   return {
@@ -269,6 +295,7 @@ export function line(
     intercept: spec.intercept,
     full: spec.full ?? 0.25,
     zero: spec.zero ?? spec.span,
+    figure: spec.figure,
   };
 }
 
@@ -297,8 +324,190 @@ export function among(
   correct: string,
   all: readonly string[],
   r: Rng,
+  figure?: Figure,
 ): Built {
-  return ask(prompt, correct, all.filter((o) => o !== correct), r);
+  return ask(prompt, correct, all.filter((o) => o !== correct), r, figure);
+}
+
+// ─── Drawing the function ────────────────────────────────
+
+/**
+ * How many samples a plotted curve is cut into.
+ *
+ * High enough that a cubic reads as a curve rather than as a chain of chords,
+ * low enough that ten questions' worth of figures still fit comfortably in a
+ * room: every one of these points is written to the database at kick-off and
+ * read by every player at the table.
+ */
+const SAMPLES = 88;
+
+/** Two decimals is finer than a pixel at this scale, and half the bytes. */
+function tidy(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Samples y = f(x) across the grid, in pieces.
+ *
+ * Anything the box cannot hold is dropped rather than clamped, because a
+ * clamped sample draws a flat stretch along the top of the grid that the
+ * function does not have. The polyline then breaks wherever samples were
+ * dropped, and wherever two neighbours sit further apart than the grid is
+ * tall — that second rule is what stops 1/(x - 2) from being drawn with a
+ * near-vertical line stitching its two branches together, which is the exact
+ * misreading the questions about infinite limits are trying to correct.
+ */
+export function plot(
+  f: (x: number) => number,
+  spec: {
+    span: number;
+    /** Defaults to the whole grid. Narrow it for a piecewise definition. */
+    from?: number;
+    to?: number;
+    tone?: Curve["tone"];
+    dashed?: boolean;
+    label?: string;
+    steps?: number;
+  },
+): Curve[] {
+  const from = spec.from ?? -spec.span;
+  const to = spec.to ?? spec.span;
+  const steps = spec.steps ?? SAMPLES;
+  const limit = spec.span * 1.5;
+
+  const pieces: Curve[] = [];
+  let run: Point[] = [];
+  let previous: number | null = null;
+
+  const cut = () => {
+    if (run.length > 1) {
+      pieces.push({
+        points: run,
+        tone: spec.tone ?? "primary",
+        dashed: spec.dashed,
+      });
+    }
+    run = [];
+  };
+
+  for (let i = 0; i <= steps; i++) {
+    const x = from + ((to - from) * i) / steps;
+    const y = f(x);
+
+    if (!Number.isFinite(y) || Math.abs(y) > limit) {
+      cut();
+      previous = null;
+      continue;
+    }
+    if (previous !== null && Math.abs(y - previous) > spec.span) cut();
+
+    run.push({ x: tidy(x), y: tidy(y) });
+    previous = y;
+  }
+  cut();
+
+  // A label belongs on one piece only, and on the rightmost one: that is where
+  // there is room for it, and where the eye leaves the curve.
+  const last = pieces[pieces.length - 1];
+  if (last && spec.label) last.label = spec.label;
+
+  return pieces;
+}
+
+/** A curve built by hand: a piecewise definition, a chord, a secant. */
+export function stroke(
+  points: Point[],
+  options: { tone?: Curve["tone"]; dashed?: boolean; label?: string } = {},
+): Curve {
+  return {
+    points: points.map((p) => ({ x: tidy(p.x), y: tidy(p.y) })),
+    tone: options.tone ?? "primary",
+    dashed: options.dashed,
+    label: options.label,
+  };
+}
+
+/** A vertical line: what no function can be, and what every pole has. */
+export function vertical(x: number, span: number, label?: string): Curve {
+  return stroke(
+    [
+      { x, y: -span },
+      { x, y: span },
+    ],
+    { tone: "guide", dashed: true, label },
+  );
+}
+
+/**
+ * A slope field: a short dash of the right slope at each lattice point.
+ *
+ * Drawn at a fixed length rather than over a fixed run, so a slope of 8 and a
+ * slope of 1/8 are told apart by their angle rather than by how far they
+ * reach — which is the only thing a slope field is for.
+ */
+export function slopeField(
+  slopeAt: (x: number, y: number) => number,
+  spec: { span: number; step?: number; reach?: number },
+): Curve[] {
+  const step = spec.step ?? 1;
+  const reach = spec.reach ?? 0.34;
+  const out: Curve[] = [];
+
+  for (let x = -spec.span + step; x <= spec.span - step / 2; x += step) {
+    for (let y = -spec.span + step; y <= spec.span - step / 2; y += step) {
+      const m = slopeAt(x, y);
+      if (!Number.isFinite(m)) continue;
+      const scale = reach / Math.hypot(1, m);
+      out.push(
+        stroke(
+          [
+            { x: x - scale, y: y - m * scale },
+            { x: x + scale, y: y + m * scale },
+          ],
+          { tone: "guide" },
+        ),
+      );
+    }
+  }
+  return out;
+}
+
+/** A dot on the figure. Open where the curve approaches a point it never takes. */
+export function dot(
+  x: number,
+  y: number,
+  options: { open?: boolean; label?: string } = {},
+): Mark {
+  return {
+    at: { x: tidy(x), y: tidy(y) },
+    open: options.open,
+    label: options.label,
+  };
+}
+
+/**
+ * Assembles a figure.
+ *
+ * Little more than a typed literal, but going through a function means a
+ * generator that forgets `span` fails at the call site rather than drawing its
+ * curve at some other scale than the grid underneath it.
+ */
+export function graph(spec: {
+  span: number;
+  curves: (Curve | Curve[])[];
+  marks?: Mark[];
+  xLabel?: string;
+  yLabel?: string;
+  caption?: string;
+}): Figure {
+  return {
+    span: spec.span,
+    curves: spec.curves.flat(),
+    marks: spec.marks,
+    xLabel: spec.xLabel,
+    yLabel: spec.yLabel,
+    caption: spec.caption,
+  };
 }
 
 // ─── Rendering maths as text ─────────────────────────────

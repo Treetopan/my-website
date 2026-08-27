@@ -9,6 +9,7 @@ import {
   PointAnswer,
   SliderAnswer,
 } from "@/components/answer-inputs";
+import { FigureView } from "@/components/graph";
 
 /**
  * The question is the hero on both game screens, so it lives in one place and
@@ -80,6 +81,14 @@ export function QuestionStage({
       <h1 className="mb-9 text-2xl leading-[1.18] font-medium tracking-[-0.03em] text-balance sm:text-[38px]">
         {question.prompt}
       </h1>
+
+      {/* The two spatial kinds draw their own figure, on the grid the answer
+          goes onto. The rest get it here, above the input, as a thing to read.
+          Rendering it in both places would put the same curve on the screen
+          twice at two different sizes. */}
+      {question.figure &&
+        question.kind !== "point" &&
+        question.kind !== "line" && <FigureView figure={question.figure} />}
 
       {question.kind === "choice" && answer.kind === "choice" && (
         <Options

@@ -3,18 +3,30 @@ import "server-only";
 import {
   among,
   ask,
+  dot,
   fill,
   frac,
+  graph,
   head,
-  nearMisses,
   piFrac,
+  plot,
+  point,
   poly,
   signed,
+  slider,
+  vertical,
   type Built,
   type Rng,
 } from "./kit";
 
-/** Precalculus generators. */
+/**
+ * Precalculus generators.
+ *
+ * The graphical half of the course is asked graphically: an asymptote and a
+ * hole are places on a curve, a polar point and a transformed point are places
+ * on the plane, and all of them are answered by pointing at the place rather
+ * than by picking its coordinates out of a list.
+ */
 export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.4 Average rate of change ──
   "math/precalculus/unit-1/1.4": [
@@ -30,19 +42,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       while (a * (x1 + x2) + b === 0) b = r.nonzero(-6, 6);
       const f = (x: number) => a * x * x + b * x + c;
       const rate = frac(f(x2) - f(x1), x2 - x1);
-      return ask(
+      return fill(
         `What is the average rate of change of f(x) = ${poly([[a, 2], [b, 1], [c, 0]])} on [${x1}, ${x2}]?`,
         rate,
-        [
-          frac(f(x2) + f(x1), x2 - x1), // added the outputs
-          frac(x2 - x1, f(x2) - f(x1)), // inverted the ratio
-          String(f(x2) - f(x1)), // never divided by the run
-          frac(f(x1) - f(x2), x2 - x1),
-          frac(f(x2), x2),
-          frac(2 * (f(x2) - f(x1)), x2 - x1),
-          "0",
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -57,17 +60,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const fg = a * at * at + b;
       const gf = (a * at + b) ** 2;
       const wantFg = r.bool();
-      return ask(
+      return fill(
         `If f(x) = ${head(a, "x")}${signed(b)} and g(x) = x², what is ${wantFg ? "f(g" : "g(f"}(${at}))?`,
         wantFg ? fg : gf,
-        [
-          wantFg ? gf : fg, // composed in the other order
-          (a * at + b) * at * at,
-          a * at + b,
-          at * at,
-          ...nearMisses(wantFg ? fg : gf),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -75,21 +71,28 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 2.7 Vertical, horizontal and slant asymptotes ──
   "math/precalculus/unit-2/2.7": [
     (r) => {
-      const root = r.nonzero(-7, 7);
-      const other = r.nonzero(-7, 7);
-      // (x + other) / (x - root) has a vertical asymptote where the bottom is 0.
-      return ask(
-        `Where is the vertical asymptote of y = (x${signed(other)}) / (x${signed(-root)})?`,
-        `x = ${root}`,
-        [
-          `x = ${-root}`, // sign slip
-          `x = ${other}`,
-          `x = ${-other}`, // gave the zero of the numerator
-          `y = ${root}`,
-          `y = 1`,
-          `x = 0`, // the asymptote of the un-shifted function
-        ],
-        r,
+      const span = 8;
+      const root = r.nonzero(-5, 5);
+      const other = r.nonzero(-5, 5);
+      // (x + other) / (x - root) has a vertical asymptote where the bottom is
+      // zero — which the graph says by running off the top of the grid at
+      // exactly one place.
+      return slider(
+        `Drag to the vertical asymptote of   y = (x${signed(other)}) / (x${signed(-root)})`,
+        {
+          min: -8,
+          max: 8,
+          step: 1,
+          value: root,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => (x + other) / (x - root), { span, label: "y" }),
+            ],
+          }),
+        },
       );
     },
   ],
@@ -101,11 +104,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const p = r.int(2, 5);
       const k = r.int(2, 4);
       // log_b((b^p)^k) = pk.
-      return ask(
+      return fill(
         `Simplify: ${k}·log_${base}(${base ** p})`,
         p * k,
-        [p + k, p, k, p * k + 1, p * k - 1, base * p * k],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -117,11 +119,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const x = r.int(2, 5);
       const shift = r.nonzero(-4, 4);
       const value = base ** x + shift;
-      return ask(
+      return fill(
         `Solve for x:  ${base}^x${signed(shift)} = ${value}`,
         x,
-        [x + shift, x - shift, value, value - shift, frac(value, base)],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -151,9 +152,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 4.5 Sinusoidal transformations ──
   "math/precalculus/unit-4/4.5": [
     (r) => {
-      const amplitude = r.int(2, 8);
+      const span = 8;
+      const amplitude = r.int(2, 6);
       const b = r.int(2, 6);
-      const midline = r.nonzero(-8, 8);
+      const midline = r.nonzero(-6, 6);
       const wanted = r.pick(["amplitude", "period", "midline"] as const);
       const correct =
         wanted === "amplitude"
@@ -174,6 +176,17 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
           `y = ${amplitude}`,
         ],
         r,
+        graph({
+          span,
+          curves: [
+            plot((x) => amplitude * Math.cos(b * x) + midline, {
+              span,
+              steps: 170,
+              label: "y",
+            }),
+          ],
+          caption: "Two of the three are visible on the graph.",
+        }),
       );
     },
   ],
@@ -188,17 +201,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
         [7, 24, 25],
       ]);
       // sin θ = a/c in the first quadrant, so cos θ = b/c.
-      return ask(
+      return fill(
         `If sin θ = ${frac(a, c)} and θ is in the first quadrant, what is cos θ?`,
         frac(b, c),
-        [
-          frac(a, c), // repeated the sine
-          frac(-b, c), // wrong quadrant
-          frac(a, b), // gave the tangent
-          frac(c, b),
-          frac(b, a),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -217,17 +223,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const x = r.sign() * a;
       const y = r.sign() * b;
       const magnitude = Math.round(Math.sqrt(a * a + b * b));
-      return ask(
+      return fill(
         `What is the magnitude of the vector ⟨${x}, ${y}⟩?`,
         magnitude,
-        [
-          Math.abs(x) + Math.abs(y), // added the components
-          Math.abs(Math.abs(y) - Math.abs(x)),
-          magnitude * magnitude,
-          Math.abs(x * y),
-          magnitude + 1,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -241,17 +240,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
         r.nonzero(-8, 8),
         r.nonzero(-8, 8),
       ];
-      return ask(
+      return fill(
         `What is ⟨${a}, ${b}⟩ · ⟨${c}, ${d}⟩?`,
         a * c + b * d,
-        [
-          a * c - b * d, // subtracted, which is the determinant
-          a * d + b * c,
-          a * d - b * c,
-          (a + b) * (c + d),
-          ...nearMisses(a * c + b * d),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -265,19 +257,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const d = r.nonzero(-8, 8);
       // x = at + b and y = ct + d, so t = (x - b)/a and y = (c/a)(x - b) + d.
       const slope = frac(c, a);
-      return ask(
+      return fill(
         `If x = ${head(a, "t")}${signed(b)} and y = ${head(c, "t")}${signed(d)}, what is the slope of the resulting line?`,
         slope,
-        [
-          frac(a, c), // inverted
-          frac(d, b),
-          frac(b, d),
-          frac(c + a, 2),
-          frac(-c, a),
-          frac(2 * c, a),
-          frac(c, 2 * a),
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],
@@ -309,17 +292,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const n = r.int(4, 8);
       // Sum of a finite geometric series: a(1 - rⁿ)/(1 - r).
       const sum = (first * (1 - ratio ** n)) / (1 - ratio);
-      return ask(
+      return fill(
         `What is the sum of the first ${n} terms of the geometric series with first term ${first} and common ratio ${ratio}?`,
         sum,
-        [
-          first * ratio ** (n - 1), // gave the nth term
-          first * ratio ** n,
-          (first * (1 - ratio ** (n + 1))) / (1 - ratio),
-          first * n,
-          -sum,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -334,17 +310,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
         for (let i = 0; i < b; i++) out = (out * (a - i)) / (i + 1);
         return Math.round(out);
       };
-      return ask(
+      return fill(
         `What is the coefficient of x^${k} in the expansion of (1 + x)^${n}?`,
         choose(n, k),
-        [
-          choose(n, k + 1),
-          choose(n, k - 1),
-          n * k,
-          2 ** k,
-          choose(n + 1, k),
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -357,17 +326,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       while (other === root) other = r.nonzero(-6, 6);
       // (x - root)(x - other) / (x - root) cancels to (x - other) at x = root.
       const limit = root - other;
-      return ask(
+      return fill(
         `Evaluate: lim(x→${root}) of (${poly([[1, 2], [-(root + other), 1], [root * other, 0]])}) / (x${signed(-root)})`,
         limit,
-        [
-          "The limit does not exist", // the usual answer to a 0/0 form
-          0,
-          root + other,
-          other - root,
-          root * other,
-        ],
-        r,
+        { hint: "a number" },
       );
     },
   ],
@@ -582,16 +544,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const real = r.nonzero(-6, 6);
       const imaginary = r.int(2, 7);
-      return ask(
+      return fill(
         `A polynomial with real coefficients has a zero at ${real} + ${imaginary}i. What other zero must it have?`,
         `${real} - ${imaginary}i`,
-        [
-          `${-real} + ${imaginary}i`,
-          `${-real} - ${imaginary}i`,
-          `${real} + ${imaginary}`,
-          `${imaginary} + ${real}i`,
-        ],
-        r,
+        { hint: "e.g. 3 - 4i" },
       );
     },
   ],
@@ -633,20 +589,29 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 2.6 Domains and holes ──
   "math/precalculus/unit-2/2.6": [
     (r) => {
-      const hole = r.nonzero(-7, 7);
-      const pole = hole + r.int(1, 6);
-      return ask(
-        `y = ((x${signed(-hole)})(x${signed(-pole)})) / ((x${signed(-hole)})(x${signed(-pole)})^2).   Where is the hole?`,
-        `x = ${hole}`,
-        [
-          `x = ${pole}`,
-          `x = ${-hole}`,
-          `x = ${-pole}`,
-          "There is none",
-          `x = ${hole + 1}`,
-          `y = ${hole}`,
-        ],
-        r,
+      const span = 8;
+      const hole = r.nonzero(-5, 5);
+      const pole = hole + r.pick([-3, -2, 2, 3]);
+      // One factor cancels and one does not, so the graph has a hole in one
+      // place and an asymptote in another. Telling them apart is the question.
+      const f = (x: number) => 1 / (x - pole);
+      return slider(
+        `y = ((x${signed(-hole)})(x${signed(-pole)})) / ((x${signed(-hole)})(x${signed(-pole)})^2).   Drag to the hole.`,
+        {
+          min: -8,
+          max: 8,
+          step: 1,
+          value: hole,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot(f, { span, to: hole - 0.4 }),
+              plot(f, { span, from: hole + 0.4, label: "y" }),
+            ],
+          }),
+        },
       );
     },
   ],
@@ -654,13 +619,27 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 2.8 Graphing rational functions ──
   "math/precalculus/unit-2/2.8": [
     (r) => {
-      const zero = r.nonzero(-7, 7);
-      const pole = zero + r.int(1, 6);
-      return ask(
-        `Where is the vertical asymptote of   y = (x${signed(-zero)}) / (x${signed(-pole)}) ?`,
-        `x = ${pole}`,
-        [`x = ${zero}`, `x = ${-pole}`, `y = ${pole}`, "y = 1", "There is none"],
-        r,
+      const span = 8;
+      const zero = r.nonzero(-5, 5);
+      const pole = zero + r.pick([-3, -2, 2, 3]);
+      return slider(
+        `Drag to the vertical asymptote of   y = (x${signed(-zero)}) / (x${signed(-pole)})`,
+        {
+          min: -8,
+          max: 8,
+          step: 1,
+          value: pole,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [
+              plot((x) => (x - zero) / (x - pole), { span, label: "y" }),
+              vertical(pole, span),
+            ],
+            caption: "The dashed line is the asymptote itself.",
+          }),
+        },
       );
     },
   ],
@@ -957,17 +936,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       ];
       const [opposite, adjacent, hypotenuse] = r.pick(triples);
       const square = hypotenuse * hypotenuse;
-      return ask(
+      return fill(
         `sin θ = ${frac(opposite, hypotenuse)} and cos θ = ${frac(adjacent, hypotenuse)}. What is cos 2θ?`,
         frac(adjacent * adjacent - opposite * opposite, square),
-        [
-          frac(2 * opposite * adjacent, square),
-          frac(opposite * opposite - adjacent * adjacent, square),
-          frac(adjacent * adjacent + opposite * opposite, square),
-          frac(2 * adjacent, hypotenuse),
-          frac(adjacent - opposite, hypotenuse),
-        ],
-        r,
+        { hint: "a fraction" },
       );
     },
   ],
@@ -1006,19 +978,18 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 4.15 Polar coordinates ──
   "math/precalculus/unit-4/4.15": [
     (r) => {
-      const radius = r.int(2, 12);
+      const span = 8;
+      const radius = r.int(2, 7);
       const cases = [
-        { angle: "0", x: `${radius}`, y: "0" },
-        { angle: "π/2", x: "0", y: `${radius}` },
-        { angle: "π", x: `${-radius}`, y: "0" },
-        { angle: "3π/2", x: "0", y: `${-radius}` },
+        { angle: "0", x: radius, y: 0 },
+        { angle: "π/2", x: 0, y: radius },
+        { angle: "π", x: -radius, y: 0 },
+        { angle: "3π/2", x: 0, y: -radius },
       ];
       const c = r.pick(cases);
-      return ask(
-        `Convert the polar point (${radius}, ${c.angle}) to rectangular coordinates.`,
-        `(${c.x}, ${c.y})`,
-        cases.filter((one) => one.angle !== c.angle).map((one) => `(${one.x}, ${one.y})`),
-        r,
+      return point(
+        `Place the polar point (${radius}, ${c.angle}) on the rectangular grid.`,
+        { span, x: c.x, y: c.y, zero: 2 },
       );
     },
   ],
@@ -1116,22 +1087,18 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.6 Parametric equations ──
   "math/precalculus/unit-5/5.6": [
     (r) => {
-      const a = r.coefficient(5);
-      const b = r.nonzero(-9, 9);
-      const c = r.coefficient(5);
-      const d = r.nonzero(-9, 9);
-      const t = r.int(-4, 4);
-      return ask(
-        `x = ${head(a, "t")}${signed(b)} and y = ${head(c, "t")}${signed(d)}.   Where is the point at t = ${t}?`,
-        `(${a * t + b}, ${c * t + d})`,
-        [
-          `(${c * t + d}, ${a * t + b})`,
-          `(${a * t}, ${c * t})`,
-          `(${a + b * t}, ${c + d * t})`,
-          `(${a * t + b + 1}, ${c * t + d})`,
-          `(${a * t - b}, ${c * t - d})`,
-        ],
-        r,
+      const span = 9;
+      const a = r.pick([-2, -1, 1, 2]);
+      const b = r.nonzero(-4, 4);
+      const c = r.pick([-2, -1, 1, 2]);
+      const d = r.nonzero(-4, 4);
+      const t = r.int(-2, 2);
+      // A parametric position is a place on the plane, so it is answered by
+      // putting something there. The ranges are kept tight enough that the
+      // point always lands on the grid.
+      return point(
+        `x = ${head(a, "t")}${signed(b)} and y = ${head(c, "t")}${signed(d)}.   Place the point at t = ${t}.`,
+        { span, x: a * t + b, y: c * t + d, zero: 2 },
       );
     },
   ],
@@ -1167,29 +1134,30 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 5.10 Matrices as transformations ──
   "math/precalculus/unit-5/5.10": [
     (r) => {
+      const span = 8;
       const x = r.nonzero(-6, 6);
       const y = r.nonzero(-6, 6);
       const kind = r.int(0, 2);
       const matrices = [
-        { name: `[[${1}, 0], [0, ${1}]]`, image: [x, y] },
+        { name: "[[1, 0], [0, 1]]", image: [x, y] },
         { name: "[[-1, 0], [0, 1]]", image: [-x, y] },
         { name: "[[0, -1], [1, 0]]", image: [-y, x] },
       ];
       const m = matrices[kind];
-      return ask(
-        `Apply ${m.name} to the point (${x}, ${y}).`,
-        `(${m.image[0]}, ${m.image[1]})`,
-        [
-          `(${y}, ${x})`,
-          `(${-x}, ${-y})`,
-          `(${x}, ${-y})`,
-          `(${y}, ${-x})`,
-          `(${-y}, ${-x})`,
-          `(${-x}, ${y})`,
-          `(${x + 1}, ${y})`,
-        ],
-        r,
-      );
+      // A transformation matrix moves a point somewhere. Reading four
+      // coordinate pairs is a different exercise from seeing where it went, so
+      // the original is marked and the image is placed.
+      return point(`Apply ${m.name} to the marked point, and place its image.`, {
+        span,
+        x: m.image[0],
+        y: m.image[1],
+        zero: 2,
+        figure: graph({
+          span,
+          curves: [],
+          marks: [dot(x, y, { label: `(${x}, ${y})` })],
+        }),
+      });
     },
   ],
 
@@ -1225,12 +1193,25 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
   // ── 6.1 Parabolas ──
   "math/precalculus/unit-6/6.1": [
     (r) => {
+      const span = 8;
       const p = r.int(1, 6);
-      return ask(
-        `What is the directrix of   x^2 = ${4 * p}y ?`,
-        `y = ${-p}`,
-        [`y = ${p}`, `x = ${-p}`, `y = ${-4 * p}`, `y = ${-2 * p}`, "y = 0"],
-        r,
+      // The parabola and its focus are drawn; the directrix is the line the
+      // curve is defined against and the one thing not shown.
+      return slider(
+        `Drag to the directrix of   x^2 = ${4 * p}y   (its y-value).`,
+        {
+          min: -8,
+          max: 8,
+          step: 1,
+          value: -p,
+          full: 0.25,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [plot((x) => (x * x) / (4 * p), { span, label: "y" })],
+            marks: [dot(0, p, { label: "focus" })],
+          }),
+        },
       );
     },
   ],
@@ -1411,19 +1392,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const b = r.coefficient(9);
       const c = r.nonzero(-9, 9);
       const d = r.nonzero(-9, 9);
-      return ask(
+      return fill(
         `Evaluate:   lim as x → ∞ of (${poly([[a, 2], [c, 0]])}) / (${poly([[b, 2], [d, 0]])})`,
         frac(a, b),
-        [
-          frac(b, a),
-          frac(c, d),
-          "0",
-          `${a}`,
-          frac(a + c, b + d),
-          frac(a, b + 1),
-          frac(a * a, b),
-        ],
-        r,
+        { hint: "a number or fraction" },
       );
     },
   ],

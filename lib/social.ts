@@ -10,6 +10,7 @@ import {
   update,
 } from "firebase/database";
 import { realtimeDb } from "@/lib/firebase";
+import type { GameId } from "@/lib/rtdb";
 import { checkUsername, usernameKey } from "@/lib/username";
 
 /**
@@ -42,6 +43,12 @@ export type Invite = {
   roomId: string;
   code: string;
   subunitId: string;
+  /**
+   * Which game the room is running. Optional because an invitation written
+   * before there was more than one game does not carry it, and those all led
+   * to the same place.
+   */
+  game?: GameId;
   at: number;
 };
 
@@ -238,13 +245,14 @@ export function watchInvites(uid: string, cb: (invites: Invite[]) => void) {
 export async function inviteFriend(
   me: Me,
   toUid: string,
-  room: { roomId: string; code: string; subunitId: string },
+  room: { roomId: string; code: string; subunitId: string; game: GameId },
 ) {
   await set(ref(realtimeDb, `invites/${toUid}/${me.uid}`), {
     username: me.username,
     roomId: room.roomId,
     code: room.code,
     subunitId: room.subunitId,
+    game: room.game,
     at: serverTimestamp(),
   });
 }
@@ -253,7 +261,12 @@ export async function dismissInvite(uid: string, fromUid: string) {
   await remove(ref(realtimeDb, `invites/${uid}/${fromUid}`));
 }
 
-/** Where an invitation leads: the game, with the code already in hand. */
+/**
+ * Where an invitation leads: the game it was sent from, with the code already
+ * in hand. An invitation with no game on it predates there being a choice,
+ * and those were all rooms.
+ */
 export function inviteHref(invite: Invite): string {
-  return `/play/room?s=${encodeURIComponent(invite.subunitId)}&join=${encodeURIComponent(invite.code)}`;
+  const path = invite.game === "mirror" ? "/play/duel" : "/play/room";
+  return `${path}?s=${encodeURIComponent(invite.subunitId)}&join=${encodeURIComponent(invite.code)}`;
 }

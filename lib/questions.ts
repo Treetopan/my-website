@@ -20,11 +20,73 @@ export type Point = { x: number; y: number };
 
 export type QuestionKind = "choice" | "fill" | "slider" | "point" | "line";
 
+// ─── Figures ─────────────────────────────────────────────
+
+/**
+ * A curve, as the points it passes through rather than as a formula.
+ *
+ * Sampling on the server and shipping the samples is the whole trick: the
+ * browser never has to know what f is, only where it goes, so there is no
+ * expression parser on the client and — more to the point — no formula in the
+ * payload for a question whose answer *is* the formula. A gap in the curve is
+ * a second `Curve`, which is how a pole or a jump gets drawn as a break rather
+ * than as a near-vertical line joining two branches that never met.
+ */
+export type Curve = {
+  /** Grid units, joined in order. */
+  points: Point[];
+  /**
+   * `primary` is the function the question is about, `second` the one it is
+   * being compared to, `guide` an asymptote or a construction line.
+   */
+  tone?: "primary" | "second" | "guide";
+  dashed?: boolean;
+  /** Drawn at the curve's right-hand end, e.g. "f" or "f'". */
+  label?: string;
+};
+
+/** A dot on the figure. Open where the curve approaches a point it never takes. */
+export type Mark = {
+  at: Point;
+  open?: boolean;
+  label?: string;
+};
+
+/**
+ * A picture that comes with the question.
+ *
+ * On `point` and `line` questions the figure and the answer share one grid —
+ * the curve you are reading and the place you are putting the answer are the
+ * same picture, which is the only arrangement under which "where is the
+ * inflection point" is a question about the graph. On the other kinds it is
+ * drawn above the input as a plain figure.
+ *
+ * The grid is square on purpose: x and y run -span to +span on the same scale,
+ * so a distance on a `point` question means one thing rather than two. A
+ * generator whose function will not fit picks a smaller one.
+ */
+export type Figure = {
+  span: number;
+  curves: Curve[];
+  marks?: Mark[];
+  /** Axis names, where the axes are not x and y — "t" and "v", say. */
+  xLabel?: string;
+  yLabel?: string;
+  /** Read out when the figure carries information the prompt does not. */
+  caption?: string;
+};
+
 type Identity = {
   id: string;
   prompt: string;
   /** The concept this tests, for the post-game summary. */
   topic: string;
+  /**
+   * A picture to read the question off. Optional on every kind: a graph is
+   * worth drawing when the question is about the graph, and clutter when it
+   * is not.
+   */
+  figure?: Figure;
 };
 
 /** Pick one of four. */

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:templates": "tsx --conditions=react-server scripts/check-templates.ts"
+    "check:templates": "tsx --conditions=react-server scripts/check-templates.ts",
+    "check:mix": "tsx --conditions=react-server scripts/question-mix.ts",
+    "check:duel": "tsx --conditions=react-server scripts/check-duel.ts"
   },
   "dependencies": {
     "firebase": "^12.18.0",

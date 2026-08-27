@@ -11,12 +11,20 @@
  * Run with `npm run check:templates`.
  */
 
-import { GENERATED, instanceId, parseInstanceId } from "../lib/templates";
+import {
+  GENERATED,
+  instanceId,
+  parseInstanceId,
+  spatialGenerators,
+} from "../lib/templates";
 import { resolveInstance } from "../lib/templates.server";
 import { getSubunit, type Question } from "../lib/curriculum";
 import type { Answer } from "../lib/grading.server";
 
 const SEEDS_PER_GENERATOR = 20_000;
+
+/** The kinds answered by placing something rather than typing or choosing. */
+const PLACED = new Set(["point", "slider", "line"]);
 
 /**
  * Seeds are swept deterministically rather than rolled at random. A check that
@@ -38,6 +46,7 @@ type Failure = { where: string; seed: number; why: string; detail?: string };
  */
 function visibleText(question: Question, answer: Answer): string[] {
   const out: string[] = [];
+  if (question.figure?.caption) out.push(question.figure.caption);
   if (question.kind === "choice") out.push(...question.options);
   if (question.kind === "fill" && question.hint) out.push(question.hint);
   if (question.kind === "slider" || question.kind === "fill") {
@@ -104,6 +113,9 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
   for (let g = 0; g < topics.length; g++) {
     const where = `${subunitId} [${g}] ${topics[g]}`;
 
+    /** How many of this generator's seeds asked for a placed answer. */
+    let placed = 0;
+
     for (let i = 0; i < SEEDS_PER_GENERATOR; i++) {
       const seed = sweepSeed(g, i);
       const id = instanceId(subunitId, g, seed);
@@ -127,6 +139,7 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
 
       checked++;
       const { question, answer } = made;
+      if (PLACED.has(question.kind)) placed++;
       const fail = (why: string) =>
         failures.push({ where, seed, why, detail: question.prompt });
 
@@ -229,6 +242,47 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
         if (answer.full >= answer.zero) fail("line scores nothing anywhere");
       }
 
+      // Figures. A figure that misses the grid it is drawn on, or that runs to
+      // thousands of points, is not wrong in a way any of the checks above can
+      // see: the question still grades correctly and the picture is still a
+      // picture. It is just the wrong picture, or one too big to send.
+      if (question.figure) {
+        const figure = question.figure;
+        if (figure.span <= 0) fail("figure has no extent");
+
+        // The answer and the drawing have to share one grid, or the point you
+        // place is not on the curve you were shown.
+        if (
+          (question.kind === "point" || question.kind === "line") &&
+          figure.span !== question.span
+        ) {
+          fail(`figure spans ±${figure.span} but the grid spans ±${question.span}`);
+        }
+
+        for (const curve of figure.curves) {
+          if (curve.points.length < 2) fail("a curve with fewer than two points");
+          const wild = curve.points.find(
+            (p) => !Number.isFinite(p.x) || !Number.isFinite(p.y),
+          );
+          if (wild) fail(`a curve leaves the number line: (${wild.x}, ${wild.y})`);
+        }
+
+        // Every figure is written into the room at kick-off and read by every
+        // player, so a generator that samples enthusiastically is a bandwidth
+        // bill on someone's phone. Ten of these is the size of a room.
+        const weight = JSON.stringify(figure).length;
+        if (weight > 12_000) fail(`figure is ${(weight / 1024).toFixed(1)}KB, too heavy to send`);
+
+        for (const mark of figure.marks ?? []) {
+          if (
+            Math.abs(mark.at.x) > figure.span ||
+            Math.abs(mark.at.y) > figure.span
+          ) {
+            fail(`mark at (${mark.at.x}, ${mark.at.y}) is off a ±${figure.span} grid`);
+          }
+        }
+      }
+
       // Determinism — the whole grading model rests on this. If a second run
       // of the same seed differs, the answer handed back at grading time is
       // not the answer to the question that was actually asked.
@@ -247,6 +301,31 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
         fail(`id does not round-trip: ${question.id}`);
       }
     }
+
+    // The public list of placed-answer generators, against what this one
+    // actually produces. The duel reads that list to decide which subunits it
+    // can be played on and which generators to deal from, and the list lives
+    // on the public side because the library needs it before a game starts —
+    // so it is checked here rather than trusted.
+    //
+    // All three ways of disagreeing matter. A generator declared and never
+    // placed would offer a duel that cannot be settled; one placed and not
+    // declared is a duel quietly missing from the library; and one that is
+    // placed on some seeds and not others would seed a duel with a question
+    // it cannot settle, however it were declared.
+    const declared = spatialGenerators(subunitId).includes(g);
+    // Seed zero: this is a fact about the generator rather than about any one
+    // roll of it, so there is no seed to point at.
+    const disagreement =
+      placed === 0 && declared
+        ? "declared as answered on a grid, but never is"
+        : placed === SEEDS_PER_GENERATOR && !declared
+          ? "always answered on a grid, but is not declared as such"
+          : placed > 0 && placed < SEEDS_PER_GENERATOR
+            ? `answered on a grid on only ${placed} of ${SEEDS_PER_GENERATOR} seeds, so it is neither`
+            : null;
+
+    if (disagreement) failures.push({ where, seed: 0, why: disagreement });
   }
 }
 

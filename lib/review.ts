@@ -26,7 +26,10 @@ export type AnswerDetail = {
   correct: boolean;
   /** 0–1. Only the proximity kinds land between the two. */
   score: number;
-  /** Fraction of the clock still left when answered, 0–1. */
+  /**
+   * How quickly it was answered, 0–1. The table measures the clock still
+   * left; the race, which has no clock, measures how far inside par.
+   */
   speed: number;
 };
 

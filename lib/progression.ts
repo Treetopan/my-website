@@ -67,7 +67,10 @@ export type AnswerRecord = {
    * proximity kinds — a slider, a placed point, a drawn line — land between.
    */
   score: number;
-  /** Fraction of the clock still remaining when answered, 0–1. */
+  /**
+   * How quickly it was answered, 0–1. The table measures the clock still
+   * remaining; the race, which has no clock, measures how far inside par.
+   */
   speed: number;
 };
 

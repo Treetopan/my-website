@@ -15,6 +15,7 @@ import {
   type Progress,
 } from "@/lib/progression";
 import { ClockRail, QuestionStage } from "@/components/question-stage";
+import { Track3D } from "@/components/racer-track-3d";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, openSession } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
@@ -26,6 +27,12 @@ import {
 
 const REVEAL_MS = 1700;
 const TICK_MS = 100;
+
+/** Elapsed milliseconds as m:ss. Races run long enough to need the minutes. */
+function stopwatch(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
 
 /** Bot answers this fraction of questions correctly, and takes this long. */
 const BOT = { accuracy: 0.68, minThink: 0.35, maxThink: 0.85 };
@@ -52,7 +59,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
   const [questions, setQuestions] = useState<Question[]>([]);
 
   const difficulty = found?.subunit.difficulty ?? "medium";
-  const totalMs = DIFFICULTY[difficulty].seconds * 1000;
+
+  // Par, not a deadline. Nothing happens when it runs out — the race has no
+  // clock and you answer at your own pace. All it sets is how long an answer
+  // can take before it stops earning the speed half of the distance, which
+  // makes efficiency worth something without making slowness a failure.
+  const parMs = DIFFICULTY[difficulty].seconds * 1000;
 
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("asking");
@@ -64,7 +76,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
   const [entered, setEntered] = useState<{ id: string; response: Answered } | null>(
     null,
   );
-  const [msLeft, setMsLeft] = useState(totalMs);
+  const [elapsed, setElapsed] = useState(0);
   const [you, setYou] = useState(0);
   const [bot, setBot] = useState(0);
   const [answers, setAnswers] = useState<AnswerDetail[]>([]);
@@ -97,10 +109,13 @@ export function Racer({ subunitId }: { subunitId: string }) {
   );
 
   const resolve = useCallback(
-    async (response: Answered, msRemaining: number) => {
+    async (response: Answered, msTaken: number) => {
       if (!question || !sessionId) return;
 
-      const speed = Math.max(0, Math.min(1, msRemaining / totalMs));
+      // Answer instantly and speed is worth its full share; take par or
+      // longer and it is worth nothing. It never goes negative — a slow
+      // answer earns less, it is not punished.
+      const speed = Math.max(0, Math.min(1, 1 - msTaken / parMs));
       setDraft(response);
 
       let verdict;
@@ -145,28 +160,18 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
       const botRight = Math.random() < BOT.accuracy;
       if (botRight) {
-        const botSpeed =
+        // The bot takes its own share of par to think, so it is racing the
+        // same trade-off you are rather than racing a clock.
+        const botThink =
           BOT.minThink + Math.random() * (BOT.maxThink - BOT.minThink);
-        setBot((d) => d + 1 + (1 - botSpeed));
+        setBot((d) => d + 1 + (1 - botThink));
       }
     },
-    [question, index, totalMs, difficulty, sessionId, setDraft],
+    [question, index, parMs, difficulty, sessionId, setDraft],
   );
 
-  const resolveRef = useRef(resolve);
-  useEffect(() => {
-    resolveRef.current = resolve;
-  }, [resolve]);
-
-  // The clock reads the draft through a ref so that ticking does not restart
-  // the interval on every keystroke.
-  const draftRef = useRef(draft);
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
-
-  // One grading session per race. Without it the clock would start before
-  // anything could be graded, so the timer waits on it below.
+  // One grading session per race. The stopwatch below waits on it, so that
+  // time spent opening the session is not charged to your first answer.
   useEffect(() => {
     if (!found || sessionId) return;
     let live = true;
@@ -190,23 +195,24 @@ export function Racer({ subunitId }: { subunitId: string }) {
     };
   }, [found, subunitId, sessionId]);
 
-  // Clock counts against a wall-clock deadline so a throttled tab cannot
-  // hand out extra seconds.
+  // A stopwatch, counting up. Nothing fires when it passes par — it exists to
+  // price the answer, not to end it, so there is no deadline to race and no
+  // path that submits on your behalf.
+  const askedAt = useRef(0);
+
   useEffect(() => {
     if (phase !== "asking" || !question || !sessionId) return;
 
-    const deadline = Date.now() + totalMs;
-    const id = setInterval(() => {
-      const left = Math.max(0, deadline - Date.now());
-      setMsLeft(left);
-      if (left === 0) {
-        clearInterval(id);
-        resolveRef.current(draftRef.current, 0);
-      }
-    }, TICK_MS);
+    // Zeroed by whoever moves the race on rather than here, so that starting
+    // the stopwatch is not itself a state change during the effect.
+    const startedAt = Date.now();
+    askedAt.current = startedAt;
 
+    // Wall-clock differences rather than an accumulating counter, so a
+    // throttled tab reports the time the question was really open for.
+    const id = setInterval(() => setElapsed(Date.now() - startedAt), TICK_MS);
     return () => clearInterval(id);
-  }, [phase, index, totalMs, question, sessionId]);
+  }, [phase, index, question, sessionId]);
 
   // Advance, or end the race.
   useEffect(() => {
@@ -221,12 +227,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
       setScore(null);
       setLastGain(null);
       setIndex(index + 1);
-      setMsLeft(totalMs);
+      setElapsed(0);
       setPhase("asking");
     }, REVEAL_MS);
 
     return () => clearTimeout(id);
-  }, [phase, index, total, totalMs]);
+  }, [phase, index, total]);
 
   const won = you > bot;
 
@@ -277,14 +283,10 @@ export function Racer({ subunitId }: { subunitId: string }) {
         </span>
 
         <span className="ml-auto flex items-center gap-5">
-          <span
-            className={`font-mono text-[13px] tnum ${
-              msLeft <= 5000 && phase === "asking"
-                ? "animate-clock-urgent text-out"
-                : "text-muted"
-            }`}
-          >
-            {phase === "over" ? "—" : `0:${String(Math.ceil(msLeft / 1000)).padStart(2, "0")}`}
+          {/* Counting up, never down, and never urgent. It reports what this
+              answer is costing you rather than threatening to end it. */}
+          <span className="font-mono text-[13px] text-muted tnum">
+            {phase === "over" ? "—" : stopwatch(elapsed)}
           </span>
           <Link href="/" className="text-faint transition-colors hover:text-ink">
             Leave
@@ -292,9 +294,11 @@ export function Racer({ subunitId }: { subunitId: string }) {
         </span>
       </header>
 
+      {/* The speed bonus draining away, not a clock. When it empties the
+          question stays open and a right answer still moves you a length. */}
       <ClockRail
-        fraction={phase === "asking" ? msLeft / totalMs : 0}
-        urgent={msLeft <= 5000}
+        fraction={phase === "asking" ? Math.max(0, 1 - elapsed / parMs) : 0}
+        urgent={false}
       />
 
       {/* ── The track. Periphery, but the reason the game is a race. ── */}
@@ -341,7 +345,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
               savedRef.current = false;
               setBefore(null);
               setAfter(null);
-              setMsLeft(totalMs);
+              setElapsed(0);
               setPhase("asking");
             }}
           />
@@ -355,7 +359,11 @@ export function Racer({ subunitId }: { subunitId: string }) {
               score={score}
               onDraft={setDraft}
               onSubmit={(response) => {
-                if (phase === "asking") resolve(response, msLeft);
+                // Timed from the answer, not from the last tick, so the
+                // hundredths between ticks are not rounded in your favour.
+                if (phase === "asking") {
+                  resolve(response, Date.now() - askedAt.current);
+                }
               }}
             />
           )
@@ -380,13 +388,8 @@ function Track({
   gain: number | null;
   over: boolean;
 }) {
-  // Two lengths per question is the theoretical maximum, so the finish line
-  // sits there and the bar never has to rescale mid-race.
-  const max = Math.max(1, length * 2);
-  const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
-
   return (
-    <section className="flex shrink-0 flex-col gap-3 border-b border-line-soft px-6 py-5">
+    <section className="flex shrink-0 flex-col gap-3 border-b border-line-soft px-6 py-4">
       <div className="flex items-baseline gap-4">
         <span className="eyebrow">Track</span>
         <span
@@ -410,44 +413,20 @@ function Track({
             +{gain.toFixed(1)}
           </span>
         )}
+
+        <span className="ml-auto font-mono text-[11px] text-muted tnum">
+          <span className="text-ink">You {you.toFixed(1)}</span>
+          <span className="mx-2 text-faint">·</span>
+          Bot {bot.toFixed(1)}
+        </span>
       </div>
 
-      <Lane label="You" value={you} width={pct(you)} accent />
-      <Lane label="Bot" value={bot} width={pct(bot)} />
+      {/* Two lengths per question is the most anyone can score, so the finish
+          line sits there and the road never rescales mid-race. */}
+      <div className="h-40 overflow-hidden rounded-[10px] border border-line sm:h-60">
+        <Track3D you={you} bot={bot} length={length} over={over} />
+      </div>
     </section>
-  );
-}
-
-function Lane({
-  label,
-  value,
-  width,
-  accent,
-}: {
-  label: string;
-  value: number;
-  width: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span
-        className={`w-8 font-mono text-[11px] ${accent ? "text-ink" : "text-faint"}`}
-      >
-        {label}
-      </span>
-      <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-line-soft">
-        <span
-          className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-out ${
-            accent ? "bg-accent" : "bg-faint"
-          }`}
-          style={{ width }}
-        />
-      </span>
-      <span className="w-9 text-right font-mono text-[11px] text-muted tnum">
-        {value.toFixed(1)}
-      </span>
-    </div>
   );
 }
 

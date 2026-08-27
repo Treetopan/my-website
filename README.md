@@ -134,7 +134,15 @@ change an answer after the reveal.
 ## The games
 
 **Racer** — you against a bot. A correct answer moves you one length plus up to
-another for speed, so answering fast is what wins races.
+another for speed, so answering efficiently is what wins races.
+
+There is no clock. A question stays open until you answer it, and nothing is
+ever submitted on your behalf. What the subunit's `seconds` sets is **par**:
+answer instantly and the speed half of the distance is worth all of it, answer
+at par or later and it is worth none, and in between it slides. Being slow
+costs you the bonus; it never costs you the length you earned by being right,
+and it can never end your question. The header counts up rather than down, and
+the rail under it is the bonus draining, not time running out.
 
 **Last One Standing** — played around the table, one player at a time.
 
@@ -152,6 +160,91 @@ still in the game, `inRound` is still answering this round. The rules live in
 Neither game shows how many questions are left — knowing the end is coming
 changes how people play. Last One Standing wraps the question bank when it runs
 out, since a turn-based round burns a question per turn.
+
+## The game spaces
+
+Both games are played in a 3D space rather than against a readout of one.
+`lib/scene3d.ts` is the whole renderer — about 300 lines, no WebGL, no
+dependency. Polygons are built in world space, moved into the camera's frame,
+clipped against the near plane, sorted back-to-front and filled on an ordinary
+2D canvas. `components/scene-canvas.tsx` owns the canvas: device-pixel sizing,
+resize, one frame loop, and the theme read back out of CSS so `globals.css`
+stays the only place a colour is decided.
+
+**Racer** is a circuit: kerbs, barriers, tyre stacks, grandstands with a crowd
+in them, and two open-wheel cars that differ in silhouette as well as livery,
+so they stay apart at the far end of the lap where colour has gone into the
+haze. Distance along it is the same number the race is scored in, so a length
+gained is a length of tarmac — the bar chart this replaced made you convert.
+The camera rides behind whoever is *last*, pulling back rather than abandoning
+them, up to the point where the leader would be too far off to read; the gap is
+something you see instead of something you work out from two bar widths. The
+finish sits at two lengths per question, the most anyone can score, so it never
+moves mid-race.
+
+The track bends. `bend(z)` is two sine waves that do not share a period, and
+everything on the circuit — surface, kerbs, barriers, stands, both cars, the
+camera — is placed through `on(z, u, y)`, which is "this far along, this far
+across". Distance is still measured along z rather than along the arc: the
+gradient peaks near 0.39, which makes the real racing line about 7% longer than
+the number the race is scored in. That is invisible, and it is worth it for not
+having to re-solve every position on the circuit against arc length.
+
+**Last One Standing** is a table. Its three states are not a scale and a list
+could only tell them apart with words, so the room says them with posture:
+standing is still answering, sat down is out for the round but still in the
+game, and an empty chair is removed for good. Your own seat is rotated to the
+near side, so whose turn it is reads from where you are looking rather than
+from matching a name against your own.
+
+The same table carries all three screens of the game, because they are all the
+same room:
+
+- **The lobby** seats everyone who has joined and leaves the open places empty,
+  so what "start now and bots take the empty seats" means is visible before you
+  press it. Seats are not assigned until kick-off, so this is join order.
+- **The elimination screen** puts the survivor in the accent and marks whoever
+  the buttons are pointing at — hover or keyboard focus — in `--color-out`,
+  with a ring on the floor. You remove a person from a table rather than a name
+  from a list. The buttons stay the control: hit-testing a canvas would have
+  made the choice mouse-only.
+- **The turn screen** is the one in the aside while questions are being
+  answered.
+
+Two props carry the difference: `empty` for a seat nobody has taken yet, and
+`markedUid` for the one about to be removed. A seat can also override the line
+under its name with `status`, because the lobby and the elimination screen are
+each describing something other than how the round is going.
+
+**Colour.** Both scenes carry their own palettes, and neither takes them from
+the design tokens. A token means something — the accent is a live answer,
+`--color-out` is a wrong one — and a grandstand roof, a green baize or a
+spectator's shirt means none of those things. Three things do reach into the
+palette, all because they have to *signal*: your own car is the accent, so is
+whoever is currently answering at the table, and a player being removed from
+the game is `--color-out`, which is what that colour already means everywhere
+else. Everyone else wears a jersey picked by seat, chosen well clear of the
+teal so that turning accent-coloured still reads as a change.
+
+**Cost.** The circuit builds about 560 polygons a frame and the table about
+130, which is fewer than the flat-shaded road it replaced — kerbs and barriers
+are single quads where the old marker posts were six-sided boxes, and a
+spectator is one quad. Filling that many at full width measures ~1.8 ms, around
+a ninth of a 60fps budget, and `requestAnimationFrame` stops entirely when the
+tab is hidden. If you add to a scene, prefer a quad to a box: nobody sees the
+back of a barrier.
+
+Two notes for anyone extending this. The camera frame is left-handed — z runs
+into the screen — so the right vector is `cross(UP, fwd)`; the right-handed
+`cross(fwd, UP)` mirrors the scene, which costs nothing on a symmetrical road
+and quietly reverses the direction of play around a table. And a large surface
+has to be cut into segments: the painter's algorithm sorts by average depth, so
+one long road quad averages to a single depth and paints over anything standing
+on its far half.
+
+Both scenes honour `prefers-reduced-motion` by snapping to their state instead
+of easing towards it, and both carry the whole table or track in an
+`aria-label`, so nothing is only available to someone who can see it.
 
 ## After a game
 
@@ -270,4 +363,7 @@ not "Golgi apparatus". There is a check for this in the notes below.
   state first, so the summary survives the deletion. Nothing about a finished
   room is worth keeping — the result already lives under `results/{uid}`.
 - **Last One Standing pays no speed bonus** — survival is the mechanic, so every
-  answer scores at the subunit's base rate.
+  answer scores at the subunit's base rate. It is also the only game left with
+  a clock: a turn-based table cannot let one player think for as long as they
+  like while three others wait on them, so `seconds` is still a deadline there
+  and a timed-out turn still counts as missed. In Racer the same number is par.

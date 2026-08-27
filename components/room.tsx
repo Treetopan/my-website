@@ -40,6 +40,7 @@ import {
   seated,
 } from "@/lib/table";
 import { ClockRail, QuestionStage } from "@/components/question-stage";
+import { RoomTable3D } from "@/components/room-table-3d";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, gradeBot, openSession } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
@@ -93,6 +94,9 @@ export function Room({ subunitId }: { subunitId: string }) {
     >
   >({});
   const [now, setNow] = useState(() => Date.now());
+
+  /** The seat a removal button is pointing at, so the table can mark it. */
+  const [marked, setMarked] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -661,26 +665,41 @@ export function Room({ subunitId }: { subunitId: string }) {
             Share this code, or start now and bots take the empty seats.
           </p>
 
-          <ul className="mb-8 flex flex-col gap-2.5">
-            {Array.from({ length: SEATS }).map((_, i) => {
-              const entry = Object.entries(players)[i];
-              return (
-                <li
-                  key={i}
-                  className={`box flex items-center justify-between px-4 py-3.5 text-[14px] ${
-                    entry ? "" : "opacity-55"
-                  }`}
-                >
-                  <span className={entry ? "text-ink" : "text-faint"}>
-                    {entry ? entry[1].displayName : "Empty seat"}
-                  </span>
-                  <span className="font-mono text-[11px] text-faint">
-                    {entry ? (entry[0] === room.hostUid ? "Host" : "Ready") : "Waiting"}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          {/* The room you are about to play in, with the places still open
+              standing empty in it. Seats are not assigned until kick-off, so
+              this is join order — the same order the list used to show. */}
+          <div className="mb-8 h-64 overflow-hidden rounded-[10px] border border-line">
+            <RoomTable3D
+              seats={Array.from({ length: SEATS }, (_, i) => {
+                const entry = Object.entries(players)[i];
+                if (!entry) {
+                  return {
+                    uid: `empty-${i}`,
+                    displayName: "Empty seat",
+                    isBot: false,
+                    alive: true,
+                    inRound: false,
+                    correct: 0,
+                    empty: true,
+                    status: "a bot fills in",
+                  };
+                }
+                const [uid, p] = entry;
+                return {
+                  uid,
+                  displayName: p.displayName,
+                  isBot: p.isBot,
+                  alive: true,
+                  inRound: true,
+                  correct: 0,
+                  status: uid === room.hostUid ? "host" : "ready",
+                };
+              })}
+              turnUid={null}
+              meUid={user?.uid ?? null}
+              revealing={false}
+            />
+          </div>
 
           {isHost ? (
             <button
@@ -713,6 +732,32 @@ export function Room({ subunitId }: { subunitId: string }) {
         <div className="w-full max-w-md">
           <p className="eyebrow mb-4">Round {room.round} over</p>
 
+          {/* The room, still there, with the survivor standing in it. You are
+              removing a person from a table rather than a name from a list —
+              and pointing at a button marks the seat it belongs to. */}
+          <div className="mb-7 h-64 overflow-hidden rounded-[10px] border border-line">
+            <RoomTable3D
+              seats={order.map(([uid, p]) => ({
+                uid,
+                displayName: p.displayName,
+                isBot: p.isBot,
+                alive: p.alive,
+                inRound: p.alive,
+                correct: p.correct,
+                status:
+                  uid === room.chooserUid
+                    ? "survived"
+                    : p.alive
+                      ? undefined
+                      : "out",
+              }))}
+              turnUid={room.chooserUid ?? null}
+              meUid={user?.uid ?? null}
+              revealing={false}
+              markedUid={marked}
+            />
+          </div>
+
           {mine ? (
             <>
               <h1 className="text-[30px] font-semibold tracking-[-0.032em]">
@@ -727,9 +772,18 @@ export function Room({ subunitId }: { subunitId: string }) {
                   <li key={uid}>
                     <button
                       type="button"
-                      onClick={() =>
-                        roomId && user && nominateTarget(roomId, user.uid, uid)
-                      }
+                      onClick={() => {
+                        // Cleared here rather than left to a pointer-leave
+                        // that never fires: the screen unmounts on the click,
+                        // and a stale mark would light up a seat the moment
+                        // the next round's choice came round.
+                        setMarked(null);
+                        if (roomId && user) nominateTarget(roomId, user.uid, uid);
+                      }}
+                      onPointerEnter={() => setMarked(uid)}
+                      onPointerLeave={() => setMarked(null)}
+                      onFocus={() => setMarked(uid)}
+                      onBlur={() => setMarked(null)}
                       className="box box-tap flex w-full items-center justify-between px-4 py-4 text-left text-[15px]"
                     >
                       <span>
@@ -828,46 +882,28 @@ export function Room({ subunitId }: { subunitId: string }) {
         </main>
 
         {/* ── The table ──────────────────────────────────── */}
-        <aside className="shrink-0 border-line-soft px-6 py-8 lg:w-68 lg:border-l">
+        <aside className="shrink-0 border-line-soft px-6 py-8 lg:w-80 lg:border-l">
           <p className="eyebrow mb-3">The table</p>
 
-          <ul className="flex flex-col gap-2">
-            {order.map(([uid, p]) => {
-              const isTurn = room.turnUid === uid && !reveal;
-              const justOut = reveal?.uid === uid && !reveal.correct;
+          {/* Standing, sat down and gone are three different things, and the
+              room shows them as three different postures. */}
+          <div className="h-56 overflow-hidden rounded-[10px] border border-line lg:h-72">
+            <RoomTable3D
+              seats={order.map(([uid, p]) => ({
+                uid,
+                displayName: p.displayName,
+                isBot: p.isBot,
+                alive: p.alive,
+                inRound: p.inRound,
+                correct: p.correct,
+              }))}
+              turnUid={room.turnUid ?? null}
+              meUid={user?.uid ?? null}
+              revealing={Boolean(reveal)}
+            />
+          </div>
 
-              return (
-                <li
-                  key={uid}
-                  className={[
-                    "box flex items-center justify-between px-3 py-2.5 text-[13px]",
-                    !p.alive ? "opacity-45" : "",
-                    isTurn ? "border-accent animate-turn" : "",
-                    justOut ? "animate-eliminate" : "",
-                  ].join(" ")}
-                >
-                  <span
-                    className={
-                      !p.alive
-                        ? "text-faint line-through decoration-line"
-                        : p.inRound
-                          ? "text-ink"
-                          : "text-faint"
-                    }
-                  >
-                    {p.displayName}
-                    {p.isBot && <span className="ml-1.5 text-faint">bot</span>}
-                  </span>
-
-                  <span className="font-mono text-[11px] text-faint tnum">
-                    {!p.alive ? "out" : p.inRound ? p.correct : "sat down"}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-
-          <p className="mt-6 text-[12px] leading-relaxed text-faint">
+          <p className="mt-5 text-[12px] leading-relaxed text-faint">
             Miss and you sit down for the round. The last one answering removes a
             player from the game.
           </p>

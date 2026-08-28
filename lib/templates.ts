@@ -22,12 +22,12 @@ import { AP_CALCULUS_BC } from "./curriculum-math";
  * minted last week still resolves today. Insert in the middle and old ids point
  * at the wrong generator — append instead.
  *
- * Coverage is deliberately partial. A subunit earns a generator when its
- * questions are genuinely parameterised — when rolling new numbers makes a new
- * question rather than the same question wearing a hat. Proof, construction,
- * and interpretation subunits are absent on purpose; they need written
- * questions, and pretending otherwise would produce four-option trivia about
- * topics that deserve better.
+ * Every subunit of the Algebra 1 → AP Calculus BC sequence is now stocked. The
+ * ones that came last are the ones that resisted: proof and construction do not
+ * reduce to rolled numbers, so they are not asked as though they did. What
+ * rolls there is the *case* — which reason justifies this step, what this
+ * indirect proof assumes, which condition is enough and which is one short —
+ * and the coordinate proofs roll over numbers like everything else.
  */
 const OWN: Record<string, string[]> = {
   // ─── Algebra 1 ─────────────────────────────────────────
@@ -235,6 +235,32 @@ const OWN: Record<string, string[]> = {
   "math/geometry/unit-12/12.4": ["Geometric probability"],
   "math/geometry/unit-12/12.6": ["Conditional probability"],
   "math/geometry/unit-12/12.7": ["Two-way tables and Venn diagrams"],
+
+  // The proof and construction subunits, which the first two passes left out.
+  // They are asked about the parts a proof is assembled from rather than about
+  // writing one, and the coordinate proofs are asked on the grid.
+  "math/geometry/unit-1/1.6": ["Naming a construction", "Why a construction works"],
+  "math/geometry/unit-2/2.6": ["The reason for a step", "The shape of a two-column proof"],
+  "math/geometry/unit-2/2.7": ["Paragraph proofs", "Flowchart proofs"],
+  "math/geometry/unit-2/2.8": [
+    "Choosing the theorem",
+    "Congruent supplements and complements",
+  ],
+  "math/geometry/unit-3/3.7": ["Constructing a perpendicular", "Constructing a parallel"],
+  "math/geometry/unit-5/5.8": ["CPCTC", "What CPCTC allows"],
+  "math/geometry/unit-5/5.9": [
+    "Proving with the distance formula",
+    "Placing a figure on the axes",
+  ],
+  "math/geometry/unit-6/6.8": [
+    "The assumption in an indirect proof",
+    "Reaching a contradiction",
+  ],
+  "math/geometry/unit-9/9.3": [
+    "Tests for a parallelogram",
+    "Diagonals that bisect each other",
+  ],
+  "math/geometry/unit-9/9.6": ["Where the diagonals cross", "Perpendicular diagonals"],
 
   // ─── Algebra 2 ─────────────────────────────────────────
   "math/algebra-2/unit-1/1.5": ["Matrix multiplication"],
@@ -638,6 +664,7 @@ const SPATIAL_OWN: Record<string, number[]> = {
   "math/geometry/unit-4/4.3": [0],
   "math/geometry/unit-4/4.4": [0],
   "math/geometry/unit-4/4.6": [0],
+  "math/geometry/unit-9/9.6": [0],
 
   // ─── Algebra 2 ─────────────────────────────────────────
   "math/algebra-2/unit-1/1.2": [0],

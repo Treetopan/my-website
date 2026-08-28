@@ -58,6 +58,11 @@ export type Reveal = {
   score: number;
   /** The right answer, as graded by the server. */
   answer: Answer;
+  /**
+   * Why it was wrong, from the server. Written only when the turn was missed,
+   * so a table that is answering well broadcasts exactly what it always did.
+   */
+  steps?: string[] | null;
 };
 
 /** One player's half of a mirrored question, once the round has settled. */
@@ -88,6 +93,12 @@ export type DuelReveal = {
   results: Record<string, DuelResult>;
   /** Who was strictly closest, or null on a dead heat. */
   closestUid: string | null;
+  /**
+   * Why the question was missed — one copy for the table, since it explains the
+   * question rather than anybody in particular. Each client shows it only if
+   * the miss was theirs. Absent when both players got it.
+   */
+  steps?: string[] | null;
 };
 
 export type Room = {

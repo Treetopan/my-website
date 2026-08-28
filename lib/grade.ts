@@ -20,6 +20,12 @@ export type Verdict = {
   response: Response;
   /** The score a proximity answer has to clear to count as right. */
   pass: number;
+  /**
+   * Why it was wrong, in a line or two. Present only on a miss, and only when
+   * something is on file — the client pairs it with its own read of how the
+   * answer missed, which it works out locally from the reveal.
+   */
+  steps?: string[];
 };
 
 export type OpenedSession = {
@@ -89,6 +95,8 @@ export type TableVerdict = {
   /** The right answer, said once for the whole table. */
   reveal: Reveal;
   pass: number;
+  /** Said once for the whole table too, and only when somebody missed. */
+  steps?: string[];
 };
 
 /**

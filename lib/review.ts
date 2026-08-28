@@ -31,6 +31,12 @@ export type AnswerDetail = {
    * left; the race, which has no clock, measures how far inside par.
    */
   speed: number;
+  /**
+   * The rule behind the question, or the worked steps for this roll. Arrives
+   * with the verdict on a miss and is carried no further than the summary —
+   * nothing about a finished session is written down anywhere.
+   */
+  steps?: string[];
 };
 
 /** The question text, for a summary that no longer stores it separately. */

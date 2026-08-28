@@ -50,7 +50,15 @@ const GENERATORS: Record<string, Generator[]> = {
 // ─── Minting and grading ─────────────────────────────────
 
 /** A generated question plus the answer, which stays on this side of the wire. */
-export type Resolved = { question: Question; answer: Answer };
+export type Resolved = {
+  question: Question;
+  answer: Answer;
+  /**
+   * Worked steps for this roll, when the generator supplied them. Never sent
+   * with the question — only ever back with a verdict, and only a wrong one.
+   */
+  steps?: string[];
+};
 
 /**
  * Splits what a generator returns into the half that travels and the half that
@@ -59,6 +67,11 @@ export type Resolved = { question: Question; answer: Answer };
  * question or an answer, never both.
  */
 function split(built: Built, id: string, topic: string): Resolved {
+  return { ...divide(built, id, topic), steps: built.steps };
+}
+
+/** The question and answer halves; `split` re-attaches the steps around them. */
+function divide(built: Built, id: string, topic: string): Omit<Resolved, "steps"> {
   switch (built.kind) {
     case "choice":
       return {

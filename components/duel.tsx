@@ -105,7 +105,16 @@ export function Duel({
 
   /** My own rounds, filled in from the settlement the host publishes. */
   const [myPicks, setMyPicks] = useState<
-    Record<number, { result: DuelResult; question: Question; answer: AnswerDetail["reveal"]; speed: number }>
+    Record<
+      number,
+      {
+        result: DuelResult;
+        question: Question;
+        answer: AnswerDetail["reveal"];
+        speed: number;
+        steps?: string[];
+      }
+    >
   >({});
 
   useEffect(() => {
@@ -201,6 +210,7 @@ export function Duel({
         correct: pick.result.correct,
         score: pick.result.score,
         speed: pick.speed,
+        steps: pick.steps,
       })),
     [myPicks, difficulty],
   );
@@ -445,7 +455,14 @@ export function Duel({
     // One write. Both halves of the round arrive together or not at all.
     await updateRoom(roomId, {
       players: next,
-      duel: { index: at, answer: graded.reveal, results, closestUid },
+      duel: {
+        index: at,
+        answer: graded.reveal,
+        results,
+        closestUid,
+        // One copy for the table, and only when somebody missed.
+        steps: graded.steps ?? null,
+      },
       committed: null,
     });
   }, [roomId, difficulty]);
@@ -578,6 +595,7 @@ export function Duel({
               question,
               answer: settled.answer,
               speed: speeds.current[settled.index] ?? 0,
+              steps: settled.steps ?? undefined,
             },
           },
     );
@@ -859,6 +877,7 @@ export function Duel({
                 draft={mine ? mine.response : draft}
                 reveal={settled ? settled.answer : null}
                 score={mine ? mine.score : null}
+                steps={settled?.steps ?? undefined}
                 disabled={locked || !!settled}
                 onDraft={setDraft}
                 onSubmit={commit}

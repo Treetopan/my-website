@@ -4,6 +4,7 @@ import { answerFor } from "@/lib/answers.server";
 import { claimPosition, getSession } from "@/lib/session-store";
 import { resolveInstance } from "@/lib/templates.server";
 import { botResponse, grade, type Answer } from "@/lib/grading.server";
+import { coachingFor } from "@/lib/coaching.server";
 import {
   PASS,
   parseResponse,
@@ -110,6 +111,7 @@ export async function POST(req: NextRequest) {
   if (seats) {
     const results: Record<string, Graded> = {};
     let reveal: Reveal | null = null;
+    let missed = false;
 
     for (const seat of seats) {
       const submitted =
@@ -119,6 +121,7 @@ export async function POST(req: NextRequest) {
 
       const verdict = grade(answer, submitted);
       reveal = verdict.reveal;
+      if (!verdict.correct) missed = true;
       results[seat.uid] = {
         score: verdict.score,
         correct: verdict.correct,
@@ -126,7 +129,17 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    return Response.json({ results, reveal, pass: PASS });
+    // One explanation for the table rather than one per seat: it is a property
+    // of the question, not of who missed it, and the duel is eight rounds of
+    // this going over the wire. Each client shows it only if it was their miss.
+    return Response.json({
+      results,
+      reveal,
+      pass: PASS,
+      ...(missed
+        ? { steps: coachingFor(found.steps, question.topic, session.subunitId) }
+        : {}),
+    });
   }
 
   // ── One player, one turn ─────────────────────────────
@@ -147,6 +160,12 @@ export async function POST(req: NextRequest) {
     response: submitted,
     /** The bar a score has to clear to count as right, so the UI can say so. */
     pass: PASS,
+    // Only ever on a miss, so a right answer costs exactly what it always did.
+    // Never sent with the question itself — a method line beside an unanswered
+    // question is a hint, and this is a game.
+    ...(correct
+      ? {}
+      : { steps: coachingFor(found.steps, question.topic, session.subunitId) }),
   });
 }
 
@@ -203,7 +222,7 @@ function parseTable(value: unknown): Seat[] | null {
 function resolve(
   subunitId: string,
   questionId: string,
-): { question: Question; answer: Answer } | null {
+): { question: Question; answer: Answer; steps?: string[] } | null {
   const instance = resolveInstance(questionId);
   if (instance) return instance;
 

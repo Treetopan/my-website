@@ -82,6 +82,7 @@ export type Built =
       options: string[];
       answer: number;
       figure?: Figure;
+      steps?: string[];
     }
   | {
       kind: "fill";
@@ -92,6 +93,7 @@ export type Built =
       show: string;
       tolerance?: number;
       figure?: Figure;
+      steps?: string[];
     }
   | {
       kind: "slider";
@@ -104,6 +106,7 @@ export type Built =
       full: number;
       zero: number;
       figure?: Figure;
+      steps?: string[];
     }
   | {
       kind: "point";
@@ -113,6 +116,7 @@ export type Built =
       full: number;
       zero: number;
       figure?: Figure;
+      steps?: string[];
     }
   | {
       kind: "line";
@@ -123,6 +127,7 @@ export type Built =
       full: number;
       zero: number;
       figure?: Figure;
+      steps?: string[];
     };
 
 /**
@@ -139,6 +144,8 @@ export function ask(
   distractors: (number | string)[],
   r: Rng,
   figure?: Figure,
+  /** Worked steps for this exact roll. Overrides the topic method. */
+  steps?: string[],
 ): Built {
   const right = String(correct);
   const wrong: string[] = [];
@@ -167,6 +174,7 @@ export function ask(
     options,
     answer: options.indexOf(right),
     figure,
+    steps,
   };
 }
 
@@ -190,6 +198,8 @@ export function fill(
     /** Numeric answers within this count. Default: exact. */
     tolerance?: number;
     figure?: Figure;
+    /** Worked steps for this exact roll. Overrides the topic method. */
+    steps?: string[];
   } = {},
 ): Built {
   const show = String(answer);
@@ -202,6 +212,7 @@ export function fill(
     show,
     tolerance: options.tolerance,
     figure: options.figure,
+    steps: options.steps,
   };
 }
 
@@ -225,6 +236,8 @@ export function slider(
     full?: number;
     zero?: number;
     figure?: Figure;
+    /** Worked steps for this exact roll. Overrides the topic method. */
+    steps?: string[];
   },
 ): Built {
   const range = spec.max - spec.min;
@@ -239,6 +252,7 @@ export function slider(
     full: spec.full ?? spec.step,
     zero: spec.zero ?? range / 10,
     figure: spec.figure,
+    steps: spec.steps,
   };
 }
 
@@ -257,6 +271,8 @@ export function point(
     full?: number;
     zero?: number;
     figure?: Figure;
+    /** Worked steps for this exact roll. Overrides the topic method. */
+    steps?: string[];
   },
 ): Built {
   return {
@@ -269,6 +285,7 @@ export function point(
     full: spec.full ?? 0.25,
     zero: spec.zero ?? 4,
     figure: spec.figure,
+    steps: spec.steps,
   };
 }
 
@@ -285,6 +302,8 @@ export function line(
     full?: number;
     zero?: number;
     figure?: Figure;
+    /** Worked steps for this exact roll. Overrides the topic method. */
+    steps?: string[];
   },
 ): Built {
   return {
@@ -296,6 +315,7 @@ export function line(
     full: spec.full ?? 0.25,
     zero: spec.zero ?? spec.span,
     figure: spec.figure,
+    steps: spec.steps,
   };
 }
 
@@ -325,8 +345,9 @@ export function among(
   all: readonly string[],
   r: Rng,
   figure?: Figure,
+  steps?: string[],
 ): Built {
-  return ask(prompt, correct, all.filter((o) => o !== correct), r, figure);
+  return ask(prompt, correct, all.filter((o) => o !== correct), r, figure, steps);
 }
 
 // ─── Drawing the function ────────────────────────────────

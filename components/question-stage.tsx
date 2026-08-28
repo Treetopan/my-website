@@ -2,7 +2,13 @@
 
 import { useEffect } from "react";
 import type { Question } from "@/lib/curriculum";
-import { emptyResponse, type Point, type Response, type Reveal } from "@/lib/questions";
+import {
+  PASS,
+  emptyResponse,
+  type Point,
+  type Response,
+  type Reveal,
+} from "@/lib/questions";
 import {
   FillAnswer,
   LineAnswer,
@@ -10,6 +16,7 @@ import {
   SliderAnswer,
 } from "@/components/answer-inputs";
 import { FigureView } from "@/components/graph";
+import { Feedback } from "@/components/feedback";
 
 /**
  * The question is the hero on both game screens, so it lives in one place and
@@ -26,6 +33,7 @@ export function QuestionStage({
   draft,
   reveal,
   score,
+  steps,
   disabled,
   onDraft,
   onSubmit,
@@ -42,6 +50,12 @@ export function QuestionStage({
   reveal: Reveal | null;
   /** What the answer scored, once graded. Between 0 and 1 on the proximity kinds. */
   score: number | null;
+  /**
+   * Why it was wrong, from the server. Arrives with the verdict on a miss and
+   * with nothing else — a question still being answered never has it, which is
+   * what keeps it feedback rather than a hint.
+   */
+  steps?: string[];
   /** True when it isn't your turn — the question shows but doesn't respond. */
   disabled?: boolean;
   onDraft: (draft: Response) => void;
@@ -158,6 +172,18 @@ export function QuestionStage({
                   },
             )
           }
+        />
+      )}
+
+      {/* Only after the reveal, and only on a miss. The threshold is the public
+          one: on the proximity kinds "wrong" starts below full marks, and a
+          part-marked answer is exactly the one worth explaining. */}
+      {revealed && score !== null && score < PASS && (
+        <Feedback
+          question={question}
+          reveal={reveal}
+          response={answer}
+          steps={steps}
         />
       )}
     </div>

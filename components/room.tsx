@@ -99,7 +99,13 @@ export function Room({
   const [myPicks, setMyPicks] = useState<
     Record<
       number,
-      { response: Answered; answer: Reveal; correct: boolean; score: number }
+      {
+        response: Answered;
+        answer: Reveal;
+        correct: boolean;
+        score: number;
+        steps?: string[];
+      }
     >
   >({});
   const [now, setNow] = useState(() => Date.now());
@@ -131,6 +137,7 @@ export function Room({
           answer: r.reveal.answer,
           correct: r.reveal.correct,
           score: r.reveal.score,
+          steps: r.reveal.steps ?? undefined,
         };
         setMyPicks((prev) => (at in prev ? prev : { ...prev, [at]: entry }));
       }
@@ -215,6 +222,7 @@ export function Room({
         difficulty,
         correct: entry.correct,
         score: entry.score,
+        steps: entry.steps,
         // Last One Standing pays no speed bonus — survival is the mechanic.
         speed: 0,
       };
@@ -382,6 +390,9 @@ export function Room({
         correct,
         score,
         answer: verdict.reveal,
+        // Written only on a miss, and the whole table reads it: watching
+        // somebody else be told why is how the rest of the room learns.
+        steps: verdict.steps ?? null,
       },
       players: {
         ...room.players,
@@ -926,6 +937,7 @@ export function Room({
                   }
                   reveal={reveal ? reveal.answer : null}
                   score={reveal ? reveal.score : null}
+                  steps={reveal?.steps ?? undefined}
                   disabled={!myTurn || answered}
                   onDraft={setDraft}
                   onSubmit={commit}

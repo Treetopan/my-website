@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { levelProgress, type Progress } from "@/lib/progression";
+import { Feedback } from "@/components/feedback";
 import {
   answerOf,
   givenOf,
@@ -162,6 +163,17 @@ export function SessionSummary({
                     </span>
                   )}
                 </p>
+
+                {/* The same explanation the reveal gave, still here at the end
+                    of the session — a student who was watching the clock the
+                    first time reads it properly now. */}
+                <Feedback
+                  question={d.question}
+                  reveal={d.reveal}
+                  response={d.response}
+                  steps={d.steps}
+                  tight
+                />
 
                 <span className="font-mono text-[10px] tracking-[0.12em] text-faint uppercase">
                   {d.topic}

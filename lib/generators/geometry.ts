@@ -20,12 +20,274 @@ import {
 /**
  * Geometry generators.
  *
- * Geometry resists generation more than the algebra courses do: most of its
- * subunits are proof, construction, and classification, none of which reduce
- * to numbers a generator can roll. What is here is the computational spine —
- * segments, angles, triangles, circles, solids — and the rest of the course is
- * left for written questions, which is the honest answer for those topics.
+ * Geometry resists generation more than the algebra courses do: much of it is
+ * proof, construction, and classification, none of which reduce to numbers a
+ * generator can roll. Most of this file is the computational spine — segments,
+ * angles, triangles, circles, solids. The proof and construction subunits sit
+ * at the end, and they roll over a case rather than over a coefficient; the
+ * tables they draw from are just above the record.
  */
+
+/**
+ * The cases the proof and construction generators roll over.
+ *
+ * These sit outside the generator record because a generator picks one of them
+ * per seed and offers the rest as the wrong answers — the list is both the
+ * question bank and the distractor pool, which is only safe while every entry
+ * is genuinely distinct from every other. Adding a near-duplicate here would
+ * put two correct answers on the board, so keep them separated by meaning.
+ */
+
+/** Compass constructions: what the steps make, and why they make it. */
+const CONSTRUCTIONS = [
+  {
+    name: "a perpendicular bisector",
+    steps: "equal arcs from each end of a segment, crossing above and below it, and the crossings joined",
+    makes: "The perpendicular bisector of the segment",
+    why: "Both crossings are equidistant from the two endpoints",
+  },
+  {
+    name: "an angle bisector",
+    steps: "an arc across both sides of an angle, then equal arcs from where it cut them, joined back to the vertex",
+    makes: "The bisector of the angle",
+    why: "The two triangles the arcs make are congruent by SSS",
+  },
+  {
+    name: "a copied angle",
+    steps: "an arc across an angle, the same arc drawn from a point on a fresh ray, and the opening between the cuts carried over",
+    makes: "A copy of the angle on the new ray",
+    why: "Carrying the opening across makes the two arcs' chords equal",
+  },
+  {
+    name: "a copied segment",
+    steps: "the compass opened to a segment and that opening struck once from a point on a fresh ray",
+    makes: "A copy of the segment on the new ray",
+    why: "The compass opening is the length, and it never changed",
+  },
+  {
+    name: "an equilateral triangle",
+    steps: "an arc of the segment's own length from each of its endpoints, meeting above it",
+    makes: "An equilateral triangle on the segment",
+    why: "Every arc was drawn at the same radius, so all three sides match",
+  },
+];
+
+/** Lines of a two-column proof, and the reason each one is entitled to. */
+const PROOF_STEPS = [
+  { line: "AB = AB", reason: "Reflexive Property" },
+  { line: "If AB = CD then CD = AB", reason: "Symmetric Property" },
+  { line: "AB = CD and CD = EF, so AB = EF", reason: "Transitive Property" },
+  { line: "B lies between A and C, so AB + BC = AC", reason: "Segment Addition Postulate" },
+  { line: "D lies inside ∠ABC, so m∠ABD + m∠DBC = m∠ABC", reason: "Angle Addition Postulate" },
+  { line: "2x + 4 = 10, so 2x = 6", reason: "Subtraction Property of Equality" },
+  { line: "2x = 6, so x = 3", reason: "Division Property of Equality" },
+  { line: "∠1 and ∠3 are vertical, so ∠1 ≅ ∠3", reason: "Vertical Angles Theorem" },
+  { line: "M is the midpoint of AB, so AM = MB", reason: "Definition of a midpoint" },
+];
+
+/** What a paragraph proof is and is not. */
+const PARAGRAPH = [
+  {
+    prompt: "What makes a paragraph proof a proof rather than a description?",
+    answer: "Every claim in it is followed by the reason it holds",
+    wrong: [
+      "It is written in complete sentences",
+      "It refers to a labelled diagram",
+      "It states the conclusion first",
+      "It avoids symbols entirely",
+      "It is shorter than a two-column proof",
+    ],
+  },
+  {
+    prompt: "A paragraph proof and a two-column proof of the same theorem differ in what?",
+    answer: "Only the way they are laid out",
+    wrong: [
+      "The theorems they are able to prove",
+      "Whether reasons have to be given",
+      "Whether the given may be used",
+      "How many steps they are allowed",
+      "Whether a diagram is required",
+    ],
+  },
+  {
+    prompt: "Where does the given information belong in a paragraph proof?",
+    answer: "Stated at the start, before anything is deduced from it",
+    wrong: [
+      "In the final sentence, as the conclusion",
+      "Left out, since it is already known",
+      "Only in the diagram",
+      "Wherever it is first needed, unannounced",
+      "In a separate paragraph after the proof",
+    ],
+  },
+];
+
+/** What a flowchart proof puts in its boxes and on its arrows. */
+const FLOWCHART = [
+  {
+    prompt: "In a flowchart proof, what goes inside a box?",
+    answer: "A statement, with its reason written underneath",
+    wrong: [
+      "A reason on its own",
+      "A question to be answered next",
+      "One term of the diagram",
+      "A statement, with the reason on the arrow",
+      "The given, and nothing else",
+    ],
+  },
+  {
+    prompt: "In a flowchart proof, what does an arrow mean?",
+    answer: "The box it points to follows from the box it leaves",
+    wrong: [
+      "The two boxes say the same thing",
+      "The boxes may be read in either order",
+      "The box it points to contradicts the other",
+      "The boxes belong to different proofs",
+      "One box restates the diagram",
+    ],
+  },
+  {
+    prompt: "Why can a flowchart proof have two arrows meeting at one box?",
+    answer: "Because a step may need two earlier statements together",
+    wrong: [
+      "Because the proof branches into two cases",
+      "Because the step could be reached either way",
+      "Because the diagram has two parts",
+      "Because one arrow is the given and one the conclusion",
+      "Because the proof is being read backwards",
+    ],
+  },
+];
+
+/** Segment and angle theorems, given the situation that calls for each. */
+const ANGLE_THEOREMS = [
+  {
+    given: "∠1 and ∠2 are supplementary, and so are ∠3 and ∠2.",
+    theorem: "Congruent Supplements Theorem",
+  },
+  {
+    given: "∠1 and ∠2 are complementary, and so are ∠3 and ∠2.",
+    theorem: "Congruent Complements Theorem",
+  },
+  {
+    given: "∠1 and ∠3 are formed by two intersecting lines and are not adjacent.",
+    theorem: "Vertical Angles Theorem",
+  },
+  {
+    given: "∠1 and ∠2 are both right angles.",
+    theorem: "Right Angle Congruence Theorem",
+  },
+  {
+    given: "∠1 and ∠2 sit on a line and share a side.",
+    theorem: "Linear Pair Postulate",
+  },
+  {
+    given: "M is the midpoint of AB, and a proof needs AM = MB.",
+    theorem: "Midpoint Theorem",
+  },
+];
+
+/**
+ * What an indirect proof assumes, which is always the exact negation.
+ *
+ * Each claim carries its own wrong answers rather than borrowing another
+ * claim's, because the mistake worth catching is the boundary: negating "at
+ * most one" to "exactly two", or "longest" to "shortest", leaves a case the
+ * proof never covers. A distractor lifted from a different claim is eliminated
+ * by reading alone and teaches nothing.
+ */
+const INDIRECT = [
+  {
+    claim: "the triangle has at most one right angle",
+    assume: "That it has two or more right angles",
+    wrong: [
+      "That it has exactly two right angles",
+      "That it has exactly one right angle",
+      "That it has no right angles",
+      "That it has at most two right angles",
+      "That it has three right angles",
+    ],
+  },
+  {
+    claim: "the two lines are parallel",
+    assume: "That the two lines meet at some point",
+    wrong: [
+      "That the two lines are perpendicular",
+      "That the two lines meet at exactly two points",
+      "That the two lines are the same line",
+      "That the two lines are parallel",
+      "That the two lines never meet",
+    ],
+  },
+  {
+    claim: "n is even",
+    assume: "That n is odd",
+    wrong: [
+      "That n is prime",
+      "That n is negative",
+      "That n is even",
+      "That n is zero",
+      "That n is not an integer",
+    ],
+  },
+  {
+    claim: "AB is the longest side",
+    assume: "That some other side is at least as long as AB",
+    wrong: [
+      "That some other side is strictly longer than AB",
+      "That AB is the shortest side",
+      "That every other side is shorter than AB",
+      "That all three sides are equal",
+      "That AB is longer than exactly one other side",
+    ],
+  },
+  {
+    claim: "the point lies outside the circle",
+    assume: "That the point lies on or inside the circle",
+    wrong: [
+      "That the point lies strictly inside the circle",
+      "That the point lies on the circle",
+      "That the point is the centre",
+      "That the point lies outside the circle",
+      "That the point is not in the plane",
+    ],
+  },
+];
+
+/**
+ * Conditions on a quadrilateral, and whether each one is enough.
+ *
+ * The two that are not enough are the point of the subunit: one pair of
+ * parallel sides is a trapezoid, and one pair of congruent sides with one pair
+ * parallel can be an isosceles trapezoid, so both are a step short.
+ */
+const PARALLELOGRAM_TESTS = [
+  {
+    given: "both pairs of opposite sides are congruent.",
+    verdict: "Yes — congruent opposite sides force it",
+  },
+  {
+    given: "both pairs of opposite angles are congruent.",
+    verdict: "Yes — congruent opposite angles force it",
+  },
+  {
+    given: "the diagonals bisect each other.",
+    verdict: "Yes — bisecting diagonals force it",
+  },
+  {
+    given: "one pair of sides is both parallel and congruent.",
+    verdict: "Yes — one pair that is both is enough",
+  },
+  {
+    given: "one pair of opposite sides is parallel.",
+    verdict: "No — that describes any trapezoid",
+  },
+  {
+    given: "one pair of opposite sides is congruent and the other pair is parallel.",
+    verdict: "No — an isosceles trapezoid does that too",
+  },
+];
+
 export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.3 Segment addition and midpoint ──
   "math/geometry/unit-1/1.3": [
@@ -1523,6 +1785,314 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `Of ${total} people, ${onlyA} like tea only, ${onlyB} coffee only, ${both} like both and ${neither} like neither. How many like tea?`,
         onlyA + both,
         { hint: "a number" },
+      );
+    },
+  ],
+  // ─────────────────────────────────────────────────────
+  // Proof and construction
+  //
+  // These subunits were left empty on the first pass, on the grounds that
+  // proof and construction do not reduce to rolled numbers. Half of that was
+  // right. What does not parameterise is the *writing* of a proof; what does
+  // is everything the writing is made of — which reason justifies a step,
+  // what an indirect proof assumes, which condition is enough and which is
+  // one short. Those roll over a case rather than over a coefficient. The
+  // coordinate proofs roll over numbers like anything else, so they are asked
+  // on the grid, where showing that two diagonals bisect each other is the
+  // same act as placing the point they share.
+  // ─────────────────────────────────────────────────────
+
+  // ── 1.6 Constructions with compass and straightedge ──
+  "math/geometry/unit-1/1.6": [
+    (r) => {
+      const c = r.pick(CONSTRUCTIONS);
+      return among(
+        `A compass and straightedge draw ${c.steps}. What has been constructed?`,
+        c.makes,
+        CONSTRUCTIONS.map((k) => k.makes),
+        r,
+      );
+    },
+    (r) => {
+      const c = r.pick(CONSTRUCTIONS);
+      return among(
+        `Why does the construction of ${c.name} give exactly what it claims?`,
+        c.why,
+        CONSTRUCTIONS.map((k) => k.why),
+        r,
+      );
+    },
+  ],
+
+  // ── 2.6 Two-column proofs ──
+  "math/geometry/unit-2/2.6": [
+    (r) => {
+      const step = r.pick(PROOF_STEPS);
+      return among(
+        `A two-column proof reads "${step.line}". What is the reason?`,
+        step.reason,
+        PROOF_STEPS.map((s) => s.reason),
+        r,
+      );
+    },
+    (r) => {
+      const first = r.bool();
+      return ask(
+        first
+          ? "What always occupies the first line of a two-column proof?"
+          : "What always occupies the last line of a two-column proof?",
+        first ? "The given information" : "The statement being proved",
+        [
+          first ? "The statement being proved" : "The given information",
+          "A definition",
+          "The diagram",
+          "An assumption made for contradiction",
+          "The reason column",
+        ],
+        r,
+      );
+    },
+  ],
+
+  // ── 2.7 Paragraph and flowchart proofs ──
+  "math/geometry/unit-2/2.7": [
+    (r) => {
+      const q = r.pick(PARAGRAPH);
+      return ask(q.prompt, q.answer, q.wrong, r);
+    },
+    (r) => {
+      const q = r.pick(FLOWCHART);
+      return ask(q.prompt, q.answer, q.wrong, r);
+    },
+  ],
+
+  // ── 2.8 Proving segment and angle theorems ──
+  "math/geometry/unit-2/2.8": [
+    (r) => {
+      const t = r.pick(ANGLE_THEOREMS);
+      return among(
+        `${t.given} Which theorem finishes the proof?`,
+        t.theorem,
+        ANGLE_THEOREMS.map((k) => k.theorem),
+        r,
+      );
+    },
+    // The Congruent Supplements Theorem applied rather than named: two angles
+    // supplementary to the same angle are congruent, so the answer is the one
+    // you were handed and the middle angle is there to be seen past.
+    (r) => {
+      const complement = r.bool();
+      const first = complement ? r.int(20, 70) : r.int(20, 160);
+      return fill(
+        complement
+          ? `∠1 and ∠2 are complementary, and ∠3 and ∠2 are complementary. If m∠1 = ${first}°, what is m∠3?`
+          : `∠1 and ∠2 are supplementary, and ∠3 and ∠2 are supplementary. If m∠1 = ${first}°, what is m∠3?`,
+        first,
+        { unit: "degrees" },
+      );
+    },
+  ],
+
+  // ── 3.7 Constructing parallel and perpendicular lines ──
+  "math/geometry/unit-3/3.7": [
+    (r) => {
+      const fromOutside = r.bool();
+      return ask(
+        fromOutside
+          ? "To drop a perpendicular from a point down to a line, what is the first compass step?"
+          : "To erect a perpendicular at a point that is already on the line, what is the first compass step?",
+        fromOutside
+          ? "Swing one arc from the point that cuts the line twice"
+          : "Mark two points equidistant from it along the line",
+        [
+          fromOutside
+            ? "Mark two points equidistant from it along the line"
+            : "Swing one arc from the point that cuts the line twice",
+          "Bisect the angle at the point",
+          "Copy the segment onto a new ray",
+          "Measure the distance with a ruler",
+          "Draw a second line through the point at a guess",
+        ],
+        r,
+      );
+    },
+    (r) =>
+      ask(
+        "Constructing a parallel line copies an angle across a transversal. Which fact makes the two lines parallel?",
+        "Congruent corresponding angles",
+        [
+          "Congruent vertical angles",
+          "Supplementary alternate interior angles",
+          "Equal segment lengths",
+          "A shared perpendicular bisector",
+          "Congruent adjacent angles",
+        ],
+        r,
+      ),
+  ],
+
+  // ── 5.8 Proofs using congruent triangles ──
+  "math/geometry/unit-5/5.8": [
+    // CPCTC with numbers in it. Once the triangles are congruent a matching
+    // pair of parts is an equation, and writing that equation is the step.
+    (r) => {
+      const x = r.int(2, 12);
+      const coefficient = r.int(2, 6);
+      const shift = r.nonzero(-9, 9);
+      return fill(
+        `△ABC ≅ △DEF. Side AB measures ${coefficient}x${signed(shift)} and side DE measures ${coefficient * x + shift}. What is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      ask(
+        "A proof has shown △ABC ≅ △DEF. What does CPCTC let you write on the next line?",
+        "That any matching pair of sides or angles is congruent",
+        [
+          "That the two triangles are similar",
+          "That the triangles have equal area only",
+          "That a third triangle is congruent to both",
+          "That the two triangles are the same triangle",
+          "That the corresponding sides are proportional",
+        ],
+        r,
+      ),
+  ],
+
+  // ── 5.9 Coordinate proofs ──
+  "math/geometry/unit-5/5.9": [
+    // An isosceles triangle placed the way a coordinate proof places one: base
+    // on the x-axis from the origin, apex above its midpoint. Rolled over
+    // Pythagorean triples so the two equal sides come out whole.
+    (r) => {
+      const [half, height] = r.pick([
+        [3, 4],
+        [6, 8],
+        [5, 12],
+        [8, 15],
+        [9, 12],
+      ]);
+      return fill(
+        `A triangle has vertices (0, 0), (${2 * half}, 0) and (${half}, ${height}). A coordinate proof shows it is isosceles. How long are the two equal sides?`,
+        Math.round(Math.sqrt(half * half + height * height)),
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      ask(
+        "Where should a figure be placed to make a coordinate proof easiest?",
+        "One vertex at the origin, with a side along an axis",
+        [
+          "Centred on the origin and tilted 45°",
+          "Inside the first quadrant, clear of both axes",
+          "Anywhere, since the placement cannot matter",
+          "With every vertex on the same axis",
+          "With the centroid at the origin",
+        ],
+        r,
+      ),
+  ],
+
+  // ── 6.8 Indirect proof ──
+  "math/geometry/unit-6/6.8": [
+    (r) => {
+      const c = r.pick(INDIRECT);
+      return ask(
+        `An indirect proof of "${c.claim}" begins by assuming what?`,
+        c.assume,
+        c.wrong,
+        r,
+      );
+    },
+    (r) =>
+      ask(
+        "An indirect proof ends when the assumption leads to what?",
+        "A contradiction of the given or of a known theorem",
+        [
+          "A statement that cannot be checked",
+          "The original claim, restated",
+          "A second assumption",
+          "A true statement unrelated to the claim",
+          "A diagram that looks wrong",
+        ],
+        r,
+      ),
+  ],
+
+  // ── 9.3 Proving a quadrilateral is a parallelogram ──
+  "math/geometry/unit-9/9.3": [
+    (r) => {
+      const c = r.pick(PARALLELOGRAM_TESTS);
+      return among(
+        `All that is known about a quadrilateral is that ${c.given} Is that enough to call it a parallelogram?`,
+        c.verdict,
+        PARALLELOGRAM_TESTS.map((k) => k.verdict),
+        r,
+      );
+    },
+    // The diagonals bisect each other, turned into the equation that proves it.
+    (r) => {
+      const x = r.int(2, 12);
+      const coefficient = r.int(2, 6);
+      const shift = r.nonzero(-9, 9);
+      return fill(
+        `The diagonals of quadrilateral ABCD meet at E, and a proof needs AE = EC. If AE = ${coefficient}x${signed(shift)} and EC = ${coefficient * x + shift}, what is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+  ],
+
+  // ── 9.6 Coordinate proofs with quadrilaterals ──
+  "math/geometry/unit-9/9.6": [
+    // Showing that the diagonals bisect each other IS showing that they share a
+    // midpoint, so the proof is asked as the placement rather than as a
+    // sentence about the placement.
+    (r) => {
+      const span = 9;
+      const mx = r.int(-5, 5);
+      const my = r.int(-5, 5);
+      const ax = r.nonzero(-4, 4);
+      const ay = r.nonzero(-4, 4);
+      let bx = r.nonzero(-4, 4);
+      let by = r.nonzero(-4, 4);
+      // Half-diagonals along one line would flatten the quadrilateral into a
+      // segment, and there would be no crossing to place.
+      if (ax * by - ay * bx === 0) {
+        bx = -ay;
+        by = ax;
+      }
+      const corners: [number, number][] = [
+        [mx - ax, my - ay],
+        [mx - bx, my - by],
+        [mx + ax, my + ay],
+        [mx + bx, my + by],
+      ];
+      return point(
+        `ABCD has vertices A(${corners[0][0]}, ${corners[0][1]}), B(${corners[1][0]}, ${corners[1][1]}), C(${corners[2][0]}, ${corners[2][1]}) and D(${corners[3][0]}, ${corners[3][1]}). Its diagonals bisect each other. Place the point where they cross.`,
+        {
+          span,
+          x: mx,
+          y: my,
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [],
+            marks: corners.map(([x, y]) => dot(x, y)),
+          }),
+        },
+      );
+    },
+    // A rhombus is proved on the grid by its perpendicular diagonals, which is
+    // one negative reciprocal.
+    (r) => {
+      const rise = r.nonzero(-6, 6);
+      const run = r.nonzero(-6, 6);
+      return fill(
+        `A coordinate proof shows ABCD is a rhombus. One diagonal has slope ${frac(rise, run)}. What is the slope of the other?`,
+        frac(-run, rise),
+        { hint: "a number or a fraction" },
       );
     },
   ],

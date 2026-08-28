@@ -21,12 +21,22 @@ import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, openSession } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
 import {
+  PASS,
   emptyResponse,
   type Response as Answered,
   type Reveal,
 } from "@/lib/questions";
 
 const REVEAL_MS = 1700;
+
+/**
+ * A missed question is held longer, because there is now something on the
+ * screen to read: the reveal carries why the answer was wrong, and 1.7 seconds
+ * is enough to notice a green tick and not enough to take in a sentence. It
+ * costs the player nothing — the bot advances when the answer is graded, not
+ * as the clock runs, so a longer look at a mistake does not lose the race.
+ */
+const REVEAL_MISSED_MS = 4200;
 
 /** Bot answers this fraction of questions correctly, and takes this long. */
 const BOT = { accuracy: 0.68, minThink: 0.35, maxThink: 0.85 };
@@ -78,6 +88,8 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
   // The correct answer is not in this bundle — it arrives with the verdict.
   const [reveal, setReveal] = useState<Reveal | null>(null);
+  /** Why the last answer was wrong. Server-sent, and only ever on a miss. */
+  const [steps, setSteps] = useState<string[] | undefined>(undefined);
   const [score, setScore] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
@@ -127,6 +139,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
       setReveal(verdict.reveal);
       setScore(verdict.score);
+      setSteps(verdict.steps);
       setPhase("revealed");
 
       setAnswers((prev) => [
@@ -141,6 +154,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
           correct: verdict.correct,
           score: verdict.score,
           speed,
+          steps: verdict.steps,
         },
       ]);
 
@@ -210,13 +224,14 @@ export function Racer({ subunitId }: { subunitId: string }) {
       }
       setReveal(null);
       setScore(null);
+      setSteps(undefined);
       setLastGain(null);
       setIndex(index + 1);
       setPhase("asking");
-    }, REVEAL_MS);
+    }, score !== null && score < PASS ? REVEAL_MISSED_MS : REVEAL_MS);
 
     return () => clearTimeout(id);
-  }, [phase, index, total]);
+  }, [phase, index, total, score]);
 
   const won = you > bot;
 
@@ -335,6 +350,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
               draft={draft}
               reveal={reveal}
               score={score}
+              steps={steps}
               onDraft={setDraft}
               onSubmit={(response) => {
                 // Timed from the answer, not from the last tick, so the

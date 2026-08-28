@@ -24,7 +24,7 @@ import type { Answer } from "../lib/grading.server";
 const SEEDS_PER_GENERATOR = 20_000;
 
 /** The kinds answered by placing something rather than typing or choosing. */
-const PLACED = new Set(["point", "slider", "line"]);
+const PLACED = new Set(["point", "slider", "line", "order"]);
 
 /**
  * Seeds are swept deterministically rather than rolled at random. A check that
@@ -58,6 +58,9 @@ function visibleText(question: Question, answer: Answer): string[] {
   if (answer.kind === "line") {
     out.push(String(answer.slope), String(answer.intercept));
   }
+  // Every step of an ordering is on the screen from the moment it is asked, so
+  // all of them are read for the same smells as an option would be.
+  if (question.kind === "order") out.push(...question.items);
   return out;
 }
 
@@ -80,6 +83,10 @@ function sampleAnswer(question: Question, answer: Answer): string {
       return `= (${answer.at.x}, ${answer.at.y})   on a ±${question.kind === "point" ? question.span : "?"} grid`;
     case "line":
       return `= y = ${answer.slope}x ${answer.intercept < 0 ? "-" : "+"} ${Math.abs(answer.intercept)}`;
+    case "order":
+      return question.kind === "order"
+        ? answer.order.map((i, at) => `${at + 1}. ${question.items[i]}`).join("  ")
+        : "?";
   }
 }
 

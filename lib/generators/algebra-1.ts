@@ -7,9 +7,11 @@ import {
   frac,
   graph,
   head,
+  isSquare,
   poly,
   fill,
   line,
+  order,
   plot,
   point,
   radical,
@@ -44,6 +46,45 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // Counting rather than classifying one value: the same knowledge, but you
+    // have to apply it five times and a lucky guess gets you nowhere.
+    (r) => {
+      const pool = [
+        { text: "3/4", irrational: false },
+        { text: "√16", irrational: false },
+        { text: "√7", irrational: true },
+        { text: "-5", irrational: false },
+        { text: "π", irrational: true },
+        { text: "0.25", irrational: false },
+        { text: "√2", irrational: true },
+        { text: "√25", irrational: false },
+        { text: "-2/3", irrational: false },
+        { text: "√11", irrational: true },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 5);
+      return fill(
+        `How many of these are irrational? ${shown.map((s) => s.text).join(", ")}`,
+        shown.filter((s) => s.irrational).length,
+        { hint: "a number from 0 to 5" },
+      );
+    },
+    (r) =>
+      order(
+        "Put these sets in order, each one inside the next.",
+        [
+          "Natural numbers",
+          "Whole numbers",
+          "Integers",
+          "Rational numbers",
+          "Real numbers",
+        ],
+        r,
+      ),
   ],
 
   // ── 1.6 Exponent rules ──
@@ -92,6 +133,28 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a fraction" },
       );
     },
+    // The rule run backwards: the result is given and one exponent is missing.
+    (r) => {
+      const v = r.pick(["x", "y", "a", "n"]);
+      const known = r.int(2, 8);
+      const missing = r.int(2, 8);
+      return fill(
+        `${v}^${known} · ${v}^? = ${v}^${known + missing}. What replaces the ?`,
+        missing,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const v = r.pick(["x", "y", "m", "k"]);
+      const a = r.int(2, 7);
+      const b = r.int(2, 5);
+      return slider(`Place the exponent of the simplified form of (${v}^${a})^${b}.`, {
+        min: 0,
+        max: 40,
+        step: 1,
+        value: a * b,
+      });
+    },
   ],
 
   // ── 1.7 Scientific notation ──
@@ -115,6 +178,29 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
           sci(`${lead}.${decimal}`, -exponent),
         ],
         r,
+      );
+    },
+    (r) => {
+      const lead = r.int(1, 9);
+      const decimal = r.int(1, 9);
+      const exponent = r.int(2, 6);
+      return fill(
+        `Write ${lead}.${decimal} × 10^${exponent} as a plain number.`,
+        `${lead}${decimal}${"0".repeat(exponent - 1)}`,
+        { hint: "the digits, written out" },
+      );
+    },
+    // Kept under ten so the mantissa never needs renormalising, which is a
+    // different rule and belongs in its own question.
+    (r) => {
+      const a = r.int(2, 3);
+      const b = r.int(2, 3);
+      const m = r.int(2, 6);
+      const n = r.int(2, 6);
+      return fill(
+        `(${a} × 10^${m})(${b} × 10^${n}) is written as ${a * b} × 10^k. What is k?`,
+        m + n,
+        { hint: "a number" },
       );
     },
   ],
@@ -169,6 +255,29 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number or fraction" },
       );
     },
+    // The solution is given and the coefficient is missing, so the equation
+    // has to be run backwards. Same equation, opposite direction of work.
+    (r) => {
+      const k = r.nonzero(-9, 9);
+      const x = r.int(2, 9);
+      const b = r.nonzero(-15, 15);
+      return fill(
+        `kx${signed(b)} = ${k * x + b} has solution x = ${x}. What is k?`,
+        k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 5);
+      const x = r.int(0, 15);
+      const b = r.nonzero(-12, 12);
+      return slider(`Solve ${a}x${signed(b)} = ${a * x + b} and place x.`, {
+        min: 0,
+        max: 15,
+        step: 1,
+        value: x,
+      });
+    },
   ],
 
   // ── 2.4 Literal equations ──
@@ -184,6 +293,36 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `If y = ${head(a, "x")}${signed(b)}, what is x when y = ${y}?`,
         value,
         { hint: "a number or fraction" },
+      );
+    },
+    (r) => {
+      const l = r.int(2, 15);
+      const w = r.int(2, 15);
+      return fill(
+        `A rectangle has perimeter P = 2l + 2w. If P = ${2 * l + 2 * w} and l = ${l}, what is w?`,
+        w,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const which = r.bool();
+      return order(
+        which
+          ? "Put the steps for rearranging A = (a + b)h/2 to make b the subject in order."
+          : "Put the steps for rearranging v = u + at to make a the subject in order.",
+        which
+          ? [
+              "Multiply both sides by 2",
+              "Divide both sides by h",
+              "Subtract a from both sides",
+              "Write b = 2A/h - a",
+            ]
+          : [
+              "Subtract u from both sides",
+              "Divide both sides by t",
+              "Write a = (v - u)/t",
+            ],
+        r,
       );
     },
   ],
@@ -217,6 +356,22 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const a = r.int(3, 7);
+      const c = r.int(1, a - 2);
+      const b = r.int(1, 9);
+      const d = r.nonzero(-12, 12);
+      return order(
+        `Put the steps for solving ${a}(x + ${b}) = ${head(c, "x")}${signed(d)} in order.`,
+        [
+          `Distribute the ${a} across the bracket`,
+          `Subtract ${head(c, "x")} from both sides`,
+          `Subtract ${a * b} from both sides`,
+          `Divide both sides by ${a - c}`,
+        ],
+        r,
+      );
+    },
   ],
 
   // ── 2.8 Absolute value equations ──
@@ -234,6 +389,27 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    // One root is handed over, so the question is about the pair rather than
+    // about grinding the algebra a second time.
+    (r) => {
+      const h = r.int(-8, 8);
+      const k = r.int(2, 9);
+      return fill(
+        `|x${signed(-h)}| = ${k} has one solution x = ${h + k}. What is the other?`,
+        h - k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const h = r.int(-4, 4);
+      const k = r.int(2, 5);
+      return slider(`Solve |x${signed(-h)}| = ${k} and place the larger solution.`, {
+        min: -10,
+        max: 10,
+        step: 1,
+        value: h + k,
+      });
+    },
   ],
 
   // ── 3.3 Function notation and evaluation ──
@@ -248,6 +424,27 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `If f(x) = ${poly([[a, 2], [b, 1], [c, 0]])}, what is f(${at})?`,
         value,
         { hint: "a number" },
+      );
+    },
+    // The rule is what is missing rather than the output, so the substitution
+    // has to be undone instead of carried out.
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.nonzero(-12, 12);
+      const x = r.int(2, 9);
+      return fill(
+        `f(x) = ax${signed(b)} and f(${x}) = ${a * x + b}. What is a?`,
+        a,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 5);
+      const b = r.nonzero(-9, 9);
+      const x = r.int(-8, 8);
+      return slider(
+        `f(x) = ${a}x${signed(b)}. Place the input x for which f(x) = ${a * x + b}.`,
+        { min: -10, max: 10, step: 1, value: x },
       );
     },
   ],
@@ -272,6 +469,15 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
       return point(
         `Plot the reflection of (${x}, ${y}) across the ${axis ? "x" : "y"}-axis.`,
         { span, x: axis ? x : -x, y: axis ? -y : y },
+      );
+    },
+    (r) => {
+      const xs = [r.int(-8, -1), r.int(0, 3), r.int(4, 8)];
+      const ys = [r.int(-9, 9), r.int(-9, 9), r.int(-9, 9)];
+      return fill(
+        `A relation is {(${xs[0]}, ${ys[0]}), (${xs[1]}, ${ys[1]}), (${xs[2]}, ${ys[2]})}. What is the largest value in its range?`,
+        Math.max(...ys),
+        { hint: "a number" },
       );
     },
   ],
@@ -309,6 +515,16 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const x1 = r.int(-8, 0);
+      const x2 = x1 + r.int(1, 6);
+      const m = r.nonzero(-4, 4);
+      const y1 = r.int(-6, 6);
+      return slider(
+        `Place the slope of the line through (${x1}, ${y1}) and (${x2}, ${y1 + m * (x2 - x1)}).`,
+        { min: -6, max: 6, step: 1, value: m },
+      );
+    },
   ],
 
   // ── 4.2 Slope-intercept form ──
@@ -334,6 +550,20 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `If y = ${head(m, "x")}${signed(b)}, what is y when x = ${x}?`,
         m * x + b,
         { hint: "a number" },
+      );
+    },
+    (r) => {
+      const m = r.nonzero(-4, 4);
+      const b = r.nonzero(-7, 7);
+      return order(
+        `Put the steps for graphing y = ${head(m, "x")}${signed(b)} by hand in order.`,
+        [
+          `Mark the y-intercept at (0, ${b})`,
+          `From there, count ${Math.abs(m)} ${m > 0 ? "up" : "down"} and 1 across`,
+          "Mark that second point",
+          "Draw the line through the two points",
+        ],
+        r,
       );
     },
   ],
@@ -364,6 +594,17 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { span, slope, intercept },
       );
     },
+    (r) => {
+      const m = r.nonzero(-5, 5);
+      const p = r.int(-6, 6);
+      const q = r.int(-6, 6);
+      const t = p + r.nonzero(-4, 4);
+      return fill(
+        `A line has slope ${m} and passes through (${p}, ${q}). What is y when x = ${t}?`,
+        q + m * (t - p),
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 4.6 Parallel and perpendicular lines ──
@@ -375,6 +616,31 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `A line has slope ${slope}. What is the slope of a line ${parallel ? "parallel" : "perpendicular"} to it?`,
         parallel ? String(slope) : frac(-1, slope),
         { hint: "a number or fraction" },
+      );
+    },
+    (r) => {
+      const span = 8;
+      const m = r.pick([1, 2, -1, -2]);
+      const p = r.int(-3, 3);
+      const perpendicular = -1 / m;
+      return line(
+        `Draw the line through (${p}, ${Math.round(perpendicular * p)}) perpendicular to a line of slope ${m}.`,
+        {
+          span,
+          slope: perpendicular,
+          intercept: Math.round(perpendicular * p) - perpendicular * p,
+        },
+      );
+    },
+    (r) => {
+      const m = r.nonzero(-4, 4);
+      const b = r.nonzero(-7, 7);
+      const p = r.nonzero(-5, 5);
+      const q = r.int(-6, 6);
+      return fill(
+        `A line parallel to y = ${head(m, "x")}${signed(b)} passes through (${p}, ${q}). What is its y-intercept?`,
+        q - m * p,
+        { hint: "a number" },
       );
     },
   ],
@@ -401,6 +667,30 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const a = r.int(2, 6);
+      const c = r.int(2, 6);
+      return fill(
+        `To eliminate x from ${a}x + 5y = 12 and ${c}x - 3y = 7, you multiply the first by ${c} and the second by k. What is k?`,
+        a,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const x = r.int(-5, 5);
+      const y = r.int(-5, 5);
+      const a = r.nonzero(-3, 3);
+      const b = r.nonzero(-3, 3);
+      const c = r.nonzero(-3, 3);
+      let d = r.nonzero(-3, 3);
+      // Proportional rows are the same line, and there is no single point.
+      if (a * d - b * c === 0) d = d + 1;
+      return point(
+        `Solve ${head(a, "x")}${signed(b, "y")} = ${a * x + b * y} and ${head(c, "x")}${signed(d, "y")} = ${c * x + d * y}, and place the solution.`,
+        { span, x, y, zero: 2 },
+      );
+    },
   ],
 
   // ── 6.3 Multiplying polynomials ──
@@ -423,6 +713,35 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const p = r.nonzero(-9, 9);
+      const q = r.nonzero(-9, 9);
+      return fill(
+        `Expand (x${signed(p)})(x${signed(q)}). What is the coefficient of x?`,
+        p + q,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const p = r.nonzero(-9, 9);
+      const q = r.nonzero(-9, 9);
+      return fill(
+        `Expand (x${signed(p)})(x${signed(q)}). What is the constant term?`,
+        p * q,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of multiplying two binomials in order.",
+        [
+          "Multiply the first terms of each bracket",
+          "Multiply the outer pair, then the inner pair",
+          "Multiply the last terms of each bracket",
+          "Add the two middle terms together",
+        ],
+        r,
+      ),
   ],
 
   // ── 6.4 Special products ──
@@ -464,6 +783,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(2, 12);
+      return fill(
+        `x^2 - ${a * a} factors as (x + k)(x - k). What is k?`,
+        a,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const root = r.int(2, 12);
+      return slider(`Solve x^2 - ${root * root} = 0 and place the positive root.`, {
+        min: 0,
+        max: 15,
+        step: 1,
+        value: root,
+      });
+    },
   ],
 
   // ── 6.6 Factoring trinomials with leading coefficient 1 ──
@@ -489,6 +825,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const p = r.nonzero(-9, 9);
+      const q = r.nonzero(-9, 9);
+      return fill(
+        `x^2${signed(p + q, "x")}${signed(p * q)} factors as (x${signed(p)})(x + k). What is k?`,
+        q,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const p = r.int(-9, -1);
+      const q = r.int(1, 9);
+      return fill(
+        `Which two numbers multiply to ${p * q} and add to ${p + q}? Enter the larger one.`,
+        Math.max(p, q),
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 7.8 The quadratic formula ──
@@ -506,6 +860,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `Solve using the quadratic formula:  ${poly([[1, 2], [b, 1], [c, 0]])} = 0.  What is the larger root?`,
         larger,
         { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.nonzero(-4, 4);
+      const b = r.nonzero(-12, 12);
+      const c = r.nonzero(-9, 9);
+      return fill(
+        `For ${poly([[a, 2], [b, 1], [c, 0]])} = 0, what is the sum of the two roots?`,
+        frac(-b, a),
+        { hint: "a number or a fraction" },
+      );
+    },
+    (r) => {
+      const p = r.int(-7, 3);
+      const q = p + r.int(1, 6);
+      return slider(
+        `x^2${signed(-(p + q), "x")}${signed(p * q)} = 0. Place the larger root.`,
+        { min: -10, max: 10, step: 1, value: q },
       );
     },
   ],
@@ -545,6 +917,15 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(1, 4);
+      const half = r.int(1, 6);
+      return fill(
+        `For what k does ${head(a, "x^2")}${signed(2 * a * half, "x")} + k = 0 have exactly one root?`,
+        a * half * half,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 8.1 Geometric sequences ──
@@ -560,6 +941,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const first = r.nonzero(-6, 6);
+      const ratio = r.pick([2, 3, 4, 5]);
+      return fill(
+        `A geometric sequence runs ${first}, ${first * ratio}, ${first * ratio ** 2}, ${first * ratio ** 3}, … What is the common ratio?`,
+        ratio,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for finding the nth term of a geometric sequence in order.",
+        [
+          "Divide any term by the one before it to get the ratio",
+          "Note the first term",
+          "Raise the ratio to the power one less than the position",
+          "Multiply that by the first term",
+        ],
+        r,
+      ),
   ],
 
   // ── 9.1 Simplifying radicals ──
@@ -581,6 +982,20 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const outside = r.int(2, 7);
+      const inside = r.pick([2, 3, 5, 6, 7, 10, 11]);
+      return fill(
+        `Simplify √${outside * outside * inside}.`,
+        radical(outside * outside * inside),
+        { hint: "a number times a root" },
+      );
+    },
+    (r) => {
+      const a = r.pick([2, 3, 5, 6, 7]);
+      const b = r.pick([2, 3, 5, 6, 7]);
+      return fill(`√${a} × √${b} = √k. What is k?`, a * b, { hint: "a number" });
+    },
   ],
 
   // ── 10.1 Measures of centre and spread ──
@@ -596,6 +1011,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `For the data set ${values.join(", ")}, what is the ${wantMean ? "mean" : "median"}?`,
         wantMean ? mean : median,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const values = [r.int(1, 9), r.int(10, 19), r.int(20, 29), r.int(30, 40)];
+      return fill(
+        `What is the range of ${values.join(", ")}?`,
+        Math.max(...values) - Math.min(...values),
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const repeated = r.int(2, 20);
+      const others = [r.int(21, 30), r.int(31, 40)];
+      return fill(
+        `What is the mode of ${[repeated, others[0], repeated, others[1]].join(", ")}?`,
+        repeated,
         { hint: "a number" },
       );
     },
@@ -622,6 +1054,35 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
       ];
       const shown = r.pick(forms);
       return among(`Which property is shown?   ${shown.text}`, shown.name, names, r);
+    },
+    // The property as a thing to use rather than a thing to name.
+    (r) => {
+      const n = r.nonzero(-12, 12);
+      const kind = r.pick(["add-inverse", "add-identity", "mul-identity", "mul-inverse"]);
+      if (kind === "add-inverse") {
+        return fill(`What goes in the blank? ${n} + __ = 0`, -n, { hint: "a number" });
+      }
+      if (kind === "add-identity") {
+        return fill(`What goes in the blank? ${n} + __ = ${n}`, 0, { hint: "a number" });
+      }
+      if (kind === "mul-identity") {
+        return fill(`What goes in the blank? ${n} × __ = ${n}`, 1, { hint: "a number" });
+      }
+      return fill(`What goes in the blank? ${n} × __ = 1`, frac(1, n), {
+        hint: "a fraction",
+      });
+    },
+    // Distribution as an arithmetic shortcut, which is the only reason anyone
+    // outside a classroom cares that it holds.
+    (r) => {
+      const a = r.int(3, 9);
+      const off = r.int(1, 4);
+      const b = 100 - off;
+      return fill(
+        `Use the distributive property: ${a} × ${b} = ${a} × (100 - ${off}) = ?`,
+        a * b,
+        { hint: "a number" },
+      );
     },
   ],
 
@@ -651,6 +1112,34 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const a = r.int(2, 12);
+      const b = r.int(2, 9);
+      const c = r.int(1, 6);
+      const d = r.int(1, 6);
+      const e = r.int(2, 5);
+      return order(
+        `Put the steps for evaluating ${a} + ${b} × (${c} + ${d})^2 ÷ ${e} in the order you carry them out.`,
+        [
+          `Add inside the brackets to get ${c + d}`,
+          `Square it to get ${(c + d) ** 2}`,
+          `Multiply by ${b}`,
+          `Divide by ${e}`,
+          `Add ${a}`,
+        ],
+        r,
+      );
+    },
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.int(2, 6);
+      const c = r.int(1, 5);
+      const d = r.int(2, 4);
+      return slider(
+        `Place the value of ${a} + ${b} × (${c} + ${d}).`,
+        { min: 0, max: 70, step: 1, value: a + b * (c + d) },
+      );
+    },
   ],
 
   // ── 1.4 Terms, coefficients and like terms ──
@@ -674,6 +1163,30 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(4, 12);
+      const c = r.int(2, a - 1);
+      const b = r.int(2, 9);
+      const d = r.int(2, 9);
+      return fill(
+        `Simplify ${a}x${signed(b)}${signed(-c, "x")}${signed(d)}. What is the coefficient of x?`,
+        a - c,
+        { hint: "a number" },
+      );
+    },
+    // The same rule read backwards: the simplified form is given and one of
+    // the original coefficients is missing.
+    (r) => {
+      const a = r.int(5, 14);
+      const left = r.int(1, a - 1);
+      const p = r.int(2, 9);
+      const q = r.int(2, 9);
+      return fill(
+        `${a}x + ${p}y - ?x + ${q}y simplifies to ${head(left, "x")} + ${p + q}y. What replaces the ?`,
+        a - left,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 1.5 Translating words into algebra ──
@@ -686,6 +1199,27 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `${a}n - ${b}`,
         [`${b} - ${a}n`, `${a}(n - ${b})`, `${b}n - ${a}`, `${a}n + ${b}`, `${a} - ${b}n`],
         r,
+      );
+    },
+    (r) => {
+      const times = r.int(2, 9);
+      const less = r.int(1, 15);
+      const n = r.int(2, 12);
+      return fill(
+        `Let n = ${n}. What is the value of "${less} less than ${times} times n"?`,
+        times * n - less,
+        { hint: "a number" },
+      );
+    },
+    // The translation run the other way: the sentence describes what was done
+    // to a number and the number is what is missing.
+    (r) => {
+      const times = r.int(2, 6);
+      const less = r.int(1, 12);
+      const n = r.int(2, 15);
+      return slider(
+        `A number is multiplied by ${times}, then ${less} is subtracted, giving ${times * n - less}. Place the number.`,
+        { min: 0, max: 20, step: 1, value: n },
       );
     },
   ],
@@ -709,6 +1243,28 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const outside = r.int(2, 6);
+      const inside = r.pick([2, 3, 5, 6, 7, 10, 11, 13]);
+      return fill(`Simplify √${outside * outside * inside}.`, radical(outside * outside * inside), {
+        hint: "a number times a root",
+      });
+    },
+    // Estimating a root is the skill that tells you an answer is wrong before
+    // you have checked it, and it is not the same skill as simplifying one.
+    (r) => {
+      let n = r.int(5, 99);
+      // A perfect square has an exact root, so estimating it asks nothing.
+      while (isSquare(n)) n = r.int(5, 99);
+      return slider(`Place √${n} on the line, to the nearest tenth.`, {
+        min: 0,
+        max: 10,
+        step: 0.1,
+        value: Math.round(Math.sqrt(n) * 10) / 10,
+        full: 0.2,
+        zero: 1.5,
+      });
+    },
   ],
 
   // ── 2.3 Equations with fractions and decimals ──
@@ -723,6 +1279,29 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         a * root,
         { hint: "Clear the fraction first" },
       );
+    },
+    // The solution is handed over and a coefficient is missing, so the
+    // equation has to be run backwards rather than forwards.
+    (r) => {
+      const a = r.int(2, 9);
+      const quotient = r.int(2, 12);
+      const k = r.nonzero(-15, 15);
+      return fill(
+        `The equation x/${a} + k = ${quotient + k} has solution x = ${a * quotient}. What is k?`,
+        k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 5);
+      const x = r.int(1, Math.floor(20 / a)) * a;
+      const b = r.nonzero(-9, 9);
+      return slider(`Solve x/${a}${signed(b)} = ${x / a + b} and place x.`, {
+        min: 0,
+        max: 20,
+        step: 1,
+        value: x,
+      });
     },
   ],
 
@@ -753,6 +1332,40 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
       ];
       return among(`How many solutions?   ${left} = ${right}`, answers[kind], answers, r);
     },
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.nonzero(-12, 12);
+      let c = r.nonzero(-12, 12);
+      // Equal constants would make it an identity rather than a contradiction.
+      if (c === b) c = b + 1;
+      return fill(
+        `For what k does ${a}x${signed(b)} = kx${signed(c)} have no solution?`,
+        a,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.nonzero(-12, 12);
+      return fill(
+        `For what k does ${a}x${signed(b)} = ${a}x + k have infinitely many solutions?`,
+        b,
+        { hint: "a number" },
+      );
+    },
+    // Reading the end state rather than engineering it: what a solved equation
+    // has collapsed to is the whole tell.
+    (r) => {
+      const contradiction = r.bool();
+      const n = r.nonzero(-12, 12);
+      return fill(
+        contradiction
+          ? `Solving an equation ends at 0 = ${n}. How many solutions does it have?`
+          : `Solving an equation ends at ${n} = ${n}. How many solutions does it have? Enter -1 for infinitely many.`,
+        contradiction ? 0 : -1,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 2.6 Linear inequalities ──
@@ -767,6 +1380,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `Solve:   ${head(-a, "x")}${signed(b)} < 0`,
         `x > ${root}`,
         { hint: "e.g. x > 4" },
+      );
+    },
+    (r) => {
+      const a = r.nonzero(-6, 6);
+      const boundary = r.int(-8, 8);
+      const b = r.nonzero(-12, 12);
+      const strict = r.bool();
+      return slider(
+        `Solve ${head(a, "x")}${signed(b)} ${strict ? ">" : "≥"} ${a * boundary + b}, then place the boundary of the solution set.`,
+        { min: -10, max: 10, step: 1, value: boundary },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 7);
+      const boundary = r.int(-6, 9);
+      const b = r.nonzero(-12, 12);
+      return fill(
+        `What is the largest integer x with ${a}x${signed(b)} ≤ ${a * boundary + b}?`,
+        boundary,
+        { hint: "a whole number" },
       );
     },
   ],
@@ -790,6 +1423,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const low = r.int(-12, 4);
+      const high = low + r.int(3, 14);
+      return fill(
+        `How many integers satisfy ${low} < x < ${high}?`,
+        high - low - 1,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const b = r.nonzero(-9, 9);
+      const lower = r.int(-8, 4);
+      const upper = lower + r.int(2, 8);
+      return slider(
+        `Solve ${lower + b} ≤ x${signed(b)} ≤ ${upper + b}, then place the smallest x that works.`,
+        { min: -10, max: 10, step: 1, value: lower },
+      );
+    },
   ],
 
   // ── 2.9 Absolute value inequalities ──
@@ -811,6 +1462,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const h = r.int(-8, 8);
+      const k = r.int(2, 9);
+      return fill(
+        `The solution of |x${signed(-h)}| < ${k} is one interval. How wide is it?`,
+        2 * k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const h = r.int(-4, 4);
+      const k = r.int(2, 5);
+      return slider(
+        `Solve |x${signed(-h)}| ≤ ${k} and place the left-hand end of the interval.`,
+        { min: -10, max: 10, step: 1, value: h - k },
+      );
+    },
   ],
 
   // ── 3.2 Functions and the vertical line test ──
@@ -827,6 +1495,27 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         set([x[0], x[0], x[2]]),
         [set(x), set([x[0], x[1], x[2] + 1]), set([x[0] - 1, x[1], x[2]]), set([x[0], x[1] + 1, x[2]])],
         r,
+      );
+    },
+    // The vertical line test as arithmetic: an x that appears twice is the
+    // whole of what makes a relation fail.
+    (r) => {
+      const repeat = r.int(-8, 8);
+      let other = r.int(-8, 8);
+      if (other === repeat) other = repeat + 1;
+      return fill(
+        `The relation {(${repeat}, ${r.int(-9, 9)}), (${other}, ${r.int(-9, 9)}), (${repeat}, ${r.int(-9, 9)})} is not a function. Which x-value is repeated?`,
+        repeat,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const pairs = r.int(3, 6);
+      const clashes = r.int(1, 3);
+      return fill(
+        `A relation has ${pairs + clashes} ordered pairs, and ${clashes} of them repeat an x-value that already appears. How many pairs must be removed to leave a function?`,
+        clashes,
+        { hint: "a whole number" },
       );
     },
   ],
@@ -853,6 +1542,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const price = r.int(3, 12);
+      const most = r.int(4, 9);
+      return fill(
+        `Tickets cost ${price} each and you may buy from 1 to ${most} of them. How many values are in the range of the cost function?`,
+        most,
+        { hint: "a whole number" },
+      );
+    },
+    // A discrete graph is dots, not a line, and plotting one of them is the
+    // clearest way to say so.
+    (r) => {
+      const span = 9;
+      const price = r.int(1, 2);
+      const bought = r.int(1, 4);
+      return point(
+        `Tickets cost ${price} each. Plot the point for buying ${bought} of them, with tickets across and cost up.`,
+        { span, x: bought, y: price * bought, zero: 2 },
+      );
+    },
   ],
 
   // ── 3.5 Reading a graph: intercepts ──
@@ -865,6 +1574,34 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `Place the x-intercept of   y = ${head(m, "x")}${signed(b)}`,
         { span: 10, x: root, y: 0 },
       );
+    },
+    (r) => {
+      const span = 9;
+      const h = r.int(-4, 4);
+      const k = r.int(-5, 5);
+      const up = r.bool();
+      const f = (x: number) => (up ? 1 : -1) * (x - h) * (x - h) + k;
+      return fill(
+        `The graph shows f. What is its ${up ? "minimum" : "maximum"} value?`,
+        k,
+        {
+          hint: "a number",
+          figure: graph({ span, curves: [plot(f, { span, label: "f" })] }),
+        },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const m = r.nonzero(-2, 2);
+      const b = r.int(-6, 6);
+      const f = (x: number) => m * x + b;
+      return slider("Place the y-intercept of the graph shown.", {
+        min: -8,
+        max: 8,
+        step: 1,
+        value: b,
+        figure: graph({ span, curves: [plot(f, { span, label: "f" })] }),
+      });
     },
   ],
 
@@ -884,6 +1621,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Which piece is x in?" },
       );
     },
+    (r) => {
+      const cut = r.int(-6, 6);
+      const a = r.int(2, 6);
+      const c = r.nonzero(-9, 9);
+      return fill(
+        `f(x) = ${a}x for x < ${cut}, and f(x) = x${signed(c)} for x ≥ ${cut}. At what x does the definition change?`,
+        cut,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const cut = r.int(-3, 3);
+      const c = r.nonzero(-3, 3);
+      const at = cut + r.int(1, 3);
+      return point(
+        `f(x) = 0 for x < ${cut}, and f(x) = x${signed(c)} for x ≥ ${cut}. Plot the point (${at}, f(${at})).`,
+        { span, x: at, y: at + c, zero: 2 },
+      );
+    },
   ],
 
   // ── 3.7 Absolute value functions ──
@@ -899,6 +1656,30 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `f(x) = |${head(a, "x")} - ${b}|${signed(c)}.   Find f(${at}).`,
         value,
         { hint: "a number" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const h = r.int(-5, 5);
+      const k = r.int(-5, 5);
+      return point(`Place the vertex of y = |x${signed(-h)}|${signed(k)}.`, {
+        span,
+        x: h,
+        y: k,
+        zero: 2,
+      });
+    },
+    // The count, not the roots: an absolute value graph meets a horizontal
+    // line twice, once, or not at all, and which one is the whole idea.
+    (r) => {
+      const h = r.int(-6, 6);
+      const k = r.int(-6, 6);
+      const above = r.pick([-2, 0, 3]);
+      const m = k + above;
+      return fill(
+        `How many solutions does |x${signed(-h)}|${signed(k)} = ${m} have?`,
+        above < 0 ? 0 : above === 0 ? 1 : 2,
+        { hint: "0, 1 or 2" },
       );
     },
   ],
@@ -936,6 +1717,31 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         }),
       );
     },
+    (r) => {
+      const span = 9;
+      const x = r.int(-4, 4);
+      const y = r.int(-4, 4);
+      const h = r.nonzero(-3, 3);
+      const k = r.nonzero(-3, 3);
+      return point(
+        `(${x}, ${y}) lies on y = f(x). Place the matching point on y = f(x${signed(-h)})${signed(k)}.`,
+        { span, x: x + h, y: y + k, zero: 2 },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 4);
+      const h = r.int(2, 5);
+      const k = r.int(2, 5);
+      return order(
+        `Put the transformations in y = ${a}f(x - ${h}) + ${k} in the order they are applied to f.`,
+        [
+          `Shift right ${h}`,
+          `Stretch vertically by ${a}`,
+          `Shift up ${k}`,
+        ],
+        r,
+      );
+    },
   ],
 
   // ── 4.4 Standard form and intercepts ──
@@ -952,6 +1758,31 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
       return point(
         `Place the point where   ${head(a, "x")} + ${head(b, "y")} = ${c}   crosses the x-axis.`,
         { span, x, y: 0, zero: 2 },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.int(2, 9);
+      const x = r.nonzero(-8, 8);
+      return fill(
+        `What is the x-intercept of ${a}x + ${b}y = ${a * x}?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 6);
+      const b = r.int(2, 6);
+      const c = a * b * r.nonzero(-3, 3);
+      return order(
+        `Put the steps for graphing ${a}x + ${b}y = ${c} from its intercepts in order.`,
+        [
+          `Set y = 0 and solve for x, giving ${c / a}`,
+          `Set x = 0 and solve for y, giving ${c / b}`,
+          "Mark both intercepts on the axes",
+          "Draw the line through them",
+        ],
+        r,
       );
     },
   ],
@@ -977,6 +1808,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
           `${head(-A, "x")}${signed(B, "y")} = ${C}`,
         ],
         r,
+      );
+    },
+    (r) => {
+      const m = r.int(2, 9);
+      const b = r.nonzero(-9, 9);
+      return fill(
+        `Write y = ${m}x${signed(b)} as Ax + By = C with A positive and whole. What is A?`,
+        m,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const m = r.int(2, 6);
+      const b = r.nonzero(-8, 8);
+      return slider(
+        `Write y = ${m}x${signed(b)} as Ax + By = C with A positive and B = -1. Place C.`,
+        { min: -10, max: 10, step: 1, value: -b },
       );
     },
   ],
@@ -1005,6 +1853,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         },
       );
     },
+    (r) => {
+      const m = r.nonzero(-4, 4);
+      const b = r.int(-7, 7);
+      const x1 = r.nonzero(-6, -1);
+      const x2 = r.int(1, 6);
+      return fill(
+        `A line passes through (${x1}, ${m * x1 + b}) and (${x2}, ${m * x2 + b}). What is its y-intercept?`,
+        b,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const rate = r.int(2, 8);
+      const fee = r.int(2, 9);
+      const trip = r.int(2, 6);
+      return slider(
+        `A taxi charges a fixed fee plus a rate per mile. A ${trip}-mile trip costs ${fee + rate * trip} and a ${trip + 1}-mile trip costs ${fee + rate * (trip + 1)}. Place the rate per mile.`,
+        { min: 0, max: 20, step: 1, value: rate },
+      );
+    },
   ],
 
   // ── 4.8 Inequalities in two variables ──
@@ -1019,6 +1887,31 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         at(xs[0], r.int(1, 4)),
         [at(xs[1], 0), at(xs[2], -r.int(1, 4)), at(xs[3], -r.int(1, 4)), at(xs[1], -r.int(5, 8))],
         r,
+      );
+    },
+    (r) => {
+      const span = 8;
+      const m = r.nonzero(-3, 3);
+      const b = r.int(-5, 5);
+      return line(
+        `Draw the boundary line of y ${r.bool() ? "≥" : "<"} ${head(m, "x")}${signed(b)}.`,
+        { span, slope: m, intercept: b },
+      );
+    },
+    (r) => {
+      const m = r.nonzero(-3, 3);
+      const b = r.int(-5, 5);
+      const at = (x: number) => m * x + b;
+      const pts = [
+        [r.int(-6, 6), 0],
+        [r.int(-6, 6), 0],
+        [r.int(-6, 6), 0],
+        [r.int(-6, 6), 0],
+      ].map(([x]) => [x, at(x) + r.int(-4, 4)] as [number, number]);
+      return fill(
+        `How many of (${pts.map(([x, y]) => `${x}, ${y}`).join("), (")}) satisfy y > ${head(m, "x")}${signed(b)}?`,
+        pts.filter(([x, y]) => y > at(x)).length,
+        { hint: "a number from 0 to 4" },
       );
     },
   ],
@@ -1043,6 +1936,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const first = r.int(-9, 9);
+      const d = r.nonzero(-7, 7);
+      const n = r.int(4, 12);
+      return fill(
+        `An arithmetic sequence starts at ${first} and has common difference ${d}. What is the ${n}th term?`,
+        first + (n - 1) * d,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const first = r.int(-6, 6);
+      const d = r.nonzero(-5, 5);
+      return slider(
+        `A sequence runs ${first}, ${first + d}, ${first + 2 * d}, ${first + 3 * d}, … Place the common difference.`,
+        { min: -6, max: 6, step: 1, value: d },
+      );
+    },
   ],
 
   // ── 5.1 Systems by graphing ──
@@ -1060,6 +1971,29 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { span: 10, x, y },
       );
     },
+    (r) => {
+      const x = r.int(-6, 6);
+      const y = r.int(-6, 6);
+      const m1 = r.nonzero(-3, 3);
+      let m2 = r.nonzero(-3, 3);
+      if (m2 === m1) m2 = m1 + 1;
+      return fill(
+        `y = ${head(m1, "x")}${signed(y - m1 * x)} and y = ${head(m2, "x")}${signed(y - m2 * x)} cross at one point. What is its x-coordinate?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for solving a system by graphing in order.",
+        [
+          "Write both equations in slope-intercept form",
+          "Graph each line from its intercept and slope",
+          "Find the point where the two lines cross",
+          "Check that point in both original equations",
+        ],
+        r,
+      ),
   ],
 
   // ── 5.2 Substitution ──
@@ -1080,6 +2014,29 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { span, x, y, zero: 2 },
       );
     },
+    (r) => {
+      const x = r.int(-6, 6);
+      const y = r.int(-6, 6);
+      const m = r.nonzero(-3, 3);
+      const a = r.nonzero(-3, 3);
+      const b = r.nonzero(-3, 3);
+      return fill(
+        `y = ${head(m, "x")}${signed(y - m * x)} and ${head(a, "x")}${signed(b, "y")} = ${a * x + b * y}. Solve by substitution: what is y?`,
+        y,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of the substitution method in order.",
+        [
+          "Isolate one variable in one of the equations",
+          "Substitute that expression into the other equation",
+          "Solve the resulting one-variable equation",
+          "Substitute back to find the remaining variable",
+        ],
+        r,
+      ),
   ],
 
   // ── 5.4 Choosing a method ──
@@ -1099,6 +2056,27 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
           "Guess and check — the numbers are small",
         ],
         r,
+      );
+    },
+    (r) => {
+      const x = r.int(-6, 6);
+      const y = r.int(-6, 6);
+      const m = r.nonzero(-3, 3);
+      const a = r.nonzero(-3, 3);
+      return fill(
+        `x = ${head(m, "y")}${signed(x - m * y)} and ${head(a, "x")} + y = ${a * x + y}. This is set up for substitution — what is y?`,
+        y,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const x = r.int(-5, 5);
+      const y = r.int(-5, 5);
+      const a = r.nonzero(-3, 3);
+      return point(
+        `x + y = ${x + y} and ${head(a, "x")} - y = ${a * x - y}. Adding the equations is quickest — place the solution.`,
+        { span, x, y, zero: 2 },
       );
     },
   ],
@@ -1132,6 +2110,28 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const m = r.nonzero(-4, 4);
+      const b1 = r.nonzero(-8, 8);
+      let b2 = r.nonzero(-8, 8);
+      if (b2 === b1) b2 = b1 + 1;
+      return fill(
+        `y = kx${signed(b1)} and y = ${head(m, "x")}${signed(b2)} never meet. What is k?`,
+        m,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for deciding how many solutions a system has in order.",
+        [
+          "Write both equations in slope-intercept form",
+          "Compare the two slopes",
+          "If the slopes match, compare the two intercepts",
+          "Say none, one, or infinitely many",
+        ],
+        r,
+      ),
   ],
 
   // ── 5.6 Break-even and mixture ──
@@ -1145,6 +2145,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `A stall costs ${fixed} to set up plus ${perUnit} a bag, and sells bags at ${perUnit + margin} each. How many bags break even?`,
         n,
         { unit: "bags", hint: "Cost = revenue" },
+      );
+    },
+    (r) => {
+      const perUnit = r.int(2, 9);
+      const margin = r.int(3, 8);
+      const units = r.int(2, 20);
+      return slider(
+        `Setting up costs ${units * margin} and each unit costs ${perUnit} to make and sells for ${perUnit + margin}. Place the break-even number of units.`,
+        { min: 0, max: 25, step: 1, value: units, full: 1, zero: 5 },
+      );
+    },
+    (r) => {
+      const fixed = r.int(10, 60);
+      const perUnit = r.int(2, 8);
+      const price = perUnit + r.int(2, 7);
+      const units = r.int(10, 40);
+      return fill(
+        `Costs are ${fixed} plus ${perUnit} per unit; each sells for ${price}. What is the profit on ${units} units?`,
+        units * (price - perUnit) - fixed,
+        { hint: "a number" },
       );
     },
   ],
@@ -1163,6 +2183,31 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `(${x}, ${y})`,
         [`(${x}, ${a})`, `(${x}, ${a - 1})`, `(${total}, ${y})`, `(${x}, ${total})`, `(${x}, ${a - 2})`],
         r,
+      );
+    },
+    (r) => {
+      const span = 9;
+      const x = r.int(-5, 5);
+      const y = r.int(-5, 5);
+      const m1 = r.nonzero(-3, 3);
+      let m2 = r.nonzero(-3, 3);
+      if (m2 === m1) m2 = m1 + 1;
+      return point(
+        `The regions y ≥ ${head(m1, "x")}${signed(y - m1 * x)} and y ≤ ${head(m2, "x")}${signed(y - m2 * x)} meet along their boundaries. Place the corner where the two boundaries cross.`,
+        { span, x, y, zero: 2 },
+      );
+    },
+    (r) => {
+      const m = r.nonzero(-2, 2);
+      const b = r.int(-4, 4);
+      const at = (x: number) => m * x + b;
+      const pts = [r.int(-6, 6), r.int(-6, 6), r.int(-6, 6)].map(
+        (x) => [x, at(x) + r.int(-3, 3)] as [number, number],
+      );
+      return fill(
+        `How many of (${pts.map(([x, y]) => `${x}, ${y}`).join("), (")}) satisfy both y ≥ ${head(m, "x")}${signed(b)} and y ≤ 6?`,
+        pts.filter(([x, y]) => y >= at(x) && y <= 6).length,
+        { hint: "a number from 0 to 3" },
       );
     },
   ],
@@ -1186,6 +2231,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Test every corner" },
       );
     },
+    (r) => {
+      const span = 9;
+      const cx = r.int(1, 6);
+      const cy = r.int(1, 6);
+      return point(
+        `A feasible region has corners at (0, 0), (${cx}, 0), (${cx}, ${cy}) and (0, ${cy}). Place the corner that maximises P = x + y.`,
+        { span, x: cx, y: cy, zero: 2 },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of a linear programming problem in order.",
+        [
+          "Write the constraints as inequalities",
+          "Graph them and shade the feasible region",
+          "Find the coordinates of every corner",
+          "Evaluate the objective at each corner and take the best",
+        ],
+        r,
+      ),
   ],
   // ── 6.1 Classifying polynomials ──
   "math/algebra-1/unit-6/6.1": [
@@ -1202,6 +2267,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
       const answer = `${degrees[d]} ${counts[t]}`;
       const all = degrees.flatMap((deg) => counts.map((c) => `${deg} ${c}`));
       return among(`Classify:   ${poly(coefficients)}`, answer, all, r);
+    },
+    (r) => {
+      const degree = r.int(2, 6);
+      const lead = r.nonzero(-8, 8);
+      const mid = r.nonzero(-8, 8);
+      const c = r.nonzero(-9, 9);
+      return fill(
+        `What is the degree of ${poly([[lead, degree], [mid, 1], [c, 0]])}?`,
+        degree,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const terms: [number, number][] = [];
+      const count = r.int(2, 4);
+      for (let i = 0; i < count; i++) terms.push([r.nonzero(-9, 9), count - i]);
+      return fill(`How many terms does ${poly(terms)} have?`, count, {
+        hint: "a whole number",
+      });
     },
   ],
 
@@ -1232,6 +2316,28 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.nonzero(-9, 9);
+      const d = r.nonzero(-9, 9);
+      const b = r.nonzero(-9, 9);
+      const e = r.nonzero(-9, 9);
+      return fill(
+        `Subtract: (${poly([[a, 2], [b, 0]])}) - (${poly([[d, 2], [e, 0]])}). What is the coefficient of x^2?`,
+        a - d,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.nonzero(-9, 9);
+      const c = r.nonzero(-9, 9);
+      const d = r.nonzero(-9, 9);
+      const f = r.nonzero(-9, 9);
+      return fill(
+        `Add: (${poly([[a, 2], [c, 0]])}) + (${poly([[d, 2], [f, 0]])}). What is the constant term?`,
+        c + f,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 6.5 The greatest common factor ──
@@ -1245,6 +2351,32 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `Factor:   ${poly([[g * p, 2], [g * q, 1]])}`,
         `${g}x(${head(p, "x")}${signed(q)})`,
         { hint: "the factored form" },
+      );
+    },
+    (r) => {
+      const m = r.int(2, 7);
+      const n = m + r.int(1, 5);
+      const a = r.int(2, 9);
+      const b = r.int(2, 9);
+      return fill(
+        `The greatest common factor of ${a}x^${n} and ${b}x^${m} contains x to what power?`,
+        m,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const g = r.int(2, 6);
+      const a = g * r.int(2, 5);
+      const b = g * r.int(2, 5);
+      return order(
+        `Put the steps for factoring ${a}x^2 + ${b}x in order.`,
+        [
+          `Find the largest number dividing ${a} and ${b}`,
+          "Take the lowest power of x that appears in both terms",
+          "Write that greatest common factor outside a bracket",
+          "Divide each term by it to fill the bracket",
+        ],
+        r,
       );
     },
   ],
@@ -1275,6 +2407,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(2, 6);
+      const b = r.nonzero(-9, 9);
+      const c = r.nonzero(-9, 9);
+      return fill(
+        `To factor ${poly([[a, 2], [b, 1], [c, 0]])} by splitting the middle term, what is the product a × c?`,
+        a * c,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const p = r.int(-8, -2);
+      const q = r.int(2, 8);
+      return fill(
+        `Splitting a middle term needs two numbers multiplying to ${p * q} and adding to ${p + q}. Enter the smaller one.`,
+        Math.min(p, q),
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 6.8 Factoring by grouping ──
@@ -1302,6 +2453,27 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(2, 6);
+      const b = r.nonzero(-8, 8);
+      const c = r.int(2, 6);
+      return fill(
+        `Factor ${a}x^3${signed(a * b, "x^2")}${signed(c, "x")}${signed(b * c)} by grouping. Both groups share the bracket (x + k). What is k?`,
+        b,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of factoring by grouping in order.",
+        [
+          "Split the four terms into two pairs",
+          "Factor the greatest common factor out of each pair",
+          "Check that the two brackets left behind match",
+          "Write the shared bracket times what was taken out",
+        ],
+        r,
+      ),
   ],
 
   // ── 6.9 Sums and differences of cubes ──
@@ -1331,6 +2503,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const b = r.int(2, 6);
+      const minus = r.bool();
+      return fill(
+        `x^3 ${minus ? "-" : "+"} ${b ** 3} factors with (x ${minus ? "-" : "+"} k) as one factor. What is k?`,
+        b,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const b = r.int(2, 6);
+      return fill(
+        `x^3 - ${b ** 3} = (x - ${b})(x^2 + kx + ${b * b}). What is k?`,
+        b,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 6.10 Factoring completely ──
@@ -1344,6 +2533,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "the factored form" },
       );
     },
+    (r) => {
+      const g = r.int(2, 5);
+      const p = r.int(2, 6);
+      return fill(
+        `${g}x^2 - ${g * p * p} factors completely as ${g}(x + ${p})(x - ${p}). How many factors does that leave, counting the ${g}?`,
+        3,
+        { hint: "a whole number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of a complete factoring strategy in order.",
+        [
+          "Take out the greatest common factor",
+          "Count the terms left inside the bracket",
+          "Apply the pattern that matches that number of terms",
+          "Check each factor to see whether it factors again",
+        ],
+        r,
+      ),
   ],
 
   // ── 7.1 Axis of symmetry and vertex ──
@@ -1373,6 +2582,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         },
       );
     },
+    (r) => {
+      const a = r.nonzero(-4, 4);
+      const b = r.nonzero(-12, 12);
+      const c = r.nonzero(-9, 9);
+      return fill(
+        `What is the axis of symmetry of y = ${poly([[a, 2], [b, 1], [c, 0]])}?`,
+        frac(-b, 2 * a),
+        { hint: "a number or a fraction" },
+      );
+    },
+    (r) => {
+      const a = r.coefficient(3);
+      const h = r.int(-5, 5);
+      const k = r.int(-8, 8);
+      return fill(
+        `y = ${a}(x${signed(-h)})^2${signed(k)}. What is the y-value at the vertex?`,
+        k,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 7.2 Vertex form ──
@@ -1386,6 +2615,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
       return point(
         `Place the vertex of   y = (${inside})^2${signed(k)}`,
         { span: 8, x: h, y: k },
+      );
+    },
+    (r) => {
+      const a = r.coefficient(3);
+      const h = r.int(-7, 7);
+      const k = r.int(-7, 7);
+      return fill(
+        `y = ${a}(x${signed(-h)})^2${signed(k)} is in vertex form. What is h?`,
+        h,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const h = r.int(-6, 6);
+      const k = r.int(-8, 8);
+      return fill(
+        `y = x^2${signed(-2 * h, "x")}${signed(h * h + k)}. What is the x-coordinate of its vertex?`,
+        h,
+        { hint: "a number" },
       );
     },
   ],
@@ -1409,6 +2657,27 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const p = r.int(-8, 8);
+      let q = r.int(-8, 8);
+      if (q === p) q = p + 1;
+      return fill(
+        `y = (x${signed(-p)})(x${signed(-q)}). Enter the larger of its two roots.`,
+        Math.max(p, q),
+        { hint: "a number" },
+      );
+    },
+    // The vertex of a factored quadratic sits above the midpoint of its roots,
+    // which is the fact the factored form is for.
+    (r) => {
+      const span = 9;
+      const mid = r.int(-3, 3);
+      const gap = r.int(1, 3);
+      return point(
+        `y = (x${signed(-(mid - gap))})(x${signed(-(mid + gap))}). Place its vertex.`,
+        { span, x: mid, y: -gap * gap, zero: 2 },
+      );
+    },
   ],
 
   // ── 7.4 Solving by graphing ──
@@ -1420,6 +2689,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `The graph of   y = ${poly([[1, 2], [-(p + q), 1], [p * q, 0]])}   crosses the x-axis twice. What is the larger root?`,
         q,
         { hint: "Where does y reach zero?" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const h = r.int(-3, 3);
+      const k = r.pick([-4, 0, 3]);
+      const f = (x: number) => (x - h) * (x - h) + k;
+      return fill(`How many x-intercepts does the graph show?`, k < 0 ? 2 : k === 0 ? 1 : 0, {
+        hint: "0, 1 or 2",
+        figure: graph({ span, curves: [plot(f, { span, label: "f" })] }),
+      });
+    },
+    (r) => {
+      const root = r.int(-7, 7);
+      const other = root + r.int(2, 6);
+      return slider(
+        `y = (x${signed(-root)})(x${signed(-other)}). Place the smaller root.`,
+        { min: -10, max: 10, step: 1, value: Math.min(root, other) },
       );
     },
   ],
@@ -1444,6 +2731,28 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(2, 6);
+      const b = a * r.int(1, 4);
+      const c = r.int(2, 6);
+      const d = c * r.int(1, 4);
+      return fill(
+        `Solve (${a}x - ${b})(${c}x - ${d}) = 0. Enter the larger solution.`,
+        Math.max(b / a, d / c),
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of solving by the Zero Product Property in order.",
+        [
+          "Move every term to one side so the other side is 0",
+          "Factor the expression completely",
+          "Set each factor equal to 0",
+          "Solve the small equations that result",
+        ],
+        r,
+      ),
   ],
 
   // ── 7.6 Solving by square roots ──
@@ -1463,6 +2772,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
           `x = ${h - root * 2} or x = ${h + root * 2}`,
         ],
         r,
+      );
+    },
+    (r) => {
+      const h = r.int(-7, 7);
+      const root = r.int(2, 7);
+      return fill(
+        `Solve (x${signed(-h)})^2 = ${root * root}. Enter the larger solution.`,
+        h + root,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const h = r.int(-6, 6);
+      const k = r.pick([-9, 0, 16]);
+      return fill(
+        `How many real solutions does (x${signed(-h)})^2 = ${k} have?`,
+        k < 0 ? 0 : k === 0 ? 1 : 2,
+        { hint: "0, 1 or 2" },
       );
     },
   ],
@@ -1488,6 +2815,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const half = r.nonzero(-9, 9);
+      return fill(
+        `x^2${signed(2 * half, "x")} + k is a perfect square. What is k?`,
+        half * half,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of completing the square for x^2 + bx + c = 0 in order.",
+        [
+          "Move the constant to the right-hand side",
+          "Halve the coefficient of x and square it",
+          "Add that number to both sides",
+          "Write the left side as a squared bracket",
+          "Take the square root of both sides, keeping both signs",
+        ],
+        r,
+      ),
   ],
 
   // ── 7.10 Complex solutions ──
@@ -1502,6 +2849,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const m = r.int(2, 12);
+      return fill(
+        `x^2 = -${m * m}. The solutions are ±ki. What is k?`,
+        m,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.nonzero(-7, 7);
+      const b = r.int(2, 7);
+      return fill(
+        `Multiply out (${a} + ${b}i)(${a} - ${b}i). The result is a real number — what is it?`,
+        a * a + b * b,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 7.11 Modelling with quadratics ──
@@ -1513,6 +2877,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `A ball's height in feet is   h(t) = -16t^2 + ${speed}t.   After how many seconds does it land?`,
         seconds,
         { unit: "seconds", hint: "Height back to zero" },
+      );
+    },
+    (r) => {
+      const peak = r.int(1, 5);
+      const start = r.int(1, 20);
+      return slider(
+        `A ball follows h = -16t^2 + ${32 * peak}t + ${start}. Place the time in seconds at which it is highest.`,
+        { min: 0, max: 12, step: 1, value: peak },
+      );
+    },
+    (r) => {
+      const peak = r.int(1, 5);
+      const start = r.int(1, 40);
+      return fill(
+        `A ball follows h = -16t^2 + ${32 * peak}t + ${start}. What is its greatest height?`,
+        16 * peak * peak + start,
+        { hint: "a number" },
       );
     },
   ],
@@ -1530,6 +2911,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Multiply, do not add" },
       );
     },
+    (r) => {
+      const rate = r.pick([5, 10, 20, 25, 50]);
+      const start = r.int(2, 40) * 100;
+      return fill(
+        `A population of ${start} grows by ${rate}% a year. What is the growth factor?`,
+        1 + rate / 100,
+        { hint: "a decimal" },
+      );
+    },
+    (r) => {
+      const start = r.int(1, 18);
+      const factor = r.pick([2, 3]);
+      return slider(
+        `A culture follows y = a × ${factor}^t and reaches ${start * factor ** 2} after 2 hours. Place a.`,
+        { min: 0, max: 20, step: 1, value: start },
+      );
+    },
   ],
 
   // ── 8.3 Exponential decay ──
@@ -1543,6 +2941,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `A sample of ${start} mg is divided by ${b} every hour. How much is left after ${halvings} hours?`,
         value,
         { unit: "mg", hint: "Divide once an hour" },
+      );
+    },
+    (r) => {
+      const rate = r.pick([10, 20, 25, 40, 50]);
+      const start = r.int(2, 40) * 100;
+      return fill(
+        `A sample of ${start} decays by a factor of ${1 - rate / 100} each year. What percentage is lost each year?`,
+        rate,
+        { unit: "%", hint: "a number" },
+      );
+    },
+    (r) => {
+      const half = r.pick([2, 3, 4, 5]);
+      const start = 2 ** r.int(3, 6);
+      return fill(
+        `A sample of ${start} halves every ${half} years. After how many years is ${start / 8} left?`,
+        3 * half,
+        { hint: "a number of years" },
       );
     },
   ],
@@ -1572,6 +2988,28 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         },
       );
     },
+    (r) => {
+      const a = r.int(2, 6);
+      const base = r.pick([2, 3, 4]);
+      const k = r.nonzero(-8, 8);
+      return fill(
+        `What is the horizontal asymptote of y = ${a} × ${base}^x${signed(k)}?`,
+        k,
+        { hint: "a number, as y = that" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const a = r.int(2, 5);
+      const base = r.pick([2, 3]);
+      const k = r.int(-4, 4);
+      return point(`Place the y-intercept of y = ${a} × ${base}^x${signed(k)}.`, {
+        span,
+        x: 0,
+        y: a + k,
+        zero: 2,
+      });
+    },
   ],
 
   // ── 8.5 Comparing rates of growth ──
@@ -1585,6 +3023,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `y = ${b}^x`,
         [`y = ${m}x`, `y = ${a}x^2`, `y = ${m}x + ${a}`, `y = ${a}x^3`],
         r,
+      );
+    },
+    (r) => {
+      const n = r.int(1, 4);
+      return fill(
+        `At x = ${n}, which is larger, 2^x or x^2? Enter the larger value.`,
+        Math.max(2 ** n, n * n),
+        { hint: "a number" },
+      );
+    },
+    // Past x = 4 the doubling is ahead for good, and the gap is what makes
+    // "eventually overtakes" concrete rather than a slogan.
+    (r) => {
+      const n = r.int(5, 10);
+      return fill(
+        `At x = ${n}, how much larger is 2^x than x^2?`,
+        2 ** n - n * n,
+        { hint: "a number" },
       );
     },
   ],
@@ -1607,6 +3063,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const first = r.nonzero(-9, 9);
+      const d = r.nonzero(-6, 6);
+      return fill(
+        `A sequence is defined by a₁ = ${first} and aₙ = aₙ₋₁${signed(d)}. What is a₅?`,
+        first + 4 * d,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for turning a recursive arithmetic rule into an explicit one in order.",
+        [
+          "Read the first term from the definition",
+          "Read the common difference from the recursion",
+          "Write aₙ = a₁ + (n - 1)d",
+          "Substitute both values into that formula",
+        ],
+        r,
+      ),
   ],
 
   // ── 8.7 Compound interest ──
@@ -1621,6 +3097,22 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `$${principal} grows at ${rate}% a year, compounded yearly. What is it worth after ${years} years?`,
         Number(value.toFixed(2)),
         { unit: "dollars", hint: "Multiply by the growth factor each year" },
+      );
+    },
+    (r) => {
+      const n = r.pick([2, 4, 12]);
+      const years = r.int(2, 9);
+      return fill(
+        `Interest is compounded ${n} times a year for ${years} years. How many compounding periods is that?`,
+        n * years,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const rate = r.pick([2, 3, 4, 6, 8, 9]);
+      return slider(
+        `The rule of 72 estimates a doubling time as 72 divided by the percentage rate. At ${rate}% a year, place the estimated doubling time in years.`,
+        { min: 0, max: 40, step: 1, value: 72 / rate, full: 1, zero: 6 },
       );
     },
   ],
@@ -1644,6 +3136,45 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.int(2, 9);
+      const k = r.pick([2, 3, 5, 7, 11]);
+      return fill(
+        `${a}√${k} + ${b}√${k} = m√${k}. What is m?`,
+        a + b,
+        { hint: "a number" },
+      );
+    },
+    // Neither radical is like the other until both are simplified, which is
+    // the step this question exists to catch.
+    (r) => {
+      const k = r.pick([2, 3, 5]);
+      const p = r.int(2, 5);
+      const q = r.int(2, 5);
+      return fill(
+        `√${p * p * k} + √${q * q * k} = m√${k}. What is m?`,
+        p + q,
+        { hint: "a number" },
+      );
+    },
+    // Which radicals are like which is the step before any adding happens, and
+    // it is the one that decides whether the sum is even possible.
+    (r) => {
+      const base = r.pick([2, 3, 5]);
+      const pool = [
+        `√${base}`,
+        `√${4 * base}`,
+        `√${9 * base}`,
+        `√${base + 1}`,
+        `√${base * base}`,
+      ];
+      return fill(
+        `After simplifying, how many of ${pool.join(", ")} are like radicals with √${base}?`,
+        3,
+        { hint: "a whole number" },
+      );
+    },
   ],
 
   // ── 9.3 Radical equations ──
@@ -1658,6 +3189,19 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Square both sides, then check it back" },
       );
     },
+    (r) => {
+      const b = r.int(2, 9);
+      const a = r.nonzero(-9, 9);
+      return fill(`Solve √(x${signed(a)}) = ${b}.`, b * b - a, { hint: "a number" });
+    },
+    (r) => {
+      const a = r.int(2, 8);
+      return fill(
+        `Solving √(x + ${a}) = x - ${a} by squaring gives two candidates, and one of them makes the right-hand side negative. How many of the two are genuine solutions?`,
+        1,
+        { hint: "a whole number" },
+      );
+    },
   ],
 
   // ── 9.4 Simplifying rational expressions ──
@@ -1668,6 +3212,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `Simplify:   (x^2 - ${a * a}) / (x - ${a})`,
         `x + ${a}`,
         { hint: "an expression in x" },
+      );
+    },
+    (r) => {
+      const a = r.nonzero(-9, 9);
+      const b = r.nonzero(-9, 9);
+      return fill(
+        `For what value of x is (x${signed(a)})/(x${signed(b)}) undefined?`,
+        -b,
+        { hint: "a number" },
+      );
+    },
+    // A factor that cancels leaves a hole rather than an asymptote, and the
+    // hole has a height the cancelled form still knows.
+    (r) => {
+      const span = 9;
+      const a = r.int(1, 4);
+      return point(
+        `(x^2 - ${a * a})/(x - ${a}) simplifies to x + ${a}, but one point is missing. Place the hole.`,
+        { span, x: a, y: 2 * a, zero: 2 },
       );
     },
   ],
@@ -1692,6 +3255,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.int(2, 9);
+      const c = r.int(2, 9);
+      return fill(
+        `(${a}x/${b}) × (${c}/x) simplifies to a number over ${b}. What is the numerator?`,
+        a * c,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.int(2, 9);
+      const c = r.int(2, 9);
+      return fill(
+        `(${a}/x) ÷ (${b}/${c}x) simplifies to a number. What is it?`,
+        frac(a * c, b),
+        { hint: "a number or a fraction" },
+      );
+    },
   ],
 
   // ── 9.6 Adding rational expressions ──
@@ -1703,6 +3286,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `Simplify:   ${a}/x + ${b}/x`,
         `${a + b}/x`,
         { hint: "an expression in x" },
+      );
+    },
+    (r) => {
+      const a = r.nonzero(-8, 8);
+      let b = r.nonzero(-8, 8);
+      if (b === a) b = a + 1;
+      return fill(
+        `To add 1/(x${signed(a)}) and 1/(x${signed(b)}), the common denominator is a product of two brackets. What is its degree in x?`,
+        2,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 12);
+      const b = r.int(2, 12);
+      return fill(
+        `${a}/x + ${b}/x = m/x. What is m?`,
+        a + b,
+        { hint: "a number" },
       );
     },
   ],
@@ -1717,6 +3319,19 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `Solve:   ${a}/x = ${b}`,
         x,
         { hint: "Multiply through by x" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 12);
+      const b = r.int(2, 9);
+      return fill(`Solve ${a * b}/x = ${b}.`, a, { hint: "a number" });
+    },
+    (r) => {
+      const a = r.nonzero(-9, 9);
+      return fill(
+        `Solving an equation containing 1/(x${signed(a)}) gives two candidates. Which one has to be thrown out?`,
+        -a,
+        { hint: "a number" },
       );
     },
   ],
@@ -1736,6 +3351,23 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: direct ? "Find the constant first" : "xy stays the same" },
       );
     },
+    (r) => {
+      const k = r.int(2, 12);
+      const x = r.int(2, 9);
+      return fill(
+        `y varies directly with x, and y = ${k * x} when x = ${x}. What is the constant of variation?`,
+        k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const k = r.pick([12, 24, 36, 48]);
+      const x = r.pick([2, 3, 4, 6]);
+      return slider(
+        `y varies inversely with x, and y = ${k / 2} when x = 2. Place y when x = ${x}.`,
+        { min: 0, max: 30, step: 1, value: k / x, full: 1, zero: 5 },
+      );
+    },
   ],
 
   // ── 10.2 The five-number summary ──
@@ -1753,6 +3385,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const base = r.int(1, 8);
+      const values = [base, base + 2, base + 4, base + 6, base + 8, base + 10, base + 12];
+      return fill(
+        `What is the first quartile of ${values.join(", ")}?`,
+        base + 2,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const base = r.int(0, 6);
+      const values = [base, base + 1, base + 3, base + 4, base + 6];
+      return slider(`Place the median of ${values.join(", ")}.`, {
+        min: 0,
+        max: 15,
+        step: 1,
+        value: base + 3,
+      });
+    },
   ],
 
   // ── 10.3 Shapes of distributions ──
@@ -1767,6 +3418,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         right ? "Skewed right" : "Skewed left",
         ["Skewed right", "Skewed left", "Symmetric", "Uniform"],
         r,
+      );
+    },
+    (r) => {
+      const values = [1, 2, 2, 3, 3, 3, r.int(30, 60)];
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      return fill(
+        `For ${values.join(", ")}, which is larger, the mean or the median? Enter the larger one, to one decimal place.`,
+        Math.round(mean * 10) / 10,
+        { hint: "a number", tolerance: 0.05 },
+      );
+    },
+    (r) => {
+      const big = r.int(40, 90);
+      const values = [2, 4, 6, 8, big];
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      return fill(
+        `How many of ${values.join(", ")} lie above the mean?`,
+        values.filter((v) => v > mean).length,
+        { hint: "a whole number" },
       );
     },
   ],
@@ -1791,6 +3461,31 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const strong = r.bool();
+      const negative = r.bool();
+      const size = strong ? 0.9 : 0.3;
+      return slider(
+        `A scatter plot shows a ${strong ? "tight" : "loose"} ${negative ? "downward" : "upward"} trend. Place the correlation coefficient.`,
+        {
+          min: -1,
+          max: 1,
+          step: 0.1,
+          value: negative ? -size : size,
+          full: 0.2,
+          zero: 0.7,
+        },
+      );
+    },
+    (r) => {
+      const r10 = r.pick([2, 3, 4, 5, 6, 7, 8, 9]);
+      const negative = r.bool();
+      return fill(
+        `Two variables have a correlation coefficient of ${negative ? "-" : ""}0.${r10}. What proportion of the variation does the line explain?`,
+        Math.round(r10 * r10) / 100,
+        { hint: "a decimal" },
+      );
+    },
   ],
 
   // ── 10.5 Lines of best fit and residuals ──
@@ -1805,6 +3500,26 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         `The line of best fit is   y = ${head(m, "x")} + ${b}.   The actual value at x = ${x} is ${predicted + residual}. What is the residual?`,
         residual,
         { hint: "Actual minus predicted" },
+      );
+    },
+    (r) => {
+      const m = r.nonzero(-4, 4);
+      const b = r.int(-6, 9);
+      const t = r.int(1, 9);
+      return fill(
+        `A line of best fit is y = ${head(m, "x")}${signed(b)}. What does it predict at x = ${t}?`,
+        m * t + b,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const m = r.int(1, 4);
+      const b = r.int(0, 5);
+      const x = r.int(1, 6);
+      const residual = r.nonzero(-5, 5);
+      return slider(
+        `A line of best fit is y = ${head(m, "x")}${signed(b)}, and the observed value at x = ${x} is ${m * x + b + residual}. Place the residual.`,
+        { min: -6, max: 6, step: 1, value: residual },
       );
     },
   ],
@@ -1823,6 +3538,24 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const a = r.int(5, 30);
+      const b = r.int(5, 30);
+      return fill(
+        `In a two-way table, a row reads ${a} and ${b} across its two columns. What is the row total?`,
+        a + b,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const both = r.int(4, 20);
+      const only = r.int(4, 20);
+      return fill(
+        `Of ${both + only} students who walk to school, ${both} also play sport. What fraction of the walkers play sport?`,
+        frac(both, both + only),
+        { hint: "a fraction" },
+      );
+    },
   ],
 
   // ── 10.7 Correlation and causation ──
@@ -1839,6 +3572,25 @@ export const ALGEBRA_1: Record<string, ((r: Rng) => Built)[]> = {
           "There is no relationship at all",
         ],
         r,
+      );
+    },
+    (r) =>
+      order(
+        "Put these in order, weakest evidence of cause first.",
+        [
+          "Two variables happen to rise together in one data set",
+          "The pattern repeats across several independent data sets",
+          "A plausible mechanism links the two",
+          "A controlled experiment changes one and the other follows",
+        ],
+        r,
+      ),
+    (r) => {
+      const r10 = r.pick([2, 4, 5, 6, 8]);
+      return fill(
+        `Two variables correlate at 0.${r10}, and someone claims one causes the other. What proportion of the variation is left unexplained?`,
+        Math.round(100 - r10 * r10) / 100,
+        { hint: "a decimal" },
       );
     },
   ],

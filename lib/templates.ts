@@ -22,126 +22,452 @@ import { AP_CALCULUS_BC } from "./curriculum-math";
  * minted last week still resolves today. Insert in the middle and old ids point
  * at the wrong generator — append instead.
  *
- * Every subunit of the Algebra 1 → AP Calculus BC sequence is now stocked. The
+ * Every subunit of the Algebra 1 → AP Calculus BC sequence is stocked. The
  * ones that came last are the ones that resisted: proof and construction do not
- * reduce to rolled numbers, so they are not asked as though they did. What
- * rolls there is the *case* — which reason justifies this step, what this
- * indirect proof assumes, which condition is enough and which is one short —
- * and the coordinate proofs roll over numbers like everything else.
+ * reduce to rolled numbers, so they are not asked as though they did. They are
+ * asked as orderings, because a proof is a sequence — the given first, the
+ * claim last, and no line using a fact it has not yet established. The
+ * coordinate proofs roll over numbers like everything else.
  */
 const OWN: Record<string, string[]> = {
   // ─── Algebra 1 ─────────────────────────────────────────
-  "math/algebra-1/unit-1/1.1": ["Classifying real numbers"],
+  "math/algebra-1/unit-1/1.1": [
+    "Classifying real numbers",
+    "Classifying real numbers",
+    "Nesting the number sets",
+  ],
   "math/algebra-1/unit-1/1.6": [
     "Product rule",
     "Quotient rule",
     "Power of a power",
     "Negative exponents",
+    "Recovering an exponent",
+    "Placing an exponent",
   ],
-  "math/algebra-1/unit-1/1.7": ["Scientific notation"],
+  "math/algebra-1/unit-1/1.7": [
+    "Scientific notation",
+    "Back to a plain number",
+    "Multiplying in scientific notation",
+  ],
   "math/algebra-1/unit-2/2.1": [
     "One-step equations",
     "Two-step equations",
     "Negative coefficients",
+    "Recovering the coefficient",
+    "Placing the solution of an equation",
   ],
-  "math/algebra-1/unit-2/2.4": ["Rearranging for a value"],
+  "math/algebra-1/unit-2/2.4": [
+    "Rearranging for a value",
+    "Rearranging and evaluating",
+    "The order of a rearrangement",
+  ],
   "math/algebra-1/unit-2/2.2": [
     "Variables on both sides",
     "Distributing before solving",
+    "The order of solving steps",
   ],
-  "math/algebra-1/unit-2/2.8": ["Absolute value equations"],
-  "math/algebra-1/unit-3/3.1": ["Plotting a point", "Reflecting a point"],
-  "math/algebra-1/unit-3/3.3": ["Evaluating a function"],
+  "math/algebra-1/unit-2/2.8": [
+    "Absolute value equations",
+    "The second solution",
+    "Placing an absolute value solution",
+  ],
+  "math/algebra-1/unit-3/3.1": [
+    "Plotting a point",
+    "Reflecting a point",
+    "Reading a range",
+  ],
+  "math/algebra-1/unit-3/3.3": [
+    "Evaluating a function",
+    "Recovering a rule",
+    "Finding the input",
+  ],
   "math/algebra-1/unit-4/4.1": [
     "Slope from two points",
     "Reading the sign of a slope",
+    "Placing a slope",
   ],
   "math/algebra-1/unit-4/4.2": [
     "Slope and intercept from an equation",
     "Evaluating a linear function",
+    "The order of graphing a line",
   ],
-  "math/algebra-1/unit-4/4.3": ["Graphing from an equation", "Graphing from two points"],
-  "math/algebra-1/unit-4/4.6": ["Parallel and perpendicular slopes"],
-  "math/algebra-1/unit-5/5.3": ["Systems by elimination"],
-  "math/algebra-1/unit-6/6.3": ["Multiplying binomials"],
+  "math/algebra-1/unit-4/4.3": [
+    "Graphing from an equation",
+    "Graphing from two points",
+    "Using point-slope to predict",
+  ],
+  "math/algebra-1/unit-4/4.6": [
+    "Parallel and perpendicular slopes",
+    "Drawing a perpendicular",
+    "The intercept of a parallel line",
+  ],
+  "math/algebra-1/unit-5/5.3": [
+    "Systems by elimination",
+    "The multiplier for elimination",
+    "Placing a system's solution",
+  ],
+  "math/algebra-1/unit-6/6.3": [
+    "Multiplying binomials",
+    "The middle coefficient",
+    "The constant of a product",
+    "The order of multiplying binomials",
+  ],
   "math/algebra-1/unit-6/6.4": [
     "Difference of squares",
     "Perfect square trinomials",
+    "The root of a difference of squares",
+    "Placing a root of a difference of squares",
   ],
-  "math/algebra-1/unit-6/6.6": ["Factoring trinomials"],
-  "math/algebra-1/unit-7/7.8": ["Solving with the quadratic formula"],
+  "math/algebra-1/unit-6/6.6": [
+    "Factoring trinomials",
+    "A factor of a trinomial",
+    "The larger factor pair",
+  ],
+  "math/algebra-1/unit-7/7.8": [
+    "Solving with the quadratic formula",
+    "The sum of the roots",
+    "Placing a root of a quadratic",
+  ],
   "math/algebra-1/unit-7/7.9": [
     "Computing the discriminant",
     "The nature of the roots",
+    "Forcing a repeated root",
   ],
-  "math/algebra-1/unit-8/8.1": ["Finding the nth term"],
-  "math/algebra-1/unit-9/9.1": ["Simplifying radicals"],
-  "math/algebra-1/unit-10/10.1": ["Mean and median"],
+  "math/algebra-1/unit-8/8.1": [
+    "Finding the nth term",
+    "The common ratio",
+    "The order of finding a term",
+  ],
+  "math/algebra-1/unit-9/9.1": [
+    "Simplifying radicals",
+    "Simplifying a radical",
+    "Multiplying radicals",
+  ],
+  "math/algebra-1/unit-10/10.1": [
+    "Mean and median",
+    "The range of a data set",
+    "The mode",
+  ],
 
-  "math/algebra-1/unit-1/1.2": ["Naming the property"],
-  "math/algebra-1/unit-1/1.3": ["Order of operations", "Brackets and powers"],
-  "math/algebra-1/unit-1/1.4": ["Combining like terms"],
-  "math/algebra-1/unit-1/1.5": ["Translating a phrase"],
-  "math/algebra-1/unit-1/1.8": ["Simplifying a square root"],
-  "math/algebra-1/unit-2/2.3": ["Clearing a fraction"],
-  "math/algebra-1/unit-2/2.5": ["How many solutions"],
-  "math/algebra-1/unit-2/2.6": ["Inequalities and the sign flip"],
-  "math/algebra-1/unit-2/2.7": ["Compound inequalities"],
-  "math/algebra-1/unit-2/2.9": ["Absolute value inequalities"],
-  "math/algebra-1/unit-3/3.2": ["Recognising a function"],
-  "math/algebra-1/unit-3/3.4": ["Discrete and continuous domains"],
-  "math/algebra-1/unit-3/3.5": ["Finding an intercept"],
-  "math/algebra-1/unit-3/3.6": ["Evaluating a piecewise function"],
-  "math/algebra-1/unit-3/3.7": ["Evaluating an absolute value function"],
-  "math/algebra-1/unit-3/3.8": ["Describing a transformation"],
-  "math/algebra-1/unit-4/4.4": ["Intercepts from standard form"],
-  "math/algebra-1/unit-4/4.5": ["Converting to standard form"],
-  "math/algebra-1/unit-4/4.7": ["A line through two points"],
-  "math/algebra-1/unit-4/4.8": ["Inequalities in two variables"],
-  "math/algebra-1/unit-4/4.9": ["An arithmetic sequence as a rule"],
-  "math/algebra-1/unit-5/5.1": ["Solving a system by graphing"],
-  "math/algebra-1/unit-5/5.2": ["Systems by substitution"],
-  "math/algebra-1/unit-5/5.4": ["Choosing a method"],
-  "math/algebra-1/unit-5/5.5": ["Systems with no solution"],
-  "math/algebra-1/unit-5/5.6": ["Break-even"],
-  "math/algebra-1/unit-5/5.7": ["Systems of inequalities"],
-  "math/algebra-1/unit-5/5.8": ["Maximising over a region"],
+  "math/algebra-1/unit-1/1.2": [
+    "Naming the property",
+    "Identity and inverse elements",
+    "Using the distributive property",
+  ],
+  "math/algebra-1/unit-1/1.3": [
+    "Order of operations",
+    "Brackets and powers",
+    "The order you work in",
+    "Placing the value of an expression",
+  ],
+  "math/algebra-1/unit-1/1.4": [
+    "Combining like terms",
+    "Combining like terms",
+    "Recovering a coefficient",
+  ],
+  "math/algebra-1/unit-1/1.5": [
+    "Translating a phrase",
+    "Evaluating a translated phrase",
+    "Reading a phrase backwards",
+  ],
+  "math/algebra-1/unit-1/1.8": [
+    "Simplifying a square root",
+    "Simplifying a square root",
+    "Estimating a root",
+  ],
+  "math/algebra-1/unit-2/2.3": [
+    "Clearing a fraction",
+    "Recovering a numerator",
+    "Placing a solution",
+  ],
+  "math/algebra-1/unit-2/2.5": [
+    "How many solutions",
+    "Forcing no solution",
+    "Forcing infinitely many",
+    "Reading the end of a solve",
+  ],
+  "math/algebra-1/unit-2/2.6": [
+    "Inequalities and the sign flip",
+    "The boundary of a solution set",
+    "The largest integer that works",
+  ],
+  "math/algebra-1/unit-2/2.7": [
+    "Compound inequalities",
+    "Counting integer solutions",
+    "A bound of a compound inequality",
+  ],
+  "math/algebra-1/unit-2/2.9": [
+    "Absolute value inequalities",
+    "The width of the band",
+    "An endpoint of the band",
+  ],
+  "math/algebra-1/unit-3/3.2": [
+    "Recognising a function",
+    "Finding the repeat",
+    "Repairing a relation",
+  ],
+  "math/algebra-1/unit-3/3.4": [
+    "Discrete and continuous domains",
+    "Sizing a discrete range",
+    "A point on a discrete graph",
+  ],
+  "math/algebra-1/unit-3/3.5": [
+    "Finding an intercept",
+    "Reading an extremum",
+    "Reading the y-intercept",
+  ],
+  "math/algebra-1/unit-3/3.6": [
+    "Evaluating a piecewise function",
+    "Where a piecewise rule switches",
+    "A point on a piecewise graph",
+  ],
+  "math/algebra-1/unit-3/3.7": [
+    "Evaluating an absolute value function",
+    "The vertex of an absolute value graph",
+    "Counting intersections",
+  ],
+  "math/algebra-1/unit-3/3.8": [
+    "Describing a transformation",
+    "Transforming a point",
+    "The order of transformations",
+  ],
+  "math/algebra-1/unit-4/4.4": [
+    "Intercepts from standard form",
+    "The x-intercept from standard form",
+    "Graphing from standard form",
+  ],
+  "math/algebra-1/unit-4/4.5": [
+    "Converting to standard form",
+    "The leading coefficient in standard form",
+    "The constant in standard form",
+  ],
+  "math/algebra-1/unit-4/4.7": [
+    "A line through two points",
+    "The intercept through two points",
+    "A rate from a context",
+  ],
+  "math/algebra-1/unit-4/4.8": [
+    "Inequalities in two variables",
+    "The boundary of an inequality",
+    "Testing points against an inequality",
+  ],
+  "math/algebra-1/unit-4/4.9": [
+    "An arithmetic sequence as a rule",
+    "A term of an arithmetic sequence",
+    "The common difference",
+  ],
+  "math/algebra-1/unit-5/5.1": [
+    "Solving a system by graphing",
+    "The x where lines cross",
+    "The order of graphing a system",
+  ],
+  "math/algebra-1/unit-5/5.2": [
+    "Systems by substitution",
+    "The second variable",
+    "The order of substitution",
+  ],
+  "math/algebra-1/unit-5/5.4": [
+    "Choosing a method",
+    "Solving the efficient way",
+    "The solution as a point",
+  ],
+  "math/algebra-1/unit-5/5.5": [
+    "Systems with no solution",
+    "Making a system parallel",
+    "Deciding how many solutions",
+  ],
+  "math/algebra-1/unit-5/5.6": [
+    "Break-even",
+    "Placing break-even",
+    "Profit at a quantity",
+  ],
+  "math/algebra-1/unit-5/5.7": [
+    "Systems of inequalities",
+    "A corner of the region",
+    "Testing a point against a system",
+  ],
+  "math/algebra-1/unit-5/5.8": [
+    "Maximising over a region",
+    "The optimal corner",
+    "The order of a linear programme",
+  ],
 
-  "math/algebra-1/unit-6/6.1": ["Classifying a polynomial"],
-  "math/algebra-1/unit-6/6.2": ["Adding and subtracting polynomials"],
-  "math/algebra-1/unit-6/6.5": ["The greatest common factor"],
-  "math/algebra-1/unit-6/6.7": ["Trinomials with a leading coefficient"],
-  "math/algebra-1/unit-6/6.8": ["Factoring by grouping"],
-  "math/algebra-1/unit-6/6.9": ["Sums and differences of cubes"],
-  "math/algebra-1/unit-6/6.10": ["Factoring completely"],
-  "math/algebra-1/unit-7/7.1": ["The axis of symmetry"],
-  "math/algebra-1/unit-7/7.2": ["Placing a vertex"],
-  "math/algebra-1/unit-7/7.3": ["Roots from factored form"],
-  "math/algebra-1/unit-7/7.4": ["Reading a root off a graph"],
-  "math/algebra-1/unit-7/7.5": ["The Zero Product Property"],
-  "math/algebra-1/unit-7/7.6": ["Solving by square roots"],
-  "math/algebra-1/unit-7/7.7": ["Completing the square"],
-  "math/algebra-1/unit-7/7.10": ["Complex solutions"],
-  "math/algebra-1/unit-7/7.11": ["Projectile motion"],
-  "math/algebra-1/unit-8/8.2": ["Exponential growth"],
-  "math/algebra-1/unit-8/8.3": ["Exponential decay"],
-  "math/algebra-1/unit-8/8.4": ["The horizontal asymptote"],
-  "math/algebra-1/unit-8/8.5": ["Comparing rates of growth"],
-  "math/algebra-1/unit-8/8.6": ["Recursive and explicit rules"],
-  "math/algebra-1/unit-8/8.7": ["Compound interest"],
-  "math/algebra-1/unit-9/9.2": ["Adding radicals"],
-  "math/algebra-1/unit-9/9.3": ["Radical equations"],
-  "math/algebra-1/unit-9/9.4": ["Simplifying a rational expression"],
-  "math/algebra-1/unit-9/9.5": ["Multiplying rational expressions"],
-  "math/algebra-1/unit-9/9.6": ["Adding rational expressions"],
-  "math/algebra-1/unit-9/9.7": ["Rational equations"],
-  "math/algebra-1/unit-9/9.8": ["Direct and inverse variation"],
-  "math/algebra-1/unit-10/10.2": ["The interquartile range"],
-  "math/algebra-1/unit-10/10.3": ["The shape of a distribution"],
-  "math/algebra-1/unit-10/10.4": ["Reading a correlation coefficient"],
-  "math/algebra-1/unit-10/10.5": ["Residuals"],
-  "math/algebra-1/unit-10/10.6": ["Two-way tables"],
-  "math/algebra-1/unit-10/10.7": ["Correlation and causation"],
+  "math/algebra-1/unit-6/6.1": [
+    "Classifying a polynomial",
+    "The degree of a polynomial",
+    "Counting terms",
+  ],
+  "math/algebra-1/unit-6/6.2": [
+    "Adding and subtracting polynomials",
+    "A coefficient after subtracting",
+    "The constant after adding",
+  ],
+  "math/algebra-1/unit-6/6.5": [
+    "The greatest common factor",
+    "The power in the GCF",
+    "The order of factoring out",
+  ],
+  "math/algebra-1/unit-6/6.7": [
+    "Trinomials with a leading coefficient",
+    "The product ac",
+    "The smaller of the split",
+  ],
+  "math/algebra-1/unit-6/6.8": [
+    "Factoring by grouping",
+    "The shared bracket",
+    "The order of grouping",
+  ],
+  "math/algebra-1/unit-6/6.9": [
+    "Sums and differences of cubes",
+    "The cube root in a difference of cubes",
+    "The middle term of the cube factor",
+  ],
+  "math/algebra-1/unit-6/6.10": [
+    "Factoring completely",
+    "Counting factors",
+    "The order of factoring completely",
+  ],
+  "math/algebra-1/unit-7/7.1": [
+    "The axis of symmetry",
+    "Computing the axis of symmetry",
+    "The height of the vertex",
+  ],
+  "math/algebra-1/unit-7/7.2": [
+    "Placing a vertex",
+    "Reading h from vertex form",
+    "The vertex from standard form",
+  ],
+  "math/algebra-1/unit-7/7.3": [
+    "Roots from factored form",
+    "The larger root",
+    "The vertex from factored form",
+  ],
+  "math/algebra-1/unit-7/7.4": [
+    "Reading a root off a graph",
+    "Counting x-intercepts",
+    "Placing a root",
+  ],
+  "math/algebra-1/unit-7/7.5": [
+    "The Zero Product Property",
+    "A root from a factor",
+    "The order of the Zero Product Property",
+  ],
+  "math/algebra-1/unit-7/7.6": [
+    "Solving by square roots",
+    "The larger square-root solution",
+    "Counting square-root solutions",
+  ],
+  "math/algebra-1/unit-7/7.7": [
+    "Completing the square",
+    "The number that completes the square",
+    "The order of completing the square",
+  ],
+  "math/algebra-1/unit-7/7.10": [
+    "Complex solutions",
+    "The imaginary part",
+    "A conjugate product",
+  ],
+  "math/algebra-1/unit-7/7.11": [
+    "Projectile motion",
+    "The time of the peak",
+    "The maximum height",
+  ],
+  "math/algebra-1/unit-8/8.2": [
+    "Exponential growth",
+    "The growth factor",
+    "Recovering the initial amount",
+  ],
+  "math/algebra-1/unit-8/8.3": [
+    "Exponential decay",
+    "The decay rate",
+    "When decay passes a threshold",
+  ],
+  "math/algebra-1/unit-8/8.4": [
+    "The horizontal asymptote",
+    "Computing the asymptote",
+    "The y-intercept of an exponential",
+  ],
+  "math/algebra-1/unit-8/8.5": [
+    "Comparing rates of growth",
+    "Comparing two values",
+    "Where exponential overtakes",
+  ],
+  "math/algebra-1/unit-8/8.6": [
+    "Recursive and explicit rules",
+    "Unrolling a recursion",
+    "From recursive to explicit",
+  ],
+  "math/algebra-1/unit-8/8.7": [
+    "Compound interest",
+    "Counting compoundings",
+    "The rule of 72",
+  ],
+  "math/algebra-1/unit-9/9.2": [
+    "Adding radicals",
+    "Adding like radicals",
+    "Simplifying before adding",
+    "Counting like radicals",
+  ],
+  "math/algebra-1/unit-9/9.3": [
+    "Radical equations",
+    "Solving a simple radical equation",
+    "Counting extraneous solutions",
+  ],
+  "math/algebra-1/unit-9/9.4": [
+    "Simplifying a rational expression",
+    "Where a rational expression is undefined",
+    "Placing a hole",
+  ],
+  "math/algebra-1/unit-9/9.5": [
+    "Multiplying rational expressions",
+    "The numerator of a product",
+    "Dividing by a reciprocal",
+  ],
+  "math/algebra-1/unit-9/9.6": [
+    "Adding rational expressions",
+    "The common denominator",
+    "Adding over a common denominator",
+  ],
+  "math/algebra-1/unit-9/9.7": [
+    "Rational equations",
+    "Solving a proportion equation",
+    "An excluded value",
+  ],
+  "math/algebra-1/unit-9/9.8": [
+    "Direct and inverse variation",
+    "The constant of variation",
+    "An inverse variation value",
+  ],
+  "math/algebra-1/unit-10/10.2": [
+    "The interquartile range",
+    "The first quartile",
+    "Placing the median",
+  ],
+  "math/algebra-1/unit-10/10.3": [
+    "The shape of a distribution",
+    "Mean against median",
+    "Counting above the mean",
+  ],
+  "math/algebra-1/unit-10/10.4": [
+    "Reading a correlation coefficient",
+    "Placing a correlation",
+    "The coefficient of determination",
+  ],
+  "math/algebra-1/unit-10/10.5": [
+    "Residuals",
+    "A prediction from the line",
+    "Placing a residual",
+  ],
+  "math/algebra-1/unit-10/10.6": [
+    "Two-way tables",
+    "A row total",
+    "A conditional proportion",
+  ],
+  "math/algebra-1/unit-10/10.7": [
+    "Correlation and causation",
+    "Ordering evidence of causation",
+    "Variation left over",
+  ],
 
   // ─── Geometry ──────────────────────────────────────────
   "math/geometry/unit-1/1.2": ["Setting an angle"],
@@ -151,20 +477,29 @@ const OWN: Record<string, string[]> = {
   "math/geometry/unit-5/5.1": ["The triangle angle sum"],
   "math/geometry/unit-5/5.2": ["The exterior angle theorem"],
   "math/geometry/unit-6/6.5": ["The midsegment theorem"],
-  "math/geometry/unit-6/6.6": ["The triangle inequality"],
+  "math/geometry/unit-6/6.6": [
+    "The triangle inequality",
+    "The range for a third side",
+  ],
   "math/geometry/unit-7/7.2": ["Scale factor"],
   "math/geometry/unit-7/7.7": ["Area ratios of similar figures"],
   "math/geometry/unit-8/8.1": ["The Pythagorean theorem"],
   "math/geometry/unit-8/8.2": ["Finding the hypotenuse"],
-  "math/geometry/unit-8/8.3": ["Special right triangles"],
+  "math/geometry/unit-8/8.3": [
+    "Special right triangles",
+    "Special right triangle ratios",
+  ],
   "math/geometry/unit-8/8.4": ["Trigonometric ratios"],
   "math/geometry/unit-9/9.1": ["Polygon angle sums"],
   "math/geometry/unit-10/10.3": ["Central and inscribed angles"],
-  "math/geometry/unit-10/10.9": ["The equation of a circle"],
-  "math/geometry/unit-10/10.10": ["Area of a sector"],
+  "math/geometry/unit-10/10.9": [
+    "The equation of a circle",
+    "Placing the centre of a circle",
+  ],
+  "math/geometry/unit-10/10.10": ["Area of a sector", "Computing sector area"],
   "math/geometry/unit-11/11.7": ["Volume of prisms and cylinders"],
-  "math/geometry/unit-11/11.8": ["Volume of cones"],
-  "math/geometry/unit-11/11.9": ["Spheres"],
+  "math/geometry/unit-11/11.8": ["Volume of cones", "Volume of a pyramid or cone"],
+  "math/geometry/unit-11/11.9": ["Spheres", "Sphere volume and surface area"],
   "math/geometry/unit-11/11.11": ["Scaling solids"],
   "math/geometry/unit-12/12.2": ["Permutations and combinations"],
   "math/geometry/unit-12/12.5": ["Independent and dependent events"],
@@ -174,11 +509,17 @@ const OWN: Record<string, string[]> = {
   "math/geometry/unit-2/2.1": ["Continuing a pattern"],
   "math/geometry/unit-2/2.2": ["Converse, inverse, contrapositive"],
   "math/geometry/unit-2/2.3": ["Biconditionals"],
-  "math/geometry/unit-2/2.4": ["The laws of logic"],
-  "math/geometry/unit-2/2.5": ["Properties of equality"],
+  "math/geometry/unit-2/2.4": ["The laws of logic", "Chaining implications"],
+  "math/geometry/unit-2/2.5": [
+    "Properties of equality",
+    "Ordering an algebraic proof",
+  ],
   "math/geometry/unit-3/3.1": ["Angle pairs on a transversal"],
   "math/geometry/unit-3/3.2": ["Angles from parallel lines"],
-  "math/geometry/unit-3/3.3": ["Proving lines parallel"],
+  "math/geometry/unit-3/3.3": [
+    "Proving lines parallel",
+    "Angles that make lines parallel",
+  ],
   "math/geometry/unit-3/3.4": ["Distance to a line"],
   "math/geometry/unit-3/3.5": ["Parallel and perpendicular slopes"],
   "math/geometry/unit-3/3.6": ["Equations of parallel lines"],
@@ -190,16 +531,22 @@ const OWN: Record<string, string[]> = {
   "math/geometry/unit-4/4.6": ["Dilating a point"],
   "math/geometry/unit-4/4.7": ["Rigid motions"],
   "math/geometry/unit-4/4.8": ["Similarity transformations"],
-  "math/geometry/unit-5/5.3": ["Corresponding parts"],
+  "math/geometry/unit-5/5.3": [
+    "Corresponding parts",
+    "Corresponding parts as an equation",
+  ],
   "math/geometry/unit-5/5.4": ["SSS and SAS"],
   "math/geometry/unit-5/5.5": ["ASA and AAS"],
   "math/geometry/unit-5/5.6": ["Right triangle congruence"],
   "math/geometry/unit-5/5.7": ["Isosceles triangles"],
   "math/geometry/unit-6/6.1": ["Bisectors"],
-  "math/geometry/unit-6/6.2": ["Centres of a triangle"],
+  "math/geometry/unit-6/6.2": ["Centres of a triangle", "Distances from a centre"],
   "math/geometry/unit-6/6.3": ["The centroid"],
-  "math/geometry/unit-6/6.4": ["Altitudes"],
-  "math/geometry/unit-6/6.7": ["Sides and angles in order"],
+  "math/geometry/unit-6/6.4": ["Altitudes", "The altitude to the hypotenuse"],
+  "math/geometry/unit-6/6.7": [
+    "Sides and angles in order",
+    "Ordering sides by angle",
+  ],
   "math/geometry/unit-7/7.1": ["Solving a proportion"],
   "math/geometry/unit-7/7.3": ["Similarity criteria"],
   "math/geometry/unit-7/7.4": ["Triangle proportionality"],
@@ -214,10 +561,13 @@ const OWN: Record<string, string[]> = {
   "math/geometry/unit-9/9.2": ["Angles in a parallelogram"],
   "math/geometry/unit-9/9.4": ["Naming a special parallelogram"],
   "math/geometry/unit-9/9.5": ["The midsegment of a trapezoid"],
-  "math/geometry/unit-9/9.7": ["The quadrilateral hierarchy"],
+  "math/geometry/unit-9/9.7": [
+    "The quadrilateral hierarchy",
+    "Ordering the quadrilateral hierarchy",
+  ],
   "math/geometry/unit-10/10.1": ["Radius and diameter"],
   "math/geometry/unit-10/10.2": ["Tangents and radii"],
-  "math/geometry/unit-10/10.4": ["Arc length"],
+  "math/geometry/unit-10/10.4": ["Arc length", "Computing arc length"],
   "math/geometry/unit-10/10.5": ["Intersecting chords"],
   "math/geometry/unit-10/10.6": ["Inscribed angles"],
   "math/geometry/unit-10/10.7": ["Angles from two secants"],
@@ -227,7 +577,10 @@ const OWN: Record<string, string[]> = {
   "math/geometry/unit-11/11.3": ["Composite areas"],
   "math/geometry/unit-11/11.4": ["Cross sections"],
   "math/geometry/unit-11/11.5": ["Surface area of a box"],
-  "math/geometry/unit-11/11.6": ["Surface area of a cone"],
+  "math/geometry/unit-11/11.6": [
+    "Surface area of a cone",
+    "Total surface area of a cone",
+  ],
   "math/geometry/unit-11/11.10": ["Cavalieri's principle"],
   "math/geometry/unit-11/11.12": ["Density"],
   "math/geometry/unit-12/12.1": ["The counting principle"],
@@ -239,28 +592,55 @@ const OWN: Record<string, string[]> = {
   // The proof and construction subunits, which the first two passes left out.
   // They are asked about the parts a proof is assembled from rather than about
   // writing one, and the coordinate proofs are asked on the grid.
-  "math/geometry/unit-1/1.6": ["Naming a construction", "Why a construction works"],
-  "math/geometry/unit-2/2.6": ["The reason for a step", "The shape of a two-column proof"],
-  "math/geometry/unit-2/2.7": ["Paragraph proofs", "Flowchart proofs"],
+  "math/geometry/unit-1/1.6": [
+    "Naming a construction",
+    "Why a construction works",
+    "Ordering a construction",
+  ],
+  "math/geometry/unit-2/2.6": [
+    "The reason for a step",
+    "The shape of a two-column proof",
+    "Ordering a two-column proof",
+  ],
+  "math/geometry/unit-2/2.7": [
+    "Paragraph proofs",
+    "Flowchart proofs",
+    "Ordering a flowchart proof",
+  ],
   "math/geometry/unit-2/2.8": [
     "Choosing the theorem",
     "Congruent supplements and complements",
+    "Ordering an angle proof",
   ],
-  "math/geometry/unit-3/3.7": ["Constructing a perpendicular", "Constructing a parallel"],
-  "math/geometry/unit-5/5.8": ["CPCTC", "What CPCTC allows"],
+  "math/geometry/unit-3/3.7": [
+    "Constructing a perpendicular",
+    "Constructing a parallel",
+    "Ordering a line construction",
+  ],
+  "math/geometry/unit-5/5.8": [
+    "CPCTC",
+    "What CPCTC allows",
+    "Ordering a congruence proof",
+  ],
   "math/geometry/unit-5/5.9": [
     "Proving with the distance formula",
     "Placing a figure on the axes",
+    "Ordering a coordinate proof",
   ],
   "math/geometry/unit-6/6.8": [
     "The assumption in an indirect proof",
     "Reaching a contradiction",
+    "Ordering an indirect proof",
   ],
   "math/geometry/unit-9/9.3": [
     "Tests for a parallelogram",
     "Diagonals that bisect each other",
+    "Ordering a parallelogram proof",
   ],
-  "math/geometry/unit-9/9.6": ["Where the diagonals cross", "Perpendicular diagonals"],
+  "math/geometry/unit-9/9.6": [
+    "Where the diagonals cross",
+    "Perpendicular diagonals",
+  ],
 
   // ─── Algebra 2 ─────────────────────────────────────────
   "math/algebra-2/unit-1/1.5": ["Matrix multiplication"],
@@ -625,9 +1005,10 @@ export function generatorCount(subunitId: string): number {
 // ─── Where an answer is placed rather than typed ─────────
 
 /**
- * The generators that ask for their answer on a grid or a scale — a point, a
- * slider, a drawn line — rather than for one typed or chosen from four.
- * Subunit id → positions in that subunit's list above.
+ * The generators that ask for their answer on a grid, on a scale, or as a
+ * sequence — a point, a slider, a drawn line, an ordering — rather than for
+ * one typed or chosen from four. Subunit id → positions in that subunit's list
+ * above.
  *
  * This is here, on the public side, because the mirror duel is settled on how
  * close two answers were, which only means anything when closeness is what
@@ -645,15 +1026,15 @@ export function generatorCount(subunitId: string): number {
 const SPATIAL_OWN: Record<string, number[]> = {
   // ─── Algebra 1 ─────────────────────────────────────────
   "math/algebra-1/unit-3/3.1": [0, 1],
-  "math/algebra-1/unit-3/3.5": [0],
+  "math/algebra-1/unit-3/3.5": [0, 2],
   "math/algebra-1/unit-4/4.3": [0, 1],
-  "math/algebra-1/unit-4/4.4": [0],
-  "math/algebra-1/unit-4/4.7": [0],
-  "math/algebra-1/unit-5/5.1": [0],
-  "math/algebra-1/unit-5/5.2": [0],
+  "math/algebra-1/unit-4/4.4": [0, 2],
+  "math/algebra-1/unit-4/4.7": [0, 2],
+  "math/algebra-1/unit-5/5.1": [0, 2],
+  "math/algebra-1/unit-5/5.2": [0, 2],
   "math/algebra-1/unit-7/7.1": [0],
   "math/algebra-1/unit-7/7.2": [0],
-  "math/algebra-1/unit-8/8.4": [0],
+  "math/algebra-1/unit-8/8.4": [0, 2],
 
   // ─── Geometry ──────────────────────────────────────────
   "math/geometry/unit-1/1.2": [0],
@@ -665,6 +1046,24 @@ const SPATIAL_OWN: Record<string, number[]> = {
   "math/geometry/unit-4/4.4": [0],
   "math/geometry/unit-4/4.6": [0],
   "math/geometry/unit-9/9.6": [0],
+  "math/geometry/unit-10/10.9": [1],
+
+  // The orderings. A duel is settled on whose answer was closer, and an
+  // ordering has a real distance — pairs the wrong way round — so two players
+  // sequencing the same proof is a game that can actually be won.
+  "math/geometry/unit-1/1.6": [2],
+  "math/geometry/unit-2/2.4": [1],
+  "math/geometry/unit-2/2.5": [1],
+  "math/geometry/unit-2/2.6": [2],
+  "math/geometry/unit-2/2.7": [2],
+  "math/geometry/unit-2/2.8": [2],
+  "math/geometry/unit-3/3.7": [2],
+  "math/geometry/unit-5/5.8": [2],
+  "math/geometry/unit-5/5.9": [2],
+  "math/geometry/unit-6/6.7": [1],
+  "math/geometry/unit-6/6.8": [2],
+  "math/geometry/unit-9/9.3": [2],
+  "math/geometry/unit-9/9.7": [1],
 
   // ─── Algebra 2 ─────────────────────────────────────────
   "math/algebra-2/unit-1/1.2": [0],
@@ -697,6 +1096,57 @@ const SPATIAL_OWN: Record<string, number[]> = {
   "math/ap-calculus-ab/unit-6/6.5": [0],
   "math/ap-calculus-ab/unit-7/7.3": [0],
   "math/ap-calculus-ab/unit-7/7.4": [0],
+  "math/algebra-1/unit-1/1.1": [2],
+  "math/algebra-1/unit-1/1.3": [2, 3],
+  "math/algebra-1/unit-1/1.5": [2],
+  "math/algebra-1/unit-1/1.8": [2],
+  "math/algebra-1/unit-2/2.2": [2],
+  "math/algebra-1/unit-2/2.3": [2],
+  "math/algebra-1/unit-2/2.4": [2],
+  "math/algebra-1/unit-2/2.6": [1],
+  "math/algebra-1/unit-2/2.7": [2],
+  "math/algebra-1/unit-2/2.8": [2],
+  "math/algebra-1/unit-2/2.9": [2],
+  "math/algebra-1/unit-3/3.3": [2],
+  "math/algebra-1/unit-3/3.4": [2],
+  "math/algebra-1/unit-3/3.6": [2],
+  "math/algebra-1/unit-3/3.7": [1],
+  "math/algebra-1/unit-3/3.8": [1, 2],
+  "math/algebra-1/unit-4/4.1": [2],
+  "math/algebra-1/unit-4/4.2": [2],
+  "math/algebra-1/unit-4/4.5": [2],
+  "math/algebra-1/unit-4/4.6": [1],
+  "math/algebra-1/unit-4/4.8": [1],
+  "math/algebra-1/unit-4/4.9": [2],
+  "math/algebra-1/unit-5/5.3": [2],
+  "math/algebra-1/unit-5/5.4": [2],
+  "math/algebra-1/unit-5/5.5": [2],
+  "math/algebra-1/unit-5/5.6": [1],
+  "math/algebra-1/unit-5/5.7": [1],
+  "math/algebra-1/unit-5/5.8": [1, 2],
+  "math/algebra-1/unit-6/6.5": [2],
+  "math/algebra-1/unit-6/6.8": [2],
+  "math/algebra-1/unit-6/6.10": [2],
+  "math/algebra-1/unit-7/7.3": [2],
+  "math/algebra-1/unit-7/7.4": [2],
+  "math/algebra-1/unit-7/7.5": [2],
+  "math/algebra-1/unit-7/7.7": [2],
+  "math/algebra-1/unit-7/7.8": [2],
+  "math/algebra-1/unit-7/7.11": [1],
+  "math/algebra-1/unit-8/8.1": [2],
+  "math/algebra-1/unit-8/8.2": [2],
+  "math/algebra-1/unit-8/8.6": [2],
+  "math/algebra-1/unit-8/8.7": [2],
+  "math/algebra-1/unit-9/9.4": [2],
+  "math/algebra-1/unit-9/9.8": [2],
+  "math/algebra-1/unit-10/10.2": [2],
+  "math/algebra-1/unit-10/10.4": [1],
+  "math/algebra-1/unit-10/10.5": [2],
+  "math/algebra-1/unit-10/10.7": [1],
+  "math/algebra-1/unit-2/2.1": [4],
+  "math/algebra-1/unit-1/1.6": [5],
+  "math/algebra-1/unit-6/6.3": [3],
+  "math/algebra-1/unit-6/6.4": [3],
 };
 
 export const SPATIAL: Record<string, number[]> = {
@@ -715,7 +1165,8 @@ export function spatialGenerators(subunitId: string): number[] {
  * A duel is decided by which answer was closer, so it needs questions where
  * closeness exists. On a typed or chosen answer two right answers are equally
  * right, every round between two good players is a dead heat, and the game
- * has nothing to say.
+ * has nothing to say. A point, a slider, a line and an ordering all have a
+ * real distance; the other two kinds do not.
  */
 export function hasSpatial(subunitId: string): boolean {
   return spatialGenerators(subunitId).length > 0;

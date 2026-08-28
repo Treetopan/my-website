@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   FillQuestion,
   LineQuestion,
+  OrderQuestion,
   Point,
   PointQuestion,
   Reveal,
@@ -20,11 +21,12 @@ import { Axes, Drawn, VIEW, useGrid } from "@/components/graph";
  * holds when it runs out, so a point you dragged into place but never confirmed
  * still counts.
  *
- * All four render their reveal in place rather than in a separate panel: the
+ * They all render their reveal in place rather than in a separate panel: the
  * value you chose and the value you should have chosen on the same scale, the
- * point you placed and the point you meant on the same grid. Where you went
- * wrong is a spatial fact on these questions, and describing it in words throws
- * that away.
+ * point you placed and the point you meant on the same grid, the step you put
+ * third sitting third with a note beside it saying where it belonged. Where
+ * you went wrong is a positional fact on these questions, and describing it in
+ * words throws that away.
  */
 
 // ─── Fill in the blank ───────────────────────────────────
@@ -457,6 +459,143 @@ function describe(through: [Point, Point]): string {
 }
 
 // ─── Shared bits ─────────────────────────────────────────
+
+// ─── Put the steps in order ──────────────────────────────
+
+/**
+ * Reorder a list of steps.
+ *
+ * Moved with buttons rather than dragged. Dragging is the obvious gesture and
+ * the wrong one here: these questions are answered under a clock, a drag that
+ * misses drops a step somewhere nobody intended, and on a phone it fights the
+ * page scroll. A row that moves one place per press is slower to think about
+ * and faster to be sure of, and it works from the keyboard for free.
+ *
+ * The draft stays null until something is actually moved, which is what tells
+ * an untouched question from an answered one. Nothing is given away by showing
+ * the scramble, because the scramble is never the answer.
+ */
+export function OrderAnswer({
+  question,
+  draft,
+  locked,
+  reveal,
+  onDraft,
+  onSubmit,
+}: {
+  question: OrderQuestion;
+  draft: number[] | null;
+  locked: boolean;
+  reveal: Reveal | null;
+  onDraft: (order: number[]) => void;
+  onSubmit: () => void;
+}) {
+  // The items arrive already scrambled, so the untouched arrangement is simply
+  // the order they are listed in.
+  const arrangement = draft ?? question.items.map((_, i) => i);
+  const right = reveal?.kind === "order" ? reveal.order : null;
+
+  function move(at: number, by: number) {
+    const to = at + by;
+    if (to < 0 || to >= arrangement.length) return;
+    const next = [...arrangement];
+    [next[at], next[to]] = [next[to], next[at]];
+    onDraft(next);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ol className="flex flex-col gap-2">
+        {arrangement.map((item, at) => {
+          const belongs = right ? right.indexOf(item) : -1;
+          const placed = right !== null && belongs === at;
+
+          let tone = "box";
+          if (right !== null) {
+            tone = placed
+              ? "box border-correct bg-correct/12"
+              : "box border-out bg-out/12";
+          }
+
+          return (
+            <li
+              key={item}
+              className={"flex items-stretch gap-3 px-3 py-2.5 " + tone}
+            >
+              <span className="flex w-6 shrink-0 items-center justify-center font-mono text-[13px] text-faint tnum">
+                {at + 1}
+              </span>
+
+              <span className="flex-1 self-center text-[15px] leading-snug">
+                {question.items[item]}
+              </span>
+
+              {/* After the reveal the arrows give way to where the step
+                  actually belonged, which is all there is left to say. */}
+              {right !== null ? (
+                <span
+                  className={
+                    "flex shrink-0 items-center font-mono text-[11px] tnum " +
+                    (placed ? "text-correct" : "text-out")
+                  }
+                >
+                  {placed ? "correct" : "belongs at " + (belongs + 1)}
+                </span>
+              ) : (
+                <span className="flex shrink-0 flex-col justify-center gap-1">
+                  <Nudge
+                    label={"Move step " + (at + 1) + " up"}
+                    glyph="↑"
+                    disabled={locked || at === 0}
+                    onClick={() => move(at, -1)}
+                  />
+                  <Nudge
+                    label={"Move step " + (at + 1) + " down"}
+                    glyph="↓"
+                    disabled={locked || at === arrangement.length - 1}
+                    onClick={() => move(at, 1)}
+                  />
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+
+      {!locked && (
+        <Commit
+          onClick={onSubmit}
+          disabled={draft === null}
+          hint="Move a step first"
+        />
+      )}
+    </div>
+  );
+}
+
+function Nudge({
+  label,
+  glyph,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  glyph: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-5 w-6 items-center justify-center rounded-sm border border-line text-[11px] leading-none text-muted transition-colors hover:border-faint hover:bg-surface-2 disabled:cursor-default disabled:border-line-soft disabled:opacity-40"
+    >
+      {glyph}
+    </button>
+  );
+}
 
 function Commit({
   onClick,

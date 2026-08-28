@@ -8,9 +8,11 @@ import {
   frac,
   graph,
   line,
+  order,
   piFrac,
   plot,
   point,
+  radical,
   signed,
   slider,
   type Built,
@@ -23,9 +25,15 @@ import {
  * Geometry resists generation more than the algebra courses do: much of it is
  * proof, construction, and classification, none of which reduce to numbers a
  * generator can roll. Most of this file is the computational spine — segments,
- * angles, triangles, circles, solids. The proof and construction subunits sit
- * at the end, and they roll over a case rather than over a coefficient; the
- * tables they draw from are just above the record.
+ * angles, triangles, circles, solids.
+ *
+ * The rest is asked in the shape it actually has. A proof is a sequence, so it
+ * is asked as one, with the `order` kind and the tables above the record; that
+ * is the honest form for a two-column proof, a construction, and an indirect
+ * argument alike, and it is what those subunits were waiting for. What is left
+ * on four options is the handful of subunits where naming the criterion really
+ * is the skill — SSS against SAS, a rhombus against a rectangle — and there
+ * the options are the question rather than a way of dodging it.
  */
 
 /**
@@ -288,6 +296,215 @@ const PARALLELOGRAM_TESTS = [
   },
 ];
 
+/**
+ * The sequences the ordering questions are built from.
+ *
+ * Each one has to be genuinely determined end to end — if two steps could be
+ * carried out in either order, the question has two right answers and marks one
+ * of them wrong. That is the whole authoring rule here, and it is why the
+ * proofs below fold "given" statements into a single line rather than listing
+ * them separately: two lines both reading "(Given)" are interchangeable, and a
+ * student who spots that is right to.
+ */
+
+/** Compass constructions, step by step. */
+const CONSTRUCTION_STEPS = [
+  {
+    name: "the perpendicular bisector of a segment",
+    sequence: [
+      "Open the compass to more than half the segment",
+      "Draw an arc from one endpoint, reaching above and below the segment",
+      "Draw an arc of the same radius from the other endpoint",
+      "Join the two points where the arcs cross",
+    ],
+  },
+  {
+    name: "the bisector of an angle",
+    sequence: [
+      "Draw an arc from the vertex, cutting both sides of the angle",
+      "From each cut, draw an arc of equal radius inside the angle",
+      "Mark the point where those two arcs cross",
+      "Draw the ray from the vertex through that point",
+    ],
+  },
+  {
+    name: "a copy of an angle",
+    sequence: [
+      "Draw a ray to carry the copy",
+      "Draw one arc across the original angle, and the same arc from the new ray",
+      "Open the compass to the gap between the original arc and the two sides",
+      "Strike that gap from where the new arc meets the ray, and join it to the endpoint",
+    ],
+  },
+  {
+    name: "an equilateral triangle on a segment",
+    sequence: [
+      "Open the compass to the full length of the segment",
+      "Draw an arc from one endpoint",
+      "Draw an arc of the same radius from the other endpoint",
+      "Join both endpoints to the point where the arcs meet",
+    ],
+  },
+];
+
+/** The two constructions that make a right angle or a parallel. */
+const LINE_CONSTRUCTIONS = [
+  {
+    name: "a perpendicular from a point down to a line",
+    sequence: [
+      "From the point, draw an arc that cuts the line in two places",
+      "From each cut, draw arcs of equal radius on the far side of the line",
+      "Mark where those two arcs cross",
+      "Draw the line through the original point and that crossing",
+    ],
+  },
+  {
+    name: "a line through a point parallel to a given line",
+    sequence: [
+      "Draw a transversal through the point, crossing the given line",
+      "Draw an arc at the angle the given line makes with the transversal",
+      "Copy that same arc up at the point, on the matching side of the transversal",
+      "Draw the line through the point at the copied angle",
+    ],
+  },
+];
+
+/** Chains of implications, for the Law of Syllogism. */
+const CHAINS = [
+  [
+    "If it rains, the field floods.",
+    "If the field floods, the match is called off.",
+    "If the match is called off, the tickets are refunded.",
+    "If the tickets are refunded, the club loses money.",
+  ],
+  [
+    "If a number is divisible by 6, it is divisible by 3.",
+    "If a number is divisible by 3, its digits sum to a multiple of 3.",
+    "If its digits sum to a multiple of 3, the sum is not 1.",
+    "If the sum is not 1, the number is not a power of 10.",
+  ],
+  [
+    "If a quadrilateral is a square, it is a rhombus.",
+    "If it is a rhombus, it is a parallelogram.",
+    "If it is a parallelogram, its opposite sides are parallel.",
+    "If its opposite sides are parallel, it is a trapezoid under the inclusive definition.",
+  ],
+];
+
+/** Two-column proofs, one line per row, reason included. */
+const TWO_COLUMN = [
+  {
+    claim: "Given AB = CD, with B and C between A and D, prove AC = BD",
+    sequence: [
+      "AB = CD (Given)",
+      "BC = BC (Reflexive Property)",
+      "AB + BC = CD + BC (Addition Property of Equality)",
+      "AB + BC = AC and CD + BC = BD (Segment Addition Postulate)",
+      "AC = BD (Substitution)",
+    ],
+  },
+  {
+    claim: "Prove that vertical angles 1 and 3 are congruent",
+    sequence: [
+      "Lines m and n intersect, forming angles 1, 2 and 3 (Given)",
+      "Angles 1 and 2 are a linear pair, and so are angles 2 and 3 (Definition of a linear pair)",
+      "m∠1 + m∠2 = 180° and m∠2 + m∠3 = 180° (Linear Pair Postulate)",
+      "m∠1 + m∠2 = m∠2 + m∠3 (Substitution)",
+      "m∠1 = m∠3 (Subtraction Property of Equality)",
+    ],
+  },
+];
+
+/** The same material as boxes on a flowchart. */
+const FLOW_PROOF = {
+  claim: "m ∥ n, cut by transversal t. Prove ∠1 ≅ ∠3",
+  sequence: [
+    "m ∥ n, cut by transversal t (Given)",
+    "∠1 ≅ ∠2 (Corresponding Angles Postulate)",
+    "∠2 ≅ ∠3 (Vertical Angles Theorem)",
+    "∠1 ≅ ∠3 (Transitive Property)",
+  ],
+};
+
+/** The Congruent Supplements Theorem, written out. */
+const SUPPLEMENTS_PROOF = {
+  claim: "∠1 and ∠2 are supplementary, and so are ∠3 and ∠2. Prove ∠1 ≅ ∠3",
+  sequence: [
+    "∠1 and ∠2 are supplementary; ∠3 and ∠2 are supplementary (Given)",
+    "m∠1 + m∠2 = 180° and m∠3 + m∠2 = 180° (Definition of supplementary)",
+    "m∠1 + m∠2 = m∠3 + m∠2 (Substitution)",
+    "m∠1 = m∠3 (Subtraction Property of Equality)",
+    "∠1 ≅ ∠3 (Definition of congruent angles)",
+  ],
+};
+
+/** A congruence proof that finishes on CPCTC. */
+const CONGRUENCE_PROOF = {
+  claim: "AB ≅ DE, AC ≅ DF and ∠A ≅ ∠D. Prove BC ≅ EF",
+  sequence: [
+    "AB ≅ DE, AC ≅ DF and ∠A ≅ ∠D (Given)",
+    "∠A lies between AB and AC, and ∠D between DE and DF (Definition of an included angle)",
+    "△ABC ≅ △DEF (SAS)",
+    "BC ≅ EF (CPCTC)",
+  ],
+};
+
+/** How a coordinate proof is set up and finished. */
+const COORDINATE_PROOF = {
+  claim: "Prove that the triangle with a base on the x-axis is isosceles",
+  sequence: [
+    "Place the figure with one vertex at the origin and a side along the x-axis",
+    "Name the vertices (0, 0), (2a, 0) and (a, b)",
+    "Work out the two side lengths with the distance formula",
+    "Show the two lengths are equal, and state the conclusion",
+  ],
+};
+
+/** A full proof that a quadrilateral is a parallelogram. */
+const PARALLELOGRAM_PROOF = {
+  claim: "AB ∥ CD and AB ≅ CD. Prove ABCD is a parallelogram",
+  sequence: [
+    "AB ∥ CD and AB ≅ CD (Given)",
+    "Draw diagonal AC (Construction)",
+    "∠BAC ≅ ∠DCA (Alternate Interior Angles Theorem)",
+    "AC ≅ CA (Reflexive Property)",
+    "△ABC ≅ △CDA (SAS)",
+    "AD ≅ CB (CPCTC), so both pairs of opposite sides are congruent",
+  ],
+};
+
+/** Indirect proofs, written the way one actually runs. */
+const INDIRECT_PROOFS = [
+  {
+    claim: "a triangle has at most one right angle",
+    sequence: [
+      "Assume instead that the triangle has two right angles",
+      "Those two angles alone already sum to 180°",
+      "The third angle would then have to measure 0°",
+      "But no angle of a triangle can measure 0°, so the assumption fails",
+      "Therefore a triangle has at most one right angle",
+    ],
+  },
+  {
+    claim: "if two lines are cut by a transversal making congruent corresponding angles, the lines are parallel",
+    sequence: [
+      "Assume instead that the two lines meet at some point P",
+      "Then the two lines and the transversal enclose a triangle",
+      "One of the congruent angles is an exterior angle of that triangle",
+      "An exterior angle is greater than either remote interior angle, so the two cannot be congruent",
+      "The lines therefore never meet, so they are parallel",
+    ],
+  },
+];
+
+/** Families of quadrilaterals, most general first. */
+const HIERARCHIES = [
+  ["Quadrilateral", "Parallelogram", "Rectangle", "Square"],
+  ["Quadrilateral", "Parallelogram", "Rhombus", "Square"],
+  ["Quadrilateral", "Trapezoid", "Isosceles trapezoid"],
+  ["Polygon", "Quadrilateral", "Parallelogram", "Rhombus"],
+];
+
 export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.3 Segment addition and midpoint ──
   "math/geometry/unit-1/1.3": [
@@ -436,6 +653,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // The bounds themselves, rather than a valid value picked from four.
+    (r) => {
+      const a = r.int(4, 15);
+      const b = r.int(4, 15);
+      const largest = r.bool();
+      return fill(
+        `Two sides of a triangle measure ${a} and ${b}. What is the ${largest ? "largest" : "smallest"} whole number the third side can be?`,
+        largest ? a + b - 1 : Math.abs(a - b) + 1,
+        { hint: "a whole number" },
+      );
+    },
   ],
 
   // ── 7.2 Similar polygons ──
@@ -529,6 +757,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // Typed rather than chosen: the ratio is the answer, and four options with
+    // one radical in them hand it over.
+    (r) => {
+      const leg = r.int(2, 12);
+      if (r.bool()) {
+        return fill(
+          `In a 45–45–90 triangle each leg measures ${leg}. How long is the hypotenuse?`,
+          radical(2, leg),
+          { hint: "a number times a root" },
+        );
+      }
+      return fill(
+        `In a 30–60–90 triangle the shorter leg measures ${leg}. How long is the longer leg?`,
+        radical(3, leg),
+        { hint: "a number times a root" },
+      );
+    },
   ],
 
   // ── 8.4 Sine, cosine and tangent ratios ──
@@ -605,6 +850,18 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // The centre, placed. Reading (h, k) off the equation is one sign flip, and
+    // the flip is the whole mistake — which a grid shows and four options hide.
+    (r) => {
+      const span = 9;
+      const h = r.nonzero(-7, 7);
+      const k = r.nonzero(-7, 7);
+      const radius = r.int(2, 6);
+      return point(
+        `Place the centre of the circle (x${signed(-h)})^2 + (y${signed(-k)})^2 = ${radius * radius}.`,
+        { span, x: h, y: k, zero: 2 },
+      );
+    },
   ],
 
   // ── 10.10 Areas of sectors ──
@@ -624,6 +881,15 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           piFrac(radius * radius, 360),
         ],
         r,
+      );
+    },
+    (r) => {
+      const radius = r.int(2, 14);
+      const degrees = r.pick([30, 45, 60, 90, 120, 180, 240]);
+      return fill(
+        `A sector of a circle of radius ${radius} has a central angle of ${degrees}°. What is its area?`,
+        piFrac(degrees * radius * radius, 360),
+        { hint: "a multiple of π" },
       );
     },
   ],
@@ -670,6 +936,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const cone = r.bool();
+      const radius = r.int(2, 10);
+      const height = r.int(2, 12) * 3;
+      const side = r.int(2, 12);
+      return cone
+        ? fill(
+            `What is the volume of a cone with radius ${radius} and height ${height}?`,
+            piFrac(radius * radius * height, 3),
+            { hint: "a multiple of π" },
+          )
+        : fill(
+            `What is the volume of a pyramid with a square base of side ${side} and height ${height}?`,
+            (side * side * height) / 3,
+            { hint: "a number" },
+          );
+    },
   ],
 
   // ── 11.9 Spheres ──
@@ -688,6 +971,15 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           piFrac(2 * radius * radius, 1),
         ],
         r,
+      );
+    },
+    (r) => {
+      const radius = r.int(2, 12);
+      const wantVolume = r.bool();
+      return fill(
+        `What is the ${wantVolume ? "volume" : "surface area"} of a sphere of radius ${radius}?`,
+        wantVolume ? piFrac(4 * radius ** 3, 3) : piFrac(4 * radius * radius, 1),
+        { hint: "a multiple of π" },
       );
     },
   ],
@@ -861,6 +1153,14 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const chain = r.pick(CHAINS);
+      return order(
+        "The Law of Syllogism links these into one chain. Put them in order, first premise to last.",
+        chain,
+        r,
+      );
+    },
   ],
 
   // ── 2.5 Algebraic proof ──
@@ -887,6 +1187,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           "Addition Property of Equality",
           "Division Property of Equality",
           "Transitive Property of Equality",
+        ],
+        r,
+      );
+    },
+    // An algebraic proof, with its numbers rolled. Every line is entitled by
+    // the one above it, which is exactly what makes the order recoverable.
+    (r) => {
+      const a = r.int(2, 9);
+      const x = r.int(2, 12);
+      const b = r.nonzero(-15, 15);
+      const c = a * x + b;
+      return order(
+        `Put this algebraic proof that x = ${x} in order.`,
+        [
+          `${a}x${signed(b)} = ${c} (Given)`,
+          `${a}x = ${c - b} (Subtraction Property of Equality)`,
+          `x = ${x} (Division Property of Equality)`,
+          `${a}(${x})${signed(b)} = ${c}, so the solution checks (Substitution)`,
         ],
         r,
       );
@@ -941,6 +1259,20 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           `The transversal meets one line at ${angle}°`,
         ],
         r,
+      );
+    },
+    // The same theorem as an equation. Corresponding angles are congruent only
+    // when the lines are parallel, so setting them equal is the condition.
+    (r) => {
+      const x = r.int(3, 15);
+      const a = r.int(2, 6);
+      const b = r.nonzero(-20, 20);
+      const c = a + r.int(1, 4);
+      const d = a * x + b - c * x;
+      return fill(
+        `Lines m and n are cut by a transversal. The corresponding angles measure (${a}x${signed(b)})° and (${c}x${signed(d)})°. For what x are m and n parallel?`,
+        x,
+        { hint: "a number" },
       );
     },
   ],
@@ -1126,6 +1458,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // CPCTC as an equation rather than as a definition to recognise.
+    (r) => {
+      const x = r.int(2, 14);
+      const a = r.int(2, 6);
+      const b = r.nonzero(-9, 9);
+      return fill(
+        `△ABC ≅ △XYZ. If m∠A = (${a}x${signed(b)})° and m∠X = ${a * x + b}°, what is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 5.4 SSS and SAS ──
@@ -1216,6 +1559,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // The circumcenter is equidistant from the vertices, which is a length
+    // equation as soon as one of the distances is written as an expression.
+    (r) => {
+      const x = r.int(3, 14);
+      const a = r.int(2, 5);
+      const b = r.nonzero(-9, 9);
+      const circum = r.bool();
+      return fill(
+        circum
+          ? `P is the circumcenter of △ABC. If PA = ${a}x${signed(b)} and PB = ${a * x + b}, what is x?`
+          : `Q is the incenter of △ABC. Its distance to side AB is ${a}x${signed(b)} and to side BC is ${a * x + b}. What is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 6.3 Medians and the centroid ──
@@ -1248,6 +1606,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // The altitude to the hypotenuse, over Pythagorean triples so the two legs
+    // are whole and only the altitude itself comes out as a fraction.
+    (r) => {
+      const [a, b, c] = r.pick([
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [8, 15, 17],
+        [9, 12, 15],
+        [7, 24, 25],
+      ]);
+      return fill(
+        `A right triangle has legs ${a} and ${b} and hypotenuse ${c}. How long is the altitude drawn to the hypotenuse?`,
+        frac(a * b, c),
+        { hint: "a number or a fraction" },
+      );
+    },
   ],
 
   // ── 6.7 Inequalities in a triangle ──
@@ -1265,6 +1640,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           "All three are equal",
           "The side between the two smaller angles",
         ],
+        r,
+      );
+    },
+    // The theorem is an ordering, so it is asked as one. Angles are rolled to
+    // be distinct, because two equal angles would make two orders correct.
+    (r) => {
+      const first = r.int(20, 40);
+      const second = r.int(45, 65);
+      const third = 180 - first - second;
+      const sides = [
+        { angle: first, name: "a" },
+        { angle: second, name: "b" },
+        { angle: third, name: "c" },
+      ].sort((p, q) => p.angle - q.angle);
+      return order(
+        `A triangle has angles ${first}°, ${second}° and ${third}°. Put the sides opposite them in order, shortest first.`,
+        sides.map((s) => `The side opposite the ${s.angle}° angle`),
         r,
       );
     },
@@ -1490,6 +1882,14 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const family = r.pick(HIERARCHIES);
+      return order(
+        "Put these in order, most general first.",
+        family,
+        r,
+      );
+    },
   ],
 
   // ── 10.1 Parts of a circle ──
@@ -1539,6 +1939,15 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           `${degrees}π`,
         ],
         r,
+      );
+    },
+    (r) => {
+      const radius = r.int(2, 18);
+      const degrees = r.pick([30, 45, 60, 90, 120, 180]);
+      return fill(
+        `What is the length of a ${degrees}° arc on a circle of radius ${radius}?`,
+        piFrac(degrees * 2 * radius, 360),
+        { hint: "a multiple of π" },
       );
     },
   ],
@@ -1686,6 +2095,15 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const radius = r.int(2, 12);
+      const slant = radius + r.int(1, 9);
+      return fill(
+        `A cone has radius ${radius} and slant height ${slant}. What is its total surface area?`,
+        piFrac(radius * (radius + slant), 1),
+        { hint: "a multiple of π" },
+      );
+    },
   ],
 
   // ── 11.10 Cavalieri's principle ──
@@ -1822,6 +2240,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // The steps of a construction are the construction. Naming one is recall;
+    // sequencing it is the thing a compass actually asks of you.
+    (r) => {
+      const c = r.pick(CONSTRUCTION_STEPS);
+      return order(`Put the steps of constructing ${c.name} in order.`, c.sequence, r);
+    },
   ],
 
   // ── 2.6 Two-column proofs ──
@@ -1852,6 +2276,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const proof = r.pick(TWO_COLUMN);
+      return order(`${proof.claim}. Put the proof in order.`, proof.sequence, r);
+    },
   ],
 
   // ── 2.7 Paragraph and flowchart proofs ──
@@ -1864,6 +2292,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const q = r.pick(FLOWCHART);
       return ask(q.prompt, q.answer, q.wrong, r);
     },
+    (r) =>
+      order(
+        `${FLOW_PROOF.claim}. Put the boxes of the flowchart in order.`,
+        FLOW_PROOF.sequence,
+        r,
+      ),
   ],
 
   // ── 2.8 Proving segment and angle theorems ──
@@ -1891,6 +2325,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { unit: "degrees" },
       );
     },
+    (r) =>
+      order(
+        `${SUPPLEMENTS_PROOF.claim}. Put the proof in order.`,
+        SUPPLEMENTS_PROOF.sequence,
+        r,
+      ),
   ],
 
   // ── 3.7 Constructing parallel and perpendicular lines ──
@@ -1929,6 +2369,10 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         ],
         r,
       ),
+    (r) => {
+      const c = r.pick(LINE_CONSTRUCTIONS);
+      return order(`Put the steps of constructing ${c.name} in order.`, c.sequence, r);
+    },
   ],
 
   // ── 5.8 Proofs using congruent triangles ──
@@ -1956,6 +2400,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           "That the two triangles are the same triangle",
           "That the corresponding sides are proportional",
         ],
+        r,
+      ),
+    (r) =>
+      order(
+        `${CONGRUENCE_PROOF.claim}. Put the proof in order.`,
+        CONGRUENCE_PROOF.sequence,
         r,
       ),
   ],
@@ -1992,6 +2442,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         ],
         r,
       ),
+    (r) =>
+      order(
+        `${COORDINATE_PROOF.claim}. Put the steps in order.`,
+        COORDINATE_PROOF.sequence,
+        r,
+      ),
   ],
 
   // ── 6.8 Indirect proof ──
@@ -2018,6 +2474,14 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         ],
         r,
       ),
+    (r) => {
+      const proof = r.pick(INDIRECT_PROOFS);
+      return order(
+        `Put this indirect proof that ${proof.claim} in order.`,
+        proof.sequence,
+        r,
+      );
+    },
   ],
 
   // ── 9.3 Proving a quadrilateral is a parallelogram ──
@@ -2042,6 +2506,12 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) =>
+      order(
+        `${PARALLELOGRAM_PROOF.claim}. Put the proof in order.`,
+        PARALLELOGRAM_PROOF.sequence,
+        r,
+      ),
   ],
 
   // ── 9.6 Coordinate proofs with quadrilaterals ──

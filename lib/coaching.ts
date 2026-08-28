@@ -23,7 +23,14 @@
  */
 
 import type { Question } from "./curriculum";
-import { distance, lineThrough, readNumber, type Response, type Reveal } from "./questions";
+import {
+  distance,
+  inversions,
+  lineThrough,
+  readNumber,
+  type Response,
+  type Reveal,
+} from "./questions";
 
 /** Rounded for display: two decimals is finer than any grid the games draw. */
 function round(n: number): number {
@@ -126,7 +133,48 @@ export function diagnose(
       }
       return `Slope ${Math.abs(slopeOff)} out, intercept ${Math.abs(shiftOff)} out.`;
     }
+
+    case "order": {
+      if (response.kind !== "order" || !response.order) return null;
+      if (response.order.length !== reveal.order.length) return null;
+      return ordering(response.order, reveal.order);
+    }
   }
+}
+
+/**
+ * How one sequence missed another.
+ *
+ * The count of misplaced pairs is the score, so saying it back is the least
+ * this can do. What is worth adding is *where* it went wrong, because the two
+ * ends are the parts a student can check without having the rest right: a
+ * proof begins at the given and finishes at the claim, a construction begins
+ * with the compass and finishes with the straightedge, a hierarchy begins at
+ * the most general. An ordering that gets both ends right and stumbles in the
+ * middle is different news from one that starts in the wrong place.
+ *
+ * The wording stays neutral about what is being ordered. These questions are
+ * mostly proofs and mostly say so in the prompt, but "the given" means nothing
+ * when the sequence is four families of quadrilateral.
+ */
+function ordering(given: number[], correct: number[]): string | null {
+  const wrong = inversions(given, correct);
+  if (wrong === 0) return null;
+
+  const backwards = given.every((item, at) => item === correct[correct.length - 1 - at]);
+  if (backwards) return "That is the sequence exactly backwards.";
+
+  const pairs = `${wrong} pair${wrong === 1 ? "" : "s"} ${
+    wrong === 1 ? "is" : "are"
+  } the wrong way round.`;
+
+  const startedWrong = given[0] !== correct[0];
+  const endedWrong = given[given.length - 1] !== correct[correct.length - 1];
+
+  if (startedWrong && endedWrong) return `${pairs} Neither end is in its place.`;
+  if (startedWrong) return `${pairs} It does not begin where it should.`;
+  if (endedWrong) return `${pairs} It does not end where it should.`;
+  return `${pairs} Both ends are right; the middle is where it slipped.`;
 }
 
 /**

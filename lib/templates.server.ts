@@ -158,6 +158,24 @@ function divide(built: Built, id: string, topic: string): Omit<Resolved, "steps"
           zero: built.zero,
         },
       };
+
+    case "order":
+      return {
+        question: {
+          kind: "order",
+          id,
+          topic,
+          prompt: built.prompt,
+          items: built.items,
+          figure: built.figure,
+        },
+        answer: {
+          kind: "order",
+          order: built.answer,
+          full: built.full,
+          zero: built.zero,
+        },
+      };
   }
 }
 
@@ -185,18 +203,81 @@ export function resolveInstance(id: string): Resolved | null {
 }
 
 /**
+ * What a generator asks, reduced to something two generators can be compared
+ * on: the kind, plus the first few plain words of the prompt.
+ *
+ * Only words made purely of letters survive. Everything algebraic is thrown
+ * away, and that is deliberate rather than lazy — blanking the numbers is not
+ * enough, because "solve for x: 4x + 14 = -18" and "solve for x: -7x - 6 = 19"
+ * still differ in their signs and operators once the digits are gone. Grouping
+ * on that split three ways of writing "solve for x" into three forms and left
+ * the deal exactly as lopsided as it was before.
+ *
+ * Erring coarse is the safe direction. Two forms wrongly merged still take
+ * turns inside one rotation, which is fine; two identical forms wrongly split
+ * is the bug this exists to prevent.
+ */
+export function questionShape(question: Question): string {
+  return (
+    question.kind +
+    " " +
+    question.prompt
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => /^[a-z]+$/.test(word))
+      .slice(0, 4)
+      .join(" ")
+  );
+}
+
+/**
+ * A fixed seed for the probe below. Any seed would do; a fixed one means the
+ * grouping is a property of the subunit rather than of the session, so it is
+ * worked out once per process and never again.
+ */
+const PROBE_SEED = 0x5eed;
+
+const shapesBySubunit = new Map<string, string[]>();
+
+/** Each generator's shape, in generator order. Computed once, then cached. */
+function shapes(subunitId: string): string[] {
+  const cached = shapesBySubunit.get(subunitId);
+  if (cached) return cached;
+
+  const generators = GENERATORS[subunitId] ?? [];
+  const out = generators.map((_, i) => {
+    const made = build({ subunitId, generator: i, seed: PROBE_SEED });
+    // A generator that will not build cannot be grouped with anything, so it
+    // gets a shape of its own and is dealt as its own form.
+    return made ? questionShape(made.question) : `generator ${i}`;
+  });
+
+  shapesBySubunit.set(subunitId, out);
+  return out;
+}
+
+/**
  * Mints `want` fresh questions for a subunit.
  *
- * Generators are dealt round-robin from a random offset so a short game still
- * samples across the topics rather than leaning on one generator, and every
- * instance gets its own seed — two students on the same subunit, or the same
- * student twice, never see the same numbers.
+ * Dealt round-robin across *forms* rather than across generators, and that
+ * distinction is the whole point. A subunit whose five generators are three
+ * ways of writing "solve for x", one that runs the equation backwards, and one
+ * that puts the answer on a number line has five generators and three forms.
+ * Dealing per generator gives a ten-question session six solve-for-x rounds
+ * and calls it varied; dealing per form gives roughly three or four of each.
+ *
+ * Within a form the generators still rotate, so the three solve-for-x
+ * templates take turns among themselves rather than one of them being dealt
+ * every time. Both rotations start somewhere random, so the same subunit does
+ * not open with the same shape twice running.
+ *
+ * Every instance still gets its own seed: two students on the same subunit, or
+ * the same student twice, never see the same numbers.
  *
  * `only` narrows the deal to particular generators, which is how a duel asks
- * for the questions it can settle. Dealing round-robin within that shorter
- * list rather than rejecting what it does not want keeps the spread even: a
- * subunit with two placed-answer generators gives four of each across eight
- * rounds, with fresh numbers every time.
+ * for the questions it can settle. The forms are grouped inside that shorter
+ * list rather than outside it, so a duel stays balanced across whatever shapes
+ * it can actually settle.
  */
 export function mintInstances(
   subunitId: string,
@@ -211,11 +292,27 @@ export function mintInstances(
     : generators.map((_, i) => i);
   if (!pool.length) return [];
 
-  const offset = Math.floor(Math.random() * pool.length);
+  const shape = shapes(subunitId);
+  const byForm = new Map<string, number[]>();
+  for (const g of pool) {
+    const key = shape[g] ?? `generator ${g}`;
+    const found = byForm.get(key);
+    if (found) found.push(g);
+    else byForm.set(key, [g]);
+  }
+
+  const forms = [...byForm.values()];
+  const offset = Math.floor(Math.random() * forms.length);
+  // Where each form starts its own rotation, so the first template of a form
+  // is not always the same one.
+  const turn = forms.map((f) => Math.floor(Math.random() * f.length));
+
   const out: Question[] = [];
 
   for (let i = 0; i < want; i++) {
-    const generator = pool[(offset + i) % pool.length];
+    const at = (offset + i) % forms.length;
+    const form = forms[at];
+    const generator = form[turn[at]++ % form.length];
     const seed = Math.floor(Math.random() * 0xffffffff);
     const made = build({ subunitId, generator, seed });
     if (made) out.push(made.question);

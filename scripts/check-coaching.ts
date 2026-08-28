@@ -69,7 +69,29 @@ function wrongAnswers(kind: Response["kind"]): Response[] {
           ],
         },
       ];
+    case "order":
+      // Filled in per question, once the item count is known.
+      return [];
   }
+}
+
+/**
+ * Wrong orderings of the right length: the sequence backwards, the first two
+ * swapped, and the last two swapped. Between them they hit every branch of the
+ * ordering diagnosis.
+ */
+function orderMisses(n: number): Response[] {
+  const identity = Array.from({ length: n }, (_, i) => i);
+  const swap = (at: number) => {
+    const out = [...identity];
+    [out[at], out[at + 1]] = [out[at + 1], out[at]];
+    return out;
+  };
+  return [
+    { kind: "order", order: [...identity].reverse() },
+    { kind: "order", order: swap(0) },
+    { kind: "order", order: swap(n - 2) },
+  ];
 }
 
 for (const [subunitId, topics] of Object.entries(GENERATED)) {
@@ -92,7 +114,12 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
       }
 
       const { question, answer } = made;
-      const attempts = [...wrongAnswers(question.kind), emptyResponse(question.kind)];
+      const attempts = [
+        ...(question.kind === "order"
+          ? orderMisses(question.items.length)
+          : wrongAnswers(question.kind)),
+        emptyResponse(question.kind),
+      ];
 
       for (const attempt of attempts) {
         const { correct, reveal } = grade(answer, attempt);

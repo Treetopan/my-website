@@ -3,6 +3,7 @@ import "server-only";
 import {
   PASS,
   distance,
+  inversions,
   isBlank,
   lineThrough,
   normalise,
@@ -40,6 +41,14 @@ export type Answer =
       intercept: number;
       /** Error is measured as vertical distance at the edges of the grid. */
       span: number;
+      full: number;
+      zero: number;
+    }
+  | {
+      kind: "order";
+      /** Item indices in the correct sequence. */
+      order: number[];
+      /** Error is the number of pairs the response puts the wrong way round. */
       full: number;
       zero: number;
     };
@@ -122,6 +131,18 @@ function scoreOf(answer: Answer, response: Response): number {
       const error = Math.max(at(-answer.span), at(answer.span));
       return proximity(error, answer.full, answer.zero);
     }
+
+    case "order": {
+      if (response.kind !== "order" || !response.order) return 0;
+      // A response of the wrong length is not a worse ordering, it is not an
+      // ordering of this question at all.
+      if (response.order.length !== answer.order.length) return 0;
+      return proximity(
+        inversions(response.order, answer.order),
+        answer.full,
+        answer.zero,
+      );
+    }
   }
 }
 
@@ -137,6 +158,8 @@ function revealOf(answer: Answer): Reveal {
       return { kind: "point", at: answer.at };
     case "line":
       return { kind: "line", slope: answer.slope, intercept: answer.intercept };
+    case "order":
+      return { kind: "order", order: answer.order };
   }
 }
 
@@ -227,6 +250,24 @@ export function botResponse(
           { x: span, y: at(span) },
         ],
       };
+    }
+
+    case "order": {
+      const out = [...answer.order];
+      if (right) return { kind: "order", order: out };
+
+      // A miss is a shuffle, not a reversal. Reversing maximises the error and
+      // would score zero every time, but it is also the one wrong ordering a
+      // person never produces — and in a duel the opponent sees your answer,
+      // so a bot with a tell is a bot you can read.
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      // A shuffle can land close by luck. A miss has to actually miss, the way
+      // it does on every other kind.
+      if (inversions(out, answer.order) < answer.zero) out.reverse();
+      return { kind: "order", order: out };
     }
   }
 }

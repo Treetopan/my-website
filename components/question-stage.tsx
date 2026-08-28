@@ -12,6 +12,7 @@ import {
 import {
   FillAnswer,
   LineAnswer,
+  OrderAnswer,
   PointAnswer,
   SliderAnswer,
 } from "@/components/answer-inputs";
@@ -172,6 +173,17 @@ export function QuestionStage({
                   },
             )
           }
+        />
+      )}
+
+      {question.kind === "order" && answer.kind === "order" && (
+        <OrderAnswer
+          question={question}
+          draft={answer.order}
+          locked={locked}
+          reveal={reveal}
+          onDraft={(order) => onDraft({ kind: "order", order })}
+          onSubmit={() => onSubmit(answer)}
         />
       )}
 

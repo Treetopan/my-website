@@ -29,12 +29,28 @@ const COURSES: [string, string][] = [
   ["ap-calculus-bc", "Calculus BC"],
 ];
 
-const KINDS: QuestionKind[] = ["choice", "fill", "slider", "point", "line"];
+const KINDS: QuestionKind[] = [
+  "choice",
+  "fill",
+  "slider",
+  "point",
+  "line",
+  "order",
+];
 
 type Tally = Record<QuestionKind, number> & { total: number; figures: number };
 
 function empty(): Tally {
-  return { choice: 0, fill: 0, slider: 0, point: 0, line: 0, total: 0, figures: 0 };
+  return {
+    choice: 0,
+    fill: 0,
+    slider: 0,
+    point: 0,
+    line: 0,
+    order: 0,
+    total: 0,
+    figures: 0,
+  };
 }
 
 const perCourse = new Map<string, Tally>(COURSES.map(([id]) => [id, empty()]));

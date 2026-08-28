@@ -10,7 +10,8 @@
     "check:templates": "tsx --conditions=react-server scripts/check-templates.ts",
     "check:mix": "tsx --conditions=react-server scripts/question-mix.ts",
     "check:duel": "tsx --conditions=react-server scripts/check-duel.ts",
-    "check:coaching": "tsx --conditions=react-server scripts/check-coaching.ts"
+    "check:coaching": "tsx --conditions=react-server scripts/check-coaching.ts",
+    "check:depth": "tsx --conditions=react-server scripts/check-depth.ts"
   },
   "dependencies": {
     "firebase": "^12.18.0",

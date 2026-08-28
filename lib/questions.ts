@@ -7,10 +7,11 @@
  * or turn a spatial question into a reading exercise. So a question declares
  * its kind, and the games render and grade whichever it is.
  *
- * Two of the kinds are graded by proximity rather than by matching. Dropping a
- * point one unit off the mark is not the same mistake as putting it in the
- * wrong quadrant, and a scale that cannot tell them apart is throwing away the
- * most useful thing it knows.
+ * Several of the kinds are graded by proximity rather than by matching.
+ * Dropping a point one unit off the mark is not the same mistake as putting it
+ * in the wrong quadrant, and a proof with one pair of steps swapped is not the
+ * same mistake as a proof in random order. A scale that cannot tell those
+ * apart is throwing away the most useful thing it knows.
  *
  * This module holds the shapes and the scoring curve, both of which are public.
  * What stays server-side is only ever the target value — see `grading.server`.
@@ -18,7 +19,13 @@
 
 export type Point = { x: number; y: number };
 
-export type QuestionKind = "choice" | "fill" | "slider" | "point" | "line";
+export type QuestionKind =
+  | "choice"
+  | "fill"
+  | "slider"
+  | "point"
+  | "line"
+  | "order";
 
 // ─── Figures ─────────────────────────────────────────────
 
@@ -126,12 +133,40 @@ export type LineQuestion = Identity & {
   span: number;
 };
 
+/**
+ * Put the steps in the right order. Graded on how much of the sequence is
+ * right rather than on whether all of it is.
+ *
+ * This kind exists because a proof is a sequence and nothing else is. Asked as
+ * four options, "which reason justifies this step" is a vocabulary question
+ * with three throwaway answers beside it. Asked as an ordering, the same
+ * material becomes what the subunit is actually about: that the given comes
+ * first, that a fact cannot be used before it has been established, that the
+ * conclusion is last. Constructions are sequences too, and so is the shape of
+ * an indirect proof.
+ *
+ * Graded by proximity, for the reason the spatial kinds are: a proof with one
+ * adjacent pair swapped and a proof in random order are not the same mistake,
+ * and a scale that cannot tell them apart throws away the most useful thing it
+ * knows.
+ */
+export type OrderQuestion = Identity & {
+  kind: "order";
+  /**
+   * The steps, already scrambled by the generator. A step's index in this list
+   * is its name — a response is a permutation of these indices, so no text
+   * ever has to travel back.
+   */
+  items: string[];
+};
+
 export type Question =
   | ChoiceQuestion
   | FillQuestion
   | SliderQuestion
   | PointQuestion
-  | LineQuestion;
+  | LineQuestion
+  | OrderQuestion;
 
 // ─── Answering ───────────────────────────────────────────
 
@@ -146,7 +181,8 @@ export type Response =
   | { kind: "fill"; text: string }
   | { kind: "slider"; value: number | null }
   | { kind: "point"; at: Point | null }
-  | { kind: "line"; through: [Point, Point] | null };
+  | { kind: "line"; through: [Point, Point] | null }
+  | { kind: "order"; order: number[] | null };
 
 /** The correct answer, sent back only with a verdict. */
 export type Reveal =
@@ -154,7 +190,8 @@ export type Reveal =
   | { kind: "fill"; text: string }
   | { kind: "slider"; value: number }
   | { kind: "point"; at: Point }
-  | { kind: "line"; slope: number; intercept: number };
+  | { kind: "line"; slope: number; intercept: number }
+  | { kind: "order"; order: number[] };
 
 export type Verdict = {
   /** 0 to 1. Only the proximity kinds ever land between the two. */
@@ -222,6 +259,8 @@ export function emptyResponse(kind: QuestionKind): Response {
       return { kind: "point", at: null };
     case "line":
       return { kind: "line", through: null };
+    case "order":
+      return { kind: "order", order: null };
   }
 }
 
@@ -276,9 +315,38 @@ export function parseResponse(value: unknown): Response | null {
       return a && b ? { kind: "line", through: [a, b] } : null;
     }
 
+    case "order": {
+      if (blank(r.order)) return { kind: "order", order: null };
+      const order = parsePermutation(r.order);
+      return order ? { kind: "order", order } : null;
+    }
+
     default:
       return null;
   }
+}
+
+/**
+ * Reads an ordering back out of untrusted data.
+ *
+ * A permutation and not merely a list of numbers: a repeated index would let a
+ * response claim one step twice and leave another unplaced, which is neither a
+ * valid answer nor something the scorer could make sense of. The length cap is
+ * generous against any sequence worth asking about and mean against anything
+ * meant to make the grader do work.
+ */
+function parsePermutation(value: unknown): number[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 12) return null;
+
+  const seen = new Set<number>();
+  for (const n of value) {
+    if (!Number.isInteger(n) || (n as number) < 0 || (n as number) >= value.length) {
+      return null;
+    }
+    if (seen.has(n as number)) return null;
+    seen.add(n as number);
+  }
+  return value as number[];
 }
 
 function parsePoint(value: unknown): Point | null {
@@ -312,6 +380,10 @@ export function parseReveal(value: unknown): Reveal | null {
       const at = parsePoint(r.at);
       return at ? { kind: "point", at } : null;
     }
+    case "order": {
+      const order = parsePermutation(r.order);
+      return order ? { kind: "order", order } : null;
+    }
     case "line":
       return Number.isFinite(r.slope) && Number.isFinite(r.intercept)
         ? {
@@ -338,6 +410,12 @@ export function isBlank(response: Response): boolean {
       return response.at === null;
     case "line":
       return response.through === null;
+    case "order":
+      // An ordering starts scrambled on the screen, so there is always an
+      // arrangement to look at. The draft stays null until the student moves
+      // something, which is what tells an untouched question from an answered
+      // one — and the scramble is never the answer, so nothing is lost.
+      return response.order === null;
   }
 }
 
@@ -401,7 +479,17 @@ export function describeReveal(reveal: Reveal, question: Question): string {
       const sign = intercept < 0 ? "−" : "+";
       return `y = ${slope}x ${sign} ${Math.abs(intercept)}`;
     }
+    case "order":
+      return question.kind === "order" ? sequence(reveal.order, question) : "—";
   }
+}
+
+/** An ordering written out as the steps it names, in the order it puts them. */
+function sequence(
+  order: number[],
+  question: Extract<Question, { kind: "order" }>,
+): string {
+  return order.map((i) => question.items[i] ?? "?").join(" → ");
 }
 
 /** The same, for what the student submitted. */
@@ -426,7 +514,46 @@ export function describeResponse(response: Response, question: Question): string
       const sign = line.intercept < 0 ? "−" : "+";
       return `y = ${round(line.slope)}x ${sign} ${Math.abs(round(line.intercept))}`;
     }
+    case "order":
+      if (!response.order) return "No answer";
+      return question.kind === "order"
+        ? sequence(response.order, question)
+        : "—";
   }
+}
+
+/**
+ * How far one ordering is from another, counted in pairs that disagree.
+ *
+ * Kendall distance rather than "how many are in the right slot", because
+ * sliding one step from the front to the back leaves nothing in its original
+ * slot and is one mistake, not n of them. Counting pairs measures the thing a
+ * proof is actually made of: what has to come before what.
+ *
+ * Public because both sides need it — the server to grade, the client to say
+ * how close you were without being told the answer twice.
+ */
+export function inversions(given: number[], correct: number[]): number {
+  const rank = new Map<number, number>();
+  correct.forEach((item, at) => rank.set(item, at));
+
+  let out = 0;
+  for (let i = 0; i < given.length; i++) {
+    for (let j = i + 1; j < given.length; j++) {
+      const a = rank.get(given[i]);
+      const b = rank.get(given[j]);
+      // An index the answer does not contain cannot be out of order with
+      // anything; a response carrying one is rejected before it gets here.
+      if (a === undefined || b === undefined) continue;
+      if (a > b) out++;
+    }
+  }
+  return out;
+}
+
+/** How many pairs there are to get wrong. The denominator for the above. */
+export function pairCount(n: number): number {
+  return (n * (n - 1)) / 2;
 }
 
 function round(n: number): number {

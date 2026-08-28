@@ -1,6 +1,12 @@
 import "server-only";
 
-import type { Curve, Figure, Mark, Point } from "../questions";
+import {
+  pairCount,
+  type Curve,
+  type Figure,
+  type Mark,
+  type Point,
+} from "../questions";
 
 /**
  * The shared kit every question generator is built from.
@@ -124,6 +130,17 @@ export type Built =
       span: number;
       slope: number;
       intercept: number;
+      full: number;
+      zero: number;
+      figure?: Figure;
+      steps?: string[];
+    }
+  | {
+      kind: "order";
+      prompt: string;
+      /** Scrambled. The answer is the permutation that puts them back. */
+      items: string[];
+      answer: number[];
       full: number;
       zero: number;
       figure?: Figure;
@@ -316,6 +333,75 @@ export function line(
     zero: spec.zero ?? spec.span,
     figure: spec.figure,
     steps: spec.steps,
+  };
+}
+
+/**
+ * Put the steps in the right order.
+ *
+ * The generator writes the sequence the right way round and this scrambles it,
+ * which is the only arrangement under which the two cannot disagree: an author
+ * who had to supply both a shuffled list and the answer as indices into it
+ * would eventually supply the answer to a different shuffle.
+ *
+ * Reach for it where the thing being learned is what comes before what — a
+ * proof, a construction, a solving procedure. Not where the steps could be
+ * carried out in any order, because then there is no answer, and not where one
+ * step names the next out loud, because then there is no question either.
+ *
+ * Scoring counts pairs, not places. Sliding one step from the front to the
+ * back leaves nothing in its original place and is one mistake, not n of them.
+ * Full marks needs the order exactly right; the score reaches zero at half the
+ * pairs inverted, which is what a shuffle averages — so an ordering no better
+ * than random scores nothing, and one adjacent swap in a five-step proof still
+ * scores 0.8.
+ */
+export function order(
+  prompt: string,
+  sequence: string[],
+  r: Rng,
+  options: {
+    full?: number;
+    zero?: number;
+    figure?: Figure;
+    steps?: string[];
+  } = {},
+): Built {
+  if (sequence.length < 3) {
+    // Two steps is a coin flip wearing a sequence's clothes, and the score has
+    // only two values it can take. An authoring bug, not a runtime condition.
+    throw new Error("An ordering needs at least three steps: " + prompt);
+  }
+  if (new Set(sequence).size !== sequence.length) {
+    // Two identical steps make two correct answers, one of which gets marked
+    // wrong. Also an authoring bug; check:templates is where it surfaces.
+    throw new Error("An ordering cannot repeat a step: " + prompt);
+  }
+
+  /** Where each step ends up once shuffled: places[i] holds step i. */
+  const places = sequence.map((_, i) => i);
+  for (let i = places.length - 1; i > 0; i--) {
+    const j = r.int(0, i);
+    [places[i], places[j]] = [places[j], places[i]];
+  }
+  // A shuffle that came back the right way round is a question with nothing to
+  // do in it. One rotation breaks that and cannot restore it.
+  if (places.every((step, at) => step === at)) places.push(places.shift()!);
+
+  const items = places.map((step) => sequence[step]);
+  // For each step in its correct position, where that step is now sitting in
+  // the scrambled list.
+  const answer = sequence.map((_, step) => places.indexOf(step));
+
+  return {
+    kind: "order",
+    prompt,
+    items,
+    answer,
+    full: options.full ?? 0,
+    zero: options.zero ?? pairCount(sequence.length) / 2,
+    figure: options.figure,
+    steps: options.steps,
   };
 }
 

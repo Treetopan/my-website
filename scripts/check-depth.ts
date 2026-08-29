@@ -47,7 +47,12 @@ const SEEDS = 16;
  * anything slips back under it. Courses not listed are reported and not gated.
  */
 const FLOORS: Record<string, { generators: number; forms: number }> = {
+  "math/grade-5": { generators: 3, forms: 3 },
+  "math/grade-6": { generators: 3, forms: 3 },
+  "math/grade-7": { generators: 3, forms: 3 },
+  "math/grade-8": { generators: 3, forms: 3 },
   "math/algebra-1": { generators: 3, forms: 3 },
+  "math/geometry": { generators: 3, forms: 3 },
 };
 
 /**

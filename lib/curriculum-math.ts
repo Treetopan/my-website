@@ -1,9 +1,9 @@
 /**
- * Math course outlines: the Algebra 1 → AP Calculus BC sequence, unit by unit
+ * Math course outlines: the Grade 5 → AP Calculus BC sequence, unit by unit
  * and subunit by subunit.
  *
  * This file is the skeleton only — no questions. It lives apart from
- * `curriculum.ts` so six courses' worth of outline does not bury the stocked
+ * `curriculum.ts` so ten courses' worth of outline does not bury the stocked
  * question banks there. `curriculum.ts` turns these specs into Units, and a
  * course stays unplayable in the UI until its subunits actually hold questions.
  *
@@ -22,6 +22,478 @@ export type SubunitSpec = [code: string, name: string, difficulty: Difficulty];
 
 /** One unit: code, name, and its subunits in order. */
 export type UnitSpec = [code: string, name: string, subunits: SubunitSpec[]];
+
+/**
+ * Grade 5. The first course in the sequence, and the first written to the
+ * depth rule from the start: every subunit gets three generators that differ
+ * in the shape of the task, not three sets of digits.
+ */
+export const GRADE_5: UnitSpec[] = [
+  [
+    "unit-1",
+    "Place Value and Decimals",
+    [
+      ["1.1", "Place value through millions and thousandths", "easy"],
+      ["1.2", "Reading, writing, and comparing decimals", "easy"],
+      ["1.3", "Rounding decimals", "easy"],
+      ["1.4", "Powers of 10 and exponent notation", "easy"],
+      ["1.5", "Multiplying and dividing by powers of 10", "medium"],
+      ["1.6", "Adding and subtracting decimals", "easy"],
+      ["1.7", "Multiplying decimals", "medium"],
+      ["1.8", "Dividing decimals", "medium"],
+    ],
+  ],
+  [
+    "unit-2",
+    "Whole Number Operations and Number Theory",
+    [
+      ["2.1", "Multi-digit multiplication", "easy"],
+      ["2.2", "Multi-digit division with remainders", "medium"],
+      ["2.3", "Interpreting remainders in context", "medium"],
+      ["2.4", "Factors, multiples, and divisibility rules", "easy"],
+      ["2.5", "Prime and composite numbers", "easy"],
+      ["2.6", "Prime factorization", "medium"],
+      ["2.7", "Greatest common factor", "medium"],
+      ["2.8", "Least common multiple", "medium"],
+    ],
+  ],
+  [
+    "unit-3",
+    "Fractions — Addition and Subtraction",
+    [
+      ["3.1", "Equivalent fractions", "easy"],
+      ["3.2", "Comparing and ordering fractions", "medium"],
+      ["3.3", "Adding fractions with unlike denominators", "medium"],
+      ["3.4", "Subtracting fractions with unlike denominators", "medium"],
+      ["3.5", "Adding and subtracting mixed numbers", "medium"],
+      ["3.6", "Regrouping with mixed numbers", "hard"],
+      ["3.7", "Estimating fraction sums and differences", "medium"],
+      ["3.8", "Fraction word problems", "hard"],
+    ],
+  ],
+  [
+    "unit-4",
+    "Fractions — Multiplication and Division",
+    [
+      ["4.1", "Fraction as division", "medium"],
+      ["4.2", "Multiplying a fraction by a whole number", "easy"],
+      ["4.3", "Multiplying two fractions", "medium"],
+      ["4.4", "Area models for fraction multiplication", "medium"],
+      ["4.5", "Scaling: comparing a product to its factors", "hard"],
+      ["4.6", "Multiplying mixed numbers", "medium"],
+      ["4.7", "Dividing a whole number by a unit fraction", "medium"],
+      ["4.8", "Dividing a unit fraction by a whole number", "medium"],
+      ["4.9", "Converting between fractions and decimals", "easy"],
+    ],
+  ],
+  [
+    "unit-5",
+    "Expressions and Patterns",
+    [
+      ["5.1", "Order of operations with grouping symbols", "medium"],
+      ["5.2", "Writing numerical expressions from words", "medium"],
+      ["5.3", "Interpreting expressions without evaluating", "hard"],
+      ["5.4", "Numerical patterns and rules", "easy"],
+      ["5.5", "Generating two related patterns", "medium"],
+      ["5.6", "Graphing pattern pairs as ordered pairs", "medium"],
+      ["5.7", "Introduction to variables", "easy"],
+    ],
+  ],
+  [
+    "unit-6",
+    "The Coordinate Plane",
+    [
+      ["6.1", "Points, axes, and the origin", "easy"],
+      ["6.2", "Plotting ordered pairs in the first quadrant", "easy"],
+      ["6.3", "Reading coordinates from a graph", "easy"],
+      ["6.4", "Distance between points on an axis", "medium"],
+      ["6.5", "Representing real-world problems on a grid", "medium"],
+      ["6.6", "Extending to all four quadrants", "medium"],
+    ],
+  ],
+  [
+    "unit-7",
+    "Measurement and Volume",
+    [
+      ["7.1", "Converting within the metric system", "easy"],
+      ["7.2", "Converting within the customary system", "medium"],
+      ["7.3", "Multi-step conversion problems", "hard"],
+      ["7.4", "Volume as unit cubes", "easy"],
+      ["7.5", "Volume of a rectangular prism", "medium"],
+      ["7.6", "Volume formulas: V = lwh and V = Bh", "medium"],
+      ["7.7", "Volume of composite solids", "hard"],
+      ["7.8", "Line plots with fractional measurements", "medium"],
+    ],
+  ],
+  [
+    "unit-8",
+    "Two-Dimensional Geometry",
+    [
+      ["8.1", "Classifying triangles by sides and angles", "easy"],
+      ["8.2", "Classifying quadrilaterals", "easy"],
+      ["8.3", "The quadrilateral hierarchy", "medium"],
+      ["8.4", "Parallel and perpendicular sides", "easy"],
+      ["8.5", "Area of rectangles with fractional side lengths", "medium"],
+      ["8.6", "Perimeter and area problems", "medium"],
+    ],
+  ],
+];
+
+/**
+ * Grade 6. Ratio and rate reasoning, negative numbers, and the first algebra:
+ * expressions with letters in them, and equations to solve rather than
+ * arithmetic to carry out.
+ */
+export const GRADE_6: UnitSpec[] = [
+  [
+    "unit-1",
+    "Ratios and Rates",
+    [
+      ["1.1", "Ratio language and notation", "easy"],
+      ["1.2", "Equivalent ratios and ratio tables", "easy"],
+      ["1.3", "Unit rates", "medium"],
+      ["1.4", "Comparing unit rates", "medium"],
+      ["1.5", "Graphing ratio relationships", "medium"],
+      ["1.6", "Converting measurement units with ratios", "medium"],
+      ["1.7", "Percent as a rate per hundred", "easy"],
+      ["1.8", "Finding a percent of a number", "medium"],
+      ["1.9", "Finding the whole given a part and a percent", "hard"],
+    ],
+  ],
+  [
+    "unit-2",
+    "Operations with Fractions and Decimals",
+    [
+      ["2.1", "Dividing a fraction by a fraction", "medium"],
+      ["2.2", "Interpreting fraction division in context", "hard"],
+      ["2.3", "Multi-digit decimal operations", "medium"],
+      ["2.4", "The standard division algorithm", "medium"],
+      ["2.5", "GCF and LCM in context", "medium"],
+      ["2.6", "The distributive property with the GCF", "hard"],
+      ["2.7", "Fluency across fractions, decimals, and percents", "medium"],
+    ],
+  ],
+  [
+    "unit-3",
+    "Rational Numbers",
+    [
+      ["3.1", "Negative numbers and their meaning", "easy"],
+      ["3.2", "The number line extended", "easy"],
+      ["3.3", "Opposites and the additive inverse", "easy"],
+      ["3.4", "Absolute value", "easy"],
+      ["3.5", "Comparing and ordering rational numbers", "medium"],
+      ["3.6", "Absolute value in context", "medium"],
+      ["3.7", "The four-quadrant coordinate plane", "easy"],
+      ["3.8", "Reflections across the axes", "medium"],
+      ["3.9", "Distance between points sharing a coordinate", "medium"],
+    ],
+  ],
+  [
+    "unit-4",
+    "Expressions",
+    [
+      ["4.1", "Exponents and repeated multiplication", "easy"],
+      ["4.2", "Order of operations with exponents", "medium"],
+      ["4.3", "Writing algebraic expressions", "medium"],
+      ["4.4", "Identifying parts of an expression", "easy"],
+      ["4.5", "Evaluating expressions by substitution", "medium"],
+      ["4.6", "The distributive property", "medium"],
+      ["4.7", "Combining like terms", "medium"],
+      ["4.8", "Equivalent expressions", "medium"],
+      ["4.9", "Formulas and evaluation", "medium"],
+    ],
+  ],
+  [
+    "unit-5",
+    "Equations and Inequalities",
+    [
+      ["5.1", "What it means to solve an equation", "easy"],
+      ["5.2", "One-step addition and subtraction equations", "easy"],
+      ["5.3", "One-step multiplication and division equations", "easy"],
+      ["5.4", "Writing equations from word problems", "hard"],
+      ["5.5", "Inequalities and their meaning", "easy"],
+      ["5.6", "Graphing inequalities on a number line", "medium"],
+      ["5.7", "Dependent and independent variables", "medium"],
+      ["5.8", "Tables, graphs, and equations of relationships", "hard"],
+    ],
+  ],
+  [
+    "unit-6",
+    "Geometry",
+    [
+      ["6.1", "Area of parallelograms", "easy"],
+      ["6.2", "Area of triangles", "medium"],
+      ["6.3", "Area of trapezoids", "medium"],
+      ["6.4", "Area of composite figures", "hard"],
+      ["6.5", "Polygons on the coordinate plane", "medium"],
+      ["6.6", "Nets of three-dimensional figures", "medium"],
+      ["6.7", "Surface area from nets", "hard"],
+      ["6.8", "Volume with fractional edge lengths", "hard"],
+    ],
+  ],
+  [
+    "unit-7",
+    "Statistics",
+    [
+      ["7.1", "Statistical versus non-statistical questions", "easy"],
+      ["7.2", "Dot plots and histograms", "easy"],
+      ["7.3", "Measures of center: mean, median, mode", "medium"],
+      ["7.4", "The mean as a balance point", "hard"],
+      ["7.5", "Measures of variability: range and IQR", "medium"],
+      ["7.6", "Mean absolute deviation", "hard"],
+      ["7.7", "Box plots", "medium"],
+      ["7.8", "Choosing an appropriate measure", "hard"],
+      ["7.9", "Describing a distribution in context", "medium"],
+    ],
+  ],
+];
+
+/**
+ * Grade 7. Proportional reasoning carried through percent, geometry and
+ * probability, and the first equations worth calling algebra: two steps,
+ * rational coefficients, and a variable on both sides.
+ */
+export const GRADE_7: UnitSpec[] = [
+  [
+    "unit-1",
+    "Proportional Relationships",
+    [
+      ["1.1", "Unit rates with fractions", "medium"],
+      ["1.2", "Recognizing proportional relationships in tables", "medium"],
+      ["1.3", "Recognizing proportional relationships in graphs", "medium"],
+      ["1.4", "The constant of proportionality", "medium"],
+      ["1.5", "Equations of proportional relationships", "medium"],
+      ["1.6", "Interpreting points on a proportional graph", "hard"],
+      ["1.7", "Solving proportions", "medium"],
+      ["1.8", "Scale drawings and scale factor", "hard"],
+      ["1.9", "Multi-step ratio problems", "hard"],
+    ],
+  ],
+  [
+    "unit-2",
+    "Operations with Rational Numbers",
+    [
+      ["2.1", "Adding integers on a number line", "easy"],
+      ["2.2", "Adding rational numbers", "medium"],
+      ["2.3", "Subtraction as adding the opposite", "medium"],
+      ["2.4", "Distance as the absolute value of a difference", "medium"],
+      ["2.5", "Multiplying rational numbers and sign rules", "medium"],
+      ["2.6", "Dividing rational numbers", "medium"],
+      ["2.7", "Terminating and repeating decimals", "medium"],
+      ["2.8", "Order of operations with rational numbers", "hard"],
+      ["2.9", "Applying rational number operations", "hard"],
+    ],
+  ],
+  [
+    "unit-3",
+    "Percent Applications",
+    [
+      ["3.1", "Percent increase and decrease", "medium"],
+      ["3.2", "Tax, tip, and commission", "medium"],
+      ["3.3", "Discount and markup", "medium"],
+      ["3.4", "Simple interest", "medium"],
+      ["3.5", "Percent error", "hard"],
+      ["3.6", "Successive percent changes", "hard"],
+      ["3.7", "Working backward from a final amount", "hard"],
+    ],
+  ],
+  [
+    "unit-4",
+    "Expressions and Equations",
+    [
+      ["4.1", "Adding and subtracting linear expressions", "medium"],
+      ["4.2", "Factoring linear expressions", "medium"],
+      ["4.3", "Expanding with the distributive property", "medium"],
+      ["4.4", "Rewriting expressions to reveal meaning", "hard"],
+      ["4.5", "Two-step equations", "medium"],
+      ["4.6", "Equations with rational coefficients", "hard"],
+      ["4.7", "Equations with the variable on both sides", "hard"],
+      ["4.8", "Two-step inequalities", "medium"],
+      ["4.9", "Reversing the inequality sign", "medium"],
+      ["4.10", "Modeling with equations and inequalities", "hard"],
+    ],
+  ],
+  [
+    "unit-5",
+    "Geometry — Angles and Figures",
+    [
+      ["5.1", "Complementary and supplementary angles", "easy"],
+      ["5.2", "Vertical and adjacent angles", "easy"],
+      ["5.3", "Solving for unknown angles", "medium"],
+      ["5.4", "Triangle inequality and constructing triangles", "medium"],
+      ["5.5", "Conditions determining a unique triangle", "hard"],
+      ["5.6", "Cross sections of three-dimensional figures", "medium"],
+      ["5.7", "Circumference of a circle", "easy"],
+      ["5.8", "Area of a circle", "medium"],
+      ["5.9", "Composite figures involving circles", "hard"],
+      ["5.10", "Area, volume, and surface area problems", "hard"],
+    ],
+  ],
+  [
+    "unit-6",
+    "Probability",
+    [
+      ["6.1", "Likelihood and the probability scale", "easy"],
+      ["6.2", "Theoretical probability", "medium"],
+      ["6.3", "Experimental probability", "medium"],
+      ["6.4", "Comparing theoretical and experimental results", "hard"],
+      ["6.5", "Simulation", "hard"],
+      ["6.6", "Sample space of compound events", "medium"],
+      ["6.7", "Tree diagrams and organized lists", "medium"],
+      ["6.8", "Probability of compound events", "hard"],
+      ["6.9", "Independent and dependent events", "hard"],
+    ],
+  ],
+  [
+    "unit-7",
+    "Statistics and Sampling",
+    [
+      ["7.1", "Populations and samples", "easy"],
+      ["7.2", "Random sampling and bias", "medium"],
+      ["7.3", "Estimating a population from a sample", "hard"],
+      ["7.4", "Variability across samples", "hard"],
+      ["7.5", "Comparing two populations", "hard"],
+      ["7.6", "Visual overlap of distributions", "medium"],
+      ["7.7", "Drawing inferences from data", "hard"],
+    ],
+  ],
+];
+
+/**
+ * Grade 8. Linear relationships worked concretely — tables, graphs, rate of
+ * change, slope-intercept, solving by graphing — plus transformations,
+ * Pythagoras and the first bivariate data.
+ *
+ * Deliberately pitched below Algebra 1 rather than duplicating it: the same
+ * content arrives there formally, in point-slope and standard form, with
+ * literal equations and elimination. A student who finishes this course should
+ * find Algebra 1's early units familiar but more abstract.
+ */
+export const GRADE_8: UnitSpec[] = [
+  [
+    "unit-1",
+    "The Number System",
+    [
+      ["1.1", "Rational and irrational numbers", "easy"],
+      ["1.2", "Converting repeating decimals to fractions", "hard"],
+      ["1.3", "Approximating irrational numbers", "medium"],
+      ["1.4", "Comparing and ordering irrational numbers", "medium"],
+      ["1.5", "Square roots and cube roots", "medium"],
+      ["1.6", "Solving x² = p and x³ = p", "medium"],
+    ],
+  ],
+  [
+    "unit-2",
+    "Exponents and Scientific Notation",
+    [
+      ["2.1", "Properties of integer exponents", "medium"],
+      ["2.2", "Zero and negative exponents", "medium"],
+      ["2.3", "Simplifying exponential expressions", "hard"],
+      ["2.4", "Scientific notation", "easy"],
+      ["2.5", "Operations in scientific notation", "hard"],
+      ["2.6", "Comparing magnitudes", "medium"],
+      ["2.7", "Choosing units for very large or small quantities", "medium"],
+    ],
+  ],
+  [
+    "unit-3",
+    "Linear Equations in One Variable",
+    [
+      ["3.1", "Solving multi-step equations", "medium"],
+      ["3.2", "Equations with variables on both sides", "medium"],
+      ["3.3", "Equations with rational coefficients", "hard"],
+      ["3.4", "One solution, no solution, infinitely many", "hard"],
+      ["3.5", "Justifying each step", "medium"],
+      ["3.6", "Modeling with linear equations", "hard"],
+    ],
+  ],
+  [
+    "unit-4",
+    "Linear Relationships and Slope",
+    [
+      ["4.1", "Proportional relationships as lines through the origin", "easy"],
+      ["4.2", "Slope as a constant rate of change", "medium"],
+      ["4.3", "Similar triangles and why slope is constant", "hard"],
+      ["4.4", "Slope from two points", "medium"],
+      ["4.5", "Slope-intercept form", "medium"],
+      ["4.6", "Graphing from an equation", "medium"],
+      ["4.7", "Writing an equation from a graph", "medium"],
+      ["4.8", "Comparing relationships across representations", "hard"],
+      ["4.9", "Interpreting slope and intercept in context", "hard"],
+    ],
+  ],
+  [
+    "unit-5",
+    "Systems of Linear Equations",
+    [
+      ["5.1", "What a solution to a system means", "easy"],
+      ["5.2", "Solving systems by graphing", "medium"],
+      ["5.3", "Estimating solutions from a graph", "medium"],
+      ["5.4", "Solving by substitution", "hard"],
+      ["5.5", "Solving by elimination", "hard"],
+      ["5.6", "Systems with no solution or infinitely many", "hard"],
+      ["5.7", "Modeling with systems", "hard"],
+    ],
+  ],
+  [
+    "unit-6",
+    "Functions",
+    [
+      ["6.1", "What makes a relation a function", "easy"],
+      ["6.2", "Function notation and language", "medium"],
+      ["6.3", "Functions from tables, graphs, and equations", "medium"],
+      ["6.4", "Linear versus nonlinear functions", "medium"],
+      ["6.5", "Rate of change and initial value", "medium"],
+      ["6.6", "Comparing functions in different forms", "hard"],
+      ["6.7", "Sketching a graph from a verbal description", "hard"],
+      ["6.8", "Qualitative graph analysis", "hard"],
+    ],
+  ],
+  [
+    "unit-7",
+    "Transformations, Congruence, and Similarity",
+    [
+      ["7.1", "Translations", "easy"],
+      ["7.2", "Reflections", "easy"],
+      ["7.3", "Rotations", "medium"],
+      ["7.4", "Sequences of transformations", "hard"],
+      ["7.5", "Congruence through rigid motions", "medium"],
+      ["7.6", "Dilations and scale factor", "medium"],
+      ["7.7", "Similarity through transformations", "hard"],
+      ["7.8", "Angles from parallel lines and a transversal", "medium"],
+      ["7.9", "Angle sum and exterior angle of a triangle", "medium"],
+      ["7.10", "The angle–angle criterion for similarity", "hard"],
+    ],
+  ],
+  [
+    "unit-8",
+    "The Pythagorean Theorem",
+    [
+      ["8.1", "Understanding the Pythagorean theorem", "easy"],
+      ["8.2", "Proving the Pythagorean theorem", "hard"],
+      ["8.3", "Finding a missing side", "medium"],
+      ["8.4", "The converse of the Pythagorean theorem", "medium"],
+      ["8.5", "Applications in two dimensions", "medium"],
+      ["8.6", "Distance between points on the coordinate plane", "medium"],
+      ["8.7", "Applications in three dimensions", "hard"],
+    ],
+  ],
+  [
+    "unit-9",
+    "Volume and Bivariate Data",
+    [
+      ["9.1", "Volume of cylinders", "medium"],
+      ["9.2", "Volume of cones", "medium"],
+      ["9.3", "Volume of spheres", "medium"],
+      ["9.4", "Composite solid volume problems", "hard"],
+      ["9.5", "Scatter plots and association", "medium"],
+      ["9.6", "Clustering, outliers, and linear association", "medium"],
+      ["9.7", "Fitting a line informally", "hard"],
+      ["9.8", "Interpreting the slope and intercept of a fitted line", "hard"],
+      ["9.9", "Two-way tables and relative frequency", "hard"],
+    ],
+  ],
+];
 
 export const ALGEBRA_1: UnitSpec[] = [
   [

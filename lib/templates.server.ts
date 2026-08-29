@@ -9,6 +9,10 @@ import {
 } from "./templates";
 import { rng, type Built, type Rng } from "./generators/kit";
 import type { Answer } from "./grading.server";
+import { GRADE_5 } from "./generators/grade-5";
+import { GRADE_6 } from "./generators/grade-6";
+import { GRADE_7 } from "./generators/grade-7";
+import { GRADE_8 } from "./generators/grade-8";
 import { ALGEBRA_1 } from "./generators/algebra-1";
 import { GEOMETRY } from "./generators/geometry";
 import { ALGEBRA_2 } from "./generators/algebra-2";
@@ -39,6 +43,10 @@ type Generator = (r: Rng) => Built;
 
 /** Every course's generators, keyed by subunit id. */
 const GENERATORS: Record<string, Generator[]> = {
+  ...GRADE_5,
+  ...GRADE_6,
+  ...GRADE_7,
+  ...GRADE_8,
   ...ALGEBRA_1,
   ...GEOMETRY,
   ...ALGEBRA_2,

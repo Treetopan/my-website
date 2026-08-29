@@ -18,6 +18,10 @@ import {
   AP_CALCULUS_AB,
   AP_CALCULUS_BC,
   GEOMETRY,
+  GRADE_5,
+  GRADE_6,
+  GRADE_7,
+  GRADE_8,
   PRECALCULUS,
   type UnitSpec,
 } from "./curriculum-math";
@@ -303,15 +307,39 @@ export const SUBJECTS: Subject[] = [
   {
     id: "math",
     name: "Math",
-    blurb: "Algebra 1 through AP Calculus BC, plus statistics",
+    blurb: "Grade 5 through AP Calculus BC, plus statistics",
     // AP Statistics leads because it is the one course with questions in it.
-    // The six below are the Algebra 1 → AP Calculus BC sequence, in order.
+    // The ten below are the Grade 5 → AP Calculus BC sequence, in order.
     courses: [
       {
         id: "math/ap-statistics",
         name: "AP Statistics",
         blurb: "Data, sampling, inference",
         units: [statsU1],
+      },
+      {
+        id: "math/grade-5",
+        name: "Grade 5",
+        blurb: "Decimals, fractions, volume, the coordinate plane",
+        units: outline("math/grade-5", GRADE_5),
+      },
+      {
+        id: "math/grade-6",
+        name: "Grade 6",
+        blurb: "Ratios, negative numbers, expressions, statistics",
+        units: outline("math/grade-6", GRADE_6),
+      },
+      {
+        id: "math/grade-7",
+        name: "Grade 7",
+        blurb: "Proportions, percent, circles, probability",
+        units: outline("math/grade-7", GRADE_7),
+      },
+      {
+        id: "math/grade-8",
+        name: "Grade 8",
+        blurb: "Exponents, lines, transformations, Pythagoras",
+        units: outline("math/grade-8", GRADE_8),
       },
       {
         id: "math/algebra-1",

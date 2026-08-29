@@ -436,6 +436,77 @@ export function among(
   return ask(prompt, correct, all.filter((o) => o !== correct), r, figure, steps);
 }
 
+// ─── Rolling ordinary numbers ────────────────────────────
+
+/**
+ * The helpers the school-level courses roll their numbers with.
+ *
+ * They live here rather than in one course file for the same reason the
+ * rendering helpers do: Grade 5 and Grade 6 both need a decimal without float
+ * noise on it and a mixed number written the way a marker expects, and a
+ * generator file that imported another generator file to get them would tie
+ * two courses together for the sake of six lines.
+ */
+
+/** A decimal with the float noise taken off: 0.1 + 0.2 is 0.3, not 0.30000000000000004. */
+export function dp(value: number, places = 2): number {
+  return Math.round(value * 10 ** places) / 10 ** places;
+}
+
+/** "2 3/4", or the whole number alone when the fraction part vanishes. */
+export function mixed(whole: number, numerator: number, denominator: number): string {
+  return numerator === 0
+    ? String(whole)
+    : `${whole} ${frac(numerator, denominator)}`;
+}
+
+/**
+ * An improper fraction written the way a Grade 5 answer is expected: as a
+ * mixed number once it passes one, with the improper form still accepted,
+ * because both are right and only one of them can be shown.
+ */
+export function asMixed(numerator: number, denominator: number): {
+  show: string;
+  accept: string[];
+} {
+  const g = gcd(numerator, denominator);
+  const n = numerator / g;
+  const d = denominator / g;
+  if (d === 1) return { show: String(n), accept: [] };
+  if (n < d) return { show: `${n}/${d}`, accept: [] };
+
+  const whole = Math.floor(n / d);
+  return { show: mixed(whole, n - whole * d, d), accept: [`${n}/${d}`] };
+}
+
+/** A proper fraction in lowest terms, with a denominator drawn from `dens`. */
+export function properFraction(
+  r: Rng,
+  dens: readonly number[],
+): { n: number; d: number } {
+  const d = r.pick(dens);
+  let n = r.int(1, d - 1);
+  while (gcd(n, d) !== 1) n = r.int(1, d - 1);
+  return { n, d };
+}
+
+/** Another number from the range, never the one already drawn. */
+export function other(r: Rng, avoid: number, min: number, max: number): number {
+  let value = r.int(min, max);
+  while (value === avoid) value = r.int(min, max);
+  return value;
+}
+
+/** A shuffled copy, so a fixed pool is not always offered in the same order. */
+export function shuffled<T>(items: readonly T[], r: Rng): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = r.int(0, i);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 // ─── Drawing the function ────────────────────────────────
 
 /**

@@ -21,6 +21,10 @@ const SEEDS = 40;
 const CEILING = 0.45;
 
 const COURSES: [string, string][] = [
+  ["grade-5", "Grade 5"],
+  ["grade-6", "Grade 6"],
+  ["grade-7", "Grade 7"],
+  ["grade-8", "Grade 8"],
   ["algebra-1", "Algebra 1"],
   ["geometry", "Geometry"],
   ["algebra-2", "Algebra 2"],

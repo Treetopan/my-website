@@ -97,7 +97,7 @@ let checked = 0;
 const SMELLS: [RegExp, string][] = [
   [/\b1x\b/, "coefficient of 1 written out"],
   [/\+ -|- -|\+\+|--/, "doubled sign"],
-  [/\d\.\d{3,}/, "unrounded decimal"],
+  [/\d\.\d{4,}/, "unrounded decimal"],
   [/NaN|Infinity|undefined\^|\^undefined/, "non-numeric value"],
   [/\/0\b/, "division by zero"],
   [/√-|√0\b/, "root of a negative or zero"],

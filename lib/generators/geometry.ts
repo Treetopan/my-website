@@ -7,6 +7,7 @@ import {
   fill,
   frac,
   graph,
+  head,
   line,
   order,
   piFrac,
@@ -517,6 +518,37 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    // The segment sum as an equation rather than an arithmetic step.
+    (r) => {
+      const x = r.int(2, 12);
+      const m = r.int(2, 6);
+      const b = r.nonzero(-9, 9);
+      const bc = r.int(4, 20);
+      return fill(
+        `B lies between A and C. If AB = ${m}x${signed(b)}, BC = ${bc} and AC = ${m * x + b + bc}, what is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const mid = r.int(-8, 8);
+      const reach = r.int(1, 6);
+      return slider(
+        `On a number line, a segment runs from ${mid - reach} to ${mid + reach}. Place its midpoint.`,
+        { min: -12, max: 12, step: 1, value: mid },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for finding the midpoint of a segment on a number line in order.",
+        [
+          "Read off the two endpoints",
+          "Add them together",
+          "Halve the total",
+          "Check the result sits the same distance from each end",
+        ],
+        r,
+      ),
   ],
 
   // ── 1.4 Angle pair relationships ──
@@ -529,6 +561,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `${complement ? 90 - angle : 180 - angle}°`,
         { hint: "in degrees" },
       );
+    },
+    (r) => {
+      const k = r.pick([2, 4, 5, 8, 9]);
+      return fill(
+        `One of two complementary angles is ${k} times the other. How large is the smaller one?`,
+        90 / (k + 1),
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(15, 165);
+      return slider(`Place the supplement of a ${a}° angle.`, {
+        min: 0,
+        max: 180,
+        step: 1,
+        value: 180 - a,
+      });
     },
   ],
 
@@ -548,6 +597,20 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         zero: 30,
       });
     },
+    (r) => {
+      const half = r.int(12, 74);
+      return fill(
+        `A ray bisects an angle of ${2 * half}°. How large is each half?`,
+        half,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put these kinds of angle in order, smallest first.",
+        ["Acute", "Right", "Obtuse", "Straight", "Reflex"],
+        r,
+      ),
   ],
 
   // ── 1.5 Distance and midpoint on the coordinate plane ──
@@ -595,6 +658,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) =>
+      order(
+        "Put the steps of the distance formula in order.",
+        [
+          "Subtract the two x-coordinates",
+          "Subtract the two y-coordinates",
+          "Square both differences and add them",
+          "Take the square root of that total",
+        ],
+        r,
+      ),
   ],
 
   // ── 5.1 Triangle classification and the angle sum theorem ──
@@ -607,6 +681,29 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `Two angles of a triangle measure ${first}° and ${second}°. What is the third?`,
         `${third}°`,
         { hint: "in degrees" },
+      );
+    },
+    (r) => {
+      const parts = r.pick([
+        [1, 2, 3],
+        [2, 3, 4],
+        [1, 1, 4],
+        [3, 4, 5],
+      ]);
+      const total = parts[0] + parts[1] + parts[2];
+      const scale = 180 / total;
+      return fill(
+        `The angles of a triangle are in the ratio ${parts.join(" : ")}. How large is the largest one?`,
+        Math.max(...parts) * scale,
+        { unit: "degrees", hint: "a number", tolerance: 0.5 },
+      );
+    },
+    (r) => {
+      const a = r.int(20, 90);
+      const b = r.int(20, 180 - a - 20);
+      return slider(
+        `Two angles of a triangle are ${a}° and ${b}°. Place the third.`,
+        { min: 0, max: 180, step: 1, value: 180 - a - b },
       );
     },
   ],
@@ -622,6 +719,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "in degrees" },
       );
     },
+    // The theorem as an equation: the exterior angle equals the two remote
+    // interior angles added, and one of the three is written as an expression.
+    (r) => {
+      const x = r.int(10, 45);
+      const first = r.int(20, 3 * x + 10 - 20);
+      return fill(
+        `An exterior angle of a triangle measures (3x + 10)°, and the two remote interior angles measure ${first}° and ${3 * x + 10 - first}°. What is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(25, 80);
+      const b = r.int(25, 80);
+      return slider(
+        `Two remote interior angles of a triangle are ${a}° and ${b}°. Place the exterior angle at the third vertex.`,
+        { min: 0, max: 180, step: 1, value: a + b },
+      );
+    },
   ],
 
   // ── 6.5 The midsegment theorem ──
@@ -632,6 +748,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `The midsegment of a triangle is parallel to a side of length ${base}. How long is the midsegment?`,
         base / 2,
         { hint: "a number" },
+      );
+    },
+    (r) => {
+      const mid = r.int(2, 15);
+      return fill(
+        `A midsegment of a triangle is ${mid} long. How long is the side it is parallel to?`,
+        2 * mid,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const side = r.int(2, 14) * 2;
+      return slider(
+        `A triangle has a side of length ${side}. Place the length of the midsegment parallel to it.`,
+        { min: 0, max: 30, step: 1, value: side / 2 },
       );
     },
   ],
@@ -664,6 +795,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a whole number" },
       );
     },
+    (r) => {
+      const a = r.int(4, 15);
+      const b = r.int(4, 15);
+      return fill(
+        `Two sides of a triangle measure ${a} and ${b}. How many whole numbers could the third side be?`,
+        a + b - 1 - (Math.abs(a - b) + 1) + 1,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const a = r.int(4, 15);
+      const b = r.int(4, 15);
+      return slider(
+        `Two sides of a triangle are ${a} and ${b}. Place the smallest whole number the third side could be.`,
+        { min: 0, max: 30, step: 1, value: Math.abs(a - b) + 1 },
+      );
+    },
   ],
 
   // ── 7.2 Similar polygons ──
@@ -677,6 +825,26 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const small = r.int(3, 9);
+      const k = r.int(2, 5);
+      return fill(
+        `Two similar polygons have perimeters ${small} and ${small * k}. What is the scale factor from the smaller to the larger?`,
+        k,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for checking two polygons are similar in order.",
+        [
+          "Match up the corresponding vertices",
+          "Check every pair of corresponding angles is congruent",
+          "Write the ratios of corresponding sides",
+          "Check all those ratios come out the same",
+        ],
+        r,
+      ),
   ],
 
   // ── 7.7 Perimeter and area ratios of similar figures ──
@@ -691,6 +859,32 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "e.g. 9:16" },
       );
     },
+    (r) => {
+      const k = r.int(2, 6);
+      return fill(
+        `Two similar figures have areas in the ratio ${k * k} : 1. What is the ratio of their perimeters, written as the number to 1?`,
+        k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const k = r.int(2, 5);
+      return slider(
+        `Two similar figures have a scale factor of ${k}. Place the ratio of their areas, as the number to 1.`,
+        { min: 0, max: 30, step: 1, value: k * k },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for comparing the areas of two similar figures in order.",
+        [
+          "Find a pair of corresponding sides",
+          "Divide one by the other to get the scale factor",
+          "Square that scale factor",
+          "Multiply the first area by the square to get the second",
+        ],
+        r,
+      ),
   ],
 
   // ── 8.1 The Pythagorean theorem ──
@@ -714,6 +908,43 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const pool = [
+        { t: "3, 4, 5", right: true },
+        { t: "5, 12, 13", right: true },
+        { t: "8, 15, 17", right: true },
+        { t: "7, 24, 25", right: true },
+        { t: "4, 5, 6", right: false },
+        { t: "2, 3, 4", right: false },
+        { t: "5, 6, 8", right: false },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `By the converse of the Pythagorean theorem, how many of these are right triangles? ${shown.map((s) => `(${s.t})`).join(", ")}`,
+        shown.filter((s) => s.right).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
+    (r) => {
+      const [a, b, c] = r.pick([
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [9, 12, 15],
+        [8, 15, 17],
+      ]);
+      return slider(`A right triangle has legs ${a} and ${b}. Place its hypotenuse.`, {
+        min: 0,
+        max: 30,
+        step: 1,
+        value: c,
+      });
+    },
   ],
 
   // ── 8.2 Pythagorean triples ──
@@ -733,6 +964,33 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A right triangle has legs ${a} and ${b}. How long is the hypotenuse?`,
         c,
         { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const [a, b, c] = r.pick([
+        [7, 24, 25],
+        [8, 15, 17],
+        [20, 21, 29],
+        [9, 40, 41],
+        [12, 35, 37],
+      ]);
+      return fill(
+        `${a}, ${b}, ? is a Pythagorean triple. What is the missing number?`,
+        c,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const base = r.pick([
+        [3, 4, 5],
+        [5, 12, 13],
+        [8, 15, 17],
+      ]);
+      const k = r.int(2, 6);
+      return fill(
+        `Multiplying every side of the triple ${base.join(", ")} by ${k} gives another triple. What is its largest number?`,
+        base[2] * k,
+        { hint: "a number" },
       );
     },
   ],
@@ -774,6 +1032,13 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number times a root" },
       );
     },
+    (r) => {
+      const short = r.int(2, 14);
+      return slider(
+        `In a 30–60–90 triangle the shorter leg is ${short}. Place the hypotenuse.`,
+        { min: 0, max: 30, step: 1, value: 2 * short },
+      );
+    },
   ],
 
   // ── 8.4 Sine, cosine and tangent ratios ──
@@ -797,6 +1062,43 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a fraction" },
       );
     },
+    (r) => {
+      const [a, b, c] = r.pick([
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [8, 15, 17],
+      ]);
+      const wantSine = r.bool();
+      return fill(
+        `A right triangle has legs ${a} and ${b} and hypotenuse ${c}, and θ is the angle opposite the side of length ${a}. What is ${wantSine ? "sin" : "cos"} θ?`,
+        wantSine ? frac(a, c) : frac(b, c),
+        { hint: "a fraction" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for choosing and using a trigonometric ratio in order.",
+        [
+          "Label the sides opposite, adjacent and hypotenuse for the angle you have",
+          "See which two of them the question involves",
+          "Pick the ratio built from those two",
+          "Substitute and solve for the unknown",
+        ],
+        r,
+      ),
+    (r) => {
+      const [a, b, c] = r.pick([
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [8, 15, 17],
+      ]);
+      return slider(
+        `In a right triangle with legs ${a} and ${b} and hypotenuse ${c}, the tangent of the angle opposite the side of length ${a} is a fraction. Place its numerator when written over ${b}.`,
+        { min: 0, max: 20, step: 1, value: a },
+      );
+    },
   ],
 
   // ── 9.1 Polygon interior and exterior angle sums ──
@@ -812,6 +1114,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "in degrees" },
       );
     },
+    (r) => {
+      const n = r.pick([3, 4, 5, 6, 8, 9, 10, 12, 18, 20]);
+      return fill(
+        `What is the measure of each interior angle of a regular ${n}-sided polygon?`,
+        ((n - 2) * 180) / n,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const n = r.pick([3, 4, 5, 6, 8, 9, 10, 12]);
+      return slider(
+        `Place the measure of each exterior angle of a regular ${n}-sided polygon.`,
+        { min: 0, max: 180, step: 1, value: 360 / n },
+      );
+    },
   ],
 
   // ── 10.3 Arcs and central angles ──
@@ -825,6 +1142,22 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
           : `A central angle measures ${central}°. What is the measure of its intercepted arc?`,
         `${central}°`,
         { hint: "in degrees" },
+      );
+    },
+    (r) => {
+      const first = r.pick([60, 90, 120]);
+      const second = r.pick([45, 75, 100]);
+      return fill(
+        `A circle is split into three arcs measuring ${first}°, ${second}° and x°. What is x?`,
+        360 - first - second,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const minor = r.int(30, 170);
+      return slider(
+        `A minor arc measures ${minor}°. Place the measure of the major arc.`,
+        { min: 0, max: 360, step: 1, value: 360 - minor },
       );
     },
   ],
@@ -862,6 +1195,16 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { span, x: h, y: k, zero: 2 },
       );
     },
+    (r) => {
+      const h = r.nonzero(-8, 8);
+      const k = r.nonzero(-8, 8);
+      const radius = r.int(2, 12);
+      return fill(
+        `What is the radius of the circle (x${signed(-h)})^2 + (y${signed(-k)})^2 = ${radius * radius}?`,
+        radius,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 10.10 Areas of sectors ──
@@ -892,6 +1235,30 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a multiple of π" },
       );
     },
+    (r) => {
+      const radius = r.int(2, 12);
+      const degrees = r.pick([30, 45, 60, 90, 120, 180]);
+      return fill(
+        `A sector of a circle of radius ${radius} has area ${piFrac(degrees * radius * radius, 360)}. What is its central angle?`,
+        degrees,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const degrees = r.pick([45, 90, 180]);
+      const radius = degrees === 45 ? r.pick([4, 8]) : r.pick([2, 4, 6, 8, 10]);
+      return slider(
+        `A sector of a circle of radius ${radius} has a central angle of ${degrees}°. Place the number that multiplies π in its area.`,
+        {
+          min: 0,
+          max: 60,
+          step: 1,
+          value: (degrees * radius * radius) / 360,
+          full: 1,
+          zero: 6,
+        },
+      );
+    },
   ],
 
   // ── 11.7 Volume of prisms and cylinders ──
@@ -916,6 +1283,34 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const radius = r.int(2, 9);
+      const height = r.int(2, 12);
+      return fill(
+        `What is the volume of a cylinder with radius ${radius} and height ${height}?`,
+        piFrac(radius * radius * height, 1),
+        { hint: "a multiple of π" },
+      );
+    },
+    (r) => {
+      const base = r.int(2, 12);
+      const height = r.int(2, 12);
+      return slider(
+        `A prism has base area ${base} and volume ${base * height}. Place its height.`,
+        { min: 0, max: 30, step: 1, value: height },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for the volume of a prism in order.",
+        [
+          "Identify which face is the base",
+          "Work out the area of that base",
+          "Measure the height perpendicular to it",
+          "Multiply the base area by the height",
+        ],
+        r,
+      ),
   ],
 
   // ── 11.8 Volume of pyramids and cones ──
@@ -953,6 +1348,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
             { hint: "a number" },
           );
     },
+    (r) => {
+      const side = r.int(2, 6);
+      const height = r.int(1, 6) * 3;
+      return slider(
+        `Place the volume of a pyramid with a square base of side ${side} and height ${height}.`,
+        {
+          min: 0,
+          max: 250,
+          step: 1,
+          value: (side * side * height) / 3,
+          full: 1,
+          zero: 25,
+        },
+      );
+    },
   ],
 
   // ── 11.9 Spheres ──
@@ -982,6 +1392,13 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a multiple of π" },
       );
     },
+    (r) => {
+      const radius = r.int(2, 12);
+      return slider(
+        `A sphere has surface area ${piFrac(4 * radius * radius, 1)}. Place its radius.`,
+        { min: 0, max: 20, step: 1, value: radius },
+      );
+    },
   ],
 
   // ── 11.11 Similar solids and the effect of scaling ──
@@ -995,6 +1412,32 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "e.g. 1:8" },
       );
     },
+    (r) => {
+      const k = r.int(2, 5);
+      return fill(
+        `Two similar solids have a scale factor of ${k}. What is the ratio of their volumes, as the number to 1?`,
+        k ** 3,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const k = r.int(2, 6);
+      return slider(
+        `Two similar solids have a scale factor of ${k}. Place the ratio of their surface areas, as the number to 1.`,
+        { min: 0, max: 40, step: 1, value: k * k, full: 1, zero: 5 },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for comparing two similar solids in order.",
+        [
+          "Find a pair of corresponding lengths",
+          "Divide them to get the scale factor",
+          "Square it for surface areas and cube it for volumes",
+          "Multiply the known quantity by the right power",
+        ],
+        r,
+      ),
   ],
 
   // ── 12.2 Permutations and combinations ──
@@ -1023,6 +1466,26 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const n = r.int(4, 8);
+      const k = r.int(2, 3);
+      let ways = 1;
+      for (let i = 0; i < k; i++) ways = (ways * (n - i)) / (i + 1);
+      return fill(
+        `How many ways are there to choose ${k} people from ${n}, when the order does not matter?`,
+        ways,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const n = r.int(3, 5);
+      let ways = 1;
+      for (let i = 2; i <= n; i++) ways *= i;
+      return slider(
+        `Place the number of different orders in which ${n} distinct books can be shelved.`,
+        { min: 0, max: 130, step: 1, value: ways, full: 1, zero: 14 },
+      );
+    },
   ],
 
   // ── 12.5 Independent and dependent events ──
@@ -1041,6 +1504,33 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a fraction" },
       );
     },
+    (r) => {
+      const a = r.int(2, 6);
+      const b = r.int(2, 6);
+      return fill(
+        `Two independent events have probabilities 1/${a} and 1/${b}. What is the probability both happen?`,
+        frac(1, a * b),
+        { hint: "a fraction" },
+      );
+    },
+    (r) => {
+      const red = r.int(2, 6);
+      const other = r.int(2, 6);
+      const total = red + other;
+      return fill(
+        `A bag holds ${red} red counters and ${other} blue. Two are drawn without replacement. What is the probability both are red?`,
+        frac(red * (red - 1), total * (total - 1)),
+        { hint: "a fraction" },
+      );
+    },
+    (r) => {
+      const total = r.pick([10, 20, 25, 50]);
+      const wanted = r.int(1, total - 1);
+      return slider(
+        `A spinner has ${total} equal sectors, ${wanted} of them winning. Place the percentage chance of winning on a single spin.`,
+        { min: 0, max: 100, step: 1, value: Math.round((wanted / total) * 100), full: 1, zero: 12 },
+      );
+    },
   ],
   // ── 1.1 Points, lines and planes ──
   "math/geometry/unit-1/1.1": [
@@ -1053,6 +1543,20 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const n = r.int(4, 9);
+      return fill(
+        `How many planes are determined by ${n} points, no three of them collinear?`,
+        (n * (n - 1) * (n - 2)) / 6,
+        { hint: "a whole number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put these in order, fewest dimensions first.",
+        ["A point", "A line", "A plane", "Space"],
+        r,
+      ),
   ],
 
   // ── 1.7 Perimeter, circumference and area ──
@@ -1078,6 +1582,16 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // The formula run backwards, which is where the squared radius is easy to
+    // forget about.
+    (r) => {
+      const radius = r.int(2, 15);
+      return fill(
+        `A circle has area ${radius * radius}π. What is its radius?`,
+        radius,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 2.1 Inductive reasoning ──
@@ -1093,6 +1607,27 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "What is being added each time?" },
       );
     },
+    (r) => {
+      const step = r.int(3, 9);
+      const start = r.int(2, 9);
+      const bad = start + step * r.int(4, 7) + r.int(1, step - 1);
+      return fill(
+        `A conjecture says every number in the pattern ${start}, ${start + step}, ${start + 2 * step}, … is ${step} more than the one before. Which of ${start + 3 * step}, ${bad}, ${start + 5 * step}, ${start + 6 * step} breaks it?`,
+        bad,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of inductive reasoning in order.",
+        [
+          "Look at several particular cases",
+          "Notice what they have in common",
+          "State that pattern as a conjecture",
+          "Test the conjecture against a case you have not used",
+        ],
+        r,
+      ),
   ],
 
   // ── 2.2 Converse, inverse and contrapositive ──
@@ -1113,6 +1648,32 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const statement = r.pick([
+        { text: "If a figure is a square, then it is a rectangle", converse: false },
+        { text: "If two angles are vertical, then they are congruent", converse: false },
+        { text: "If two lines are perpendicular, then they intersect", converse: false },
+        { text: "If a number is even, then it is divisible by two", converse: true },
+        { text: "If an angle measures 90 degrees, then it is a right angle", converse: true },
+        { text: "If a polygon is a triangle, then it has three sides", converse: true },
+      ]);
+      return fill(
+        `"${statement.text}" is true. Of its converse and its contrapositive, how many are also true?`,
+        statement.converse ? 2 : 1,
+        { hint: "0, 1 or 2" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for forming the contrapositive in order.",
+        [
+          "Write the statement as: if p, then q",
+          "Swap the hypothesis and the conclusion",
+          "Negate both of them",
+          "Check the result has the same truth value as the original",
+        ],
+        r,
+      ),
   ],
 
   // ── 2.3 Biconditionals ──
@@ -1131,6 +1692,42 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // Counted from a rolled sample, so the answer follows from what is on the
+    // screen rather than from a number chosen beside it.
+    (r) => {
+      const pool = [
+        { text: "A square is a rectangle with four equal sides", reversible: true },
+        { text: "A right angle measures 90 degrees", reversible: true },
+        { text: "An even number is a multiple of two", reversible: true },
+        { text: "A midpoint cuts a segment into two congruent parts", reversible: true },
+        { text: "A triangle is a polygon", reversible: false },
+        { text: "A rhombus is a parallelogram", reversible: false },
+        { text: "A prime number is greater than one", reversible: false },
+        { text: "A bird is an animal that flies", reversible: false },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `How many of these are reversible, and so could be written as biconditionals? ${shown.map((x) => x.text).join("; ")}`,
+        shown.filter((x) => x.reversible).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for testing whether a definition is reversible in order.",
+        [
+          "Write the definition as a conditional",
+          "Write its converse",
+          "Decide whether both are true",
+          "If both hold, join them as a biconditional",
+        ],
+        r,
+      ),
   ],
 
   // ── 2.4 The laws of logic ──
@@ -1159,6 +1756,14 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         "The Law of Syllogism links these into one chain. Put them in order, first premise to last.",
         chain,
         r,
+      );
+    },
+    (r) => {
+      const known = r.int(2, 5);
+      return fill(
+        `A chain of ${known} implications links p to the last statement, and p is known to be true. How many of the later statements follow?`,
+        known,
+        { hint: "a whole number" },
       );
     },
   ],
@@ -1209,6 +1814,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    // The property named by what changed between two lines of a real proof.
+    (r) => {
+      const a = r.int(2, 9);
+      const b = r.int(2, 20);
+      const x = r.int(2, 12);
+      return fill(
+        `One line of an algebraic proof reads ${a}x + ${b} = ${a * x + b}, and the next reads ${a}x = ${a * x}. What was subtracted from both sides?`,
+        b,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 3.1 Transversals and angle pairs ──
@@ -1224,6 +1840,33 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { unit: "degrees" },
       );
     },
+    (r) => {
+      const congruent = r.bool();
+      const angle = r.int(20, 80);
+      return fill(
+        `Two parallel lines are cut by a transversal, making eight angles, one of them ${angle}°. Apart from that one, how many of the other seven are ${congruent ? "congruent to" : "supplementary to"} it?`,
+        congruent ? 3 : 4,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const a = r.int(20, 160);
+      return slider(
+        `Two parallel lines are cut by a transversal. One same-side interior angle is ${a}°. Place the other.`,
+        { min: 0, max: 180, step: 1, value: 180 - a },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for naming an angle pair on a transversal in order.",
+        [
+          "Find the transversal and the two lines it crosses",
+          "Decide whether both angles sit between the two lines or outside them",
+          "Decide whether they are on the same side of the transversal or opposite sides",
+          "Name the pair from those two answers",
+        ],
+        r,
+      ),
   ],
 
   // ── 3.2 Angles from parallel lines ──
@@ -1241,6 +1884,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `One angle measures ${angle}°. What is its ${kind.name} partner?`,
         kind.value,
         { hint: "in degrees" },
+      );
+    },
+    (r) => {
+      const a = r.int(20, 160);
+      return fill(
+        `Two parallel lines are cut by a transversal, and one angle measures ${a}°. How many of the eight angles measure exactly ${a}°?`,
+        a === 90 ? 8 : 4,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const a = r.int(20, 160);
+      return slider(
+        `Two parallel lines are cut by a transversal. One angle is ${a}°. Place the measure of its alternate exterior angle.`,
+        { min: 0, max: 180, step: 1, value: a },
       );
     },
   ],
@@ -1275,6 +1933,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) =>
+      order(
+        "Put the steps for proving two lines parallel in order.",
+        [
+          "Identify the transversal and the angle pair it makes",
+          "Name which pair they are: corresponding, alternate or co-interior",
+          "Show that pair is congruent, or supplementary for co-interior",
+          "Conclude the lines are parallel by the matching converse",
+        ],
+        r,
+      ),
   ],
 
   // ── 3.4 Distance from a point to a line ──
@@ -1291,6 +1960,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Straight across, at a right angle" },
       );
     },
+    (r) => {
+      const a = r.nonzero(-9, 9);
+      const p = r.int(-9, 9);
+      return fill(
+        `What is the distance from the point (${p}, ${r.int(-9, 9)}) to the vertical line x = ${a}?`,
+        Math.abs(p - a),
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const p = r.nonzero(-7, 7);
+      const q = r.nonzero(-7, 7);
+      return point(
+        `Place the foot of the perpendicular dropped from (${p}, ${q}) to the x-axis.`,
+        { span, x: p, y: 0, zero: 2 },
+      );
+    },
   ],
 
   // ── 3.5 Slopes of parallel and perpendicular lines ──
@@ -1303,6 +1990,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A line has slope ${frac(rise, run)}. What is the slope of a line ${parallel ? "parallel" : "perpendicular"} to it?`,
         parallel ? frac(rise, run) : frac(-run, rise),
         { hint: "a number or fraction" },
+      );
+    },
+    (r) => {
+      const x1 = r.int(-7, 0);
+      const x2 = x1 + r.int(1, 6);
+      const m = r.nonzero(-3, 3);
+      const y1 = r.int(-6, 6);
+      return fill(
+        `A line passes through (${x1}, ${y1}) and (${x2}, ${y1 + m * (x2 - x1)}). What is the slope of any line perpendicular to it?`,
+        frac(-1, m),
+        { hint: "a number or a fraction" },
+      );
+    },
+    (r) => {
+      const k = r.nonzero(-6, 6);
+      return slider(
+        `Place the slope of a line perpendicular to one of slope ${frac(-1, k)}.`,
+        { min: -6, max: 6, step: 1, value: k },
       );
     },
   ],
@@ -1333,6 +2038,28 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         },
       );
     },
+    (r) => {
+      const m = r.nonzero(-4, 4);
+      const b = r.nonzero(-8, 8);
+      const p = r.nonzero(-5, 5);
+      const q = r.int(-7, 7);
+      return fill(
+        `A line parallel to y = ${head(m, "x")}${signed(b)} passes through (${p}, ${q}). What is its y-intercept?`,
+        q - m * p,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for writing the equation of a line through a point and parallel to a given line in order.",
+        [
+          "Read the slope off the given line",
+          "Keep that slope, since parallel lines share one",
+          "Substitute the point and the slope into y = mx + b",
+          "Solve for b and write the finished equation",
+        ],
+        r,
+      ),
   ],
 
   // ── 4.1 Translations ──
@@ -1347,6 +2074,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { span: 10, x: x + dx, y: y + dy },
       );
     },
+    (r) => {
+      const x = r.int(-6, 6);
+      const y = r.int(-6, 6);
+      const h = r.nonzero(-6, 6);
+      const k = r.nonzero(-6, 6);
+      return fill(
+        `A translation maps (${x}, ${y}) to (${x + h}, ${y + k}). What is the horizontal part of the shift?`,
+        h,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const y = r.int(-6, 6);
+      const k = r.nonzero(-8, 8);
+      return slider(
+        `A translation maps (3, ${y}) to (3, ${y + k}). Place the vertical part of the shift.`,
+        { min: -10, max: 10, step: 1, value: k },
+      );
+    },
   ],
 
   // ── 4.2 Reflections ──
@@ -1358,6 +2104,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       return point(
         `Reflect (${x}, ${y}) in the ${overX ? "x" : "y"}-axis. Place the image.`,
         { span: 10, x: overX ? x : -x, y: overX ? -y : y },
+      );
+    },
+    (r) => {
+      const x = r.nonzero(-8, 8);
+      const y = r.nonzero(-8, 8);
+      const acrossY = r.bool();
+      return fill(
+        `Reflect (${x}, ${y}) across the ${acrossY ? "y" : "x"}-axis. What is the ${acrossY ? "x" : "y"}-coordinate of the image?`,
+        acrossY ? -x : -y,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const x = r.int(-6, 6);
+      const c = r.nonzero(-5, 5);
+      return slider(
+        `Reflect (${x}, 2) across the vertical line x = ${c}. Place the x-coordinate of the image.`,
+        { min: -18, max: 18, step: 1, value: 2 * c - x },
       );
     },
   ],
@@ -1375,6 +2139,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { span: 10, x: image.x, y: image.y },
       );
     },
+    (r) => {
+      const x = r.nonzero(-8, 8);
+      const y = r.nonzero(-8, 8);
+      return fill(
+        `Rotate (${x}, ${y}) 90° counterclockwise about the origin. What is the x-coordinate of the image?`,
+        -y,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const n = r.pick([3, 4, 5, 6, 8, 9, 10, 12]);
+      return fill(
+        `A regular ${n}-sided polygon maps onto itself under the smallest rotation of how many degrees?`,
+        360 / n,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
   ],
 
   // ── 4.4 Compositions of transformations ──
@@ -1389,6 +2170,27 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { span: 10, x: x + dx, y: -(y + dy) },
       );
     },
+    (r) => {
+      const x = r.int(-5, 5);
+      const y = r.int(-5, 5);
+      const h = r.nonzero(-4, 4);
+      return fill(
+        `(${x}, ${y}) is translated ${h} to the right, then reflected across the x-axis. What is the y-coordinate of the image?`,
+        -y,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of applying a composition of transformations in order.",
+        [
+          "Read which transformation is applied first",
+          "Apply it to every vertex",
+          "Take those images as the new input",
+          "Apply the second transformation to them",
+        ],
+        r,
+      ),
   ],
 
   // ── 4.5 Symmetry ──
@@ -1399,6 +2201,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `How many lines of symmetry does a regular ${n}-gon have?`,
         n,
         { hint: "One through every vertex or edge midpoint" },
+      );
+    },
+    (r) => {
+      const n = r.pick([3, 4, 5, 6, 8, 9, 10, 12]);
+      return fill(
+        `What is the order of rotational symmetry of a regular ${n}-sided polygon?`,
+        n,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const n = r.pick([3, 4, 5, 6, 8, 9, 10, 12]);
+      return slider(
+        `Place the smallest angle of rotational symmetry of a regular ${n}-sided polygon.`,
+        { min: 0, max: 180, step: 1, value: 360 / n },
       );
     },
   ],
@@ -1412,6 +2229,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       return point(
         `Dilate (${x}, ${y}) about the origin by a scale factor of ${k}. Place the image.`,
         { span: 12, x: k * x, y: k * y },
+      );
+    },
+    (r) => {
+      const x = r.nonzero(-6, 6);
+      const y = r.nonzero(-6, 6);
+      const k = r.int(2, 4);
+      return fill(
+        `A dilation about the origin with scale factor ${k} maps (${x}, ${y}) somewhere. What is the y-coordinate of the image?`,
+        k * y,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const original = r.int(2, 12);
+      const k = r.int(2, 6);
+      return fill(
+        `A dilation maps a segment of length ${original} to one of length ${original * k}. What is the scale factor?`,
+        k,
+        { hint: "a number" },
       );
     },
   ],
@@ -1432,6 +2268,37 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const pool = [
+        { name: "a translation", rigid: true },
+        { name: "a reflection", rigid: true },
+        { name: "a rotation", rigid: true },
+        { name: "a dilation with scale factor 3", rigid: false },
+        { name: "a dilation with scale factor 1/2", rigid: false },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `How many of these preserve both length and angle? ${shown.map((s) => s.name).join(", ")}`,
+        shown.filter((s) => s.rigid).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for showing two figures are congruent by rigid motions in order.",
+        [
+          "Match up corresponding vertices",
+          "Find a rigid motion carrying the first vertex onto its partner",
+          "Follow it with further rigid motions until every vertex lands",
+          "Conclude the figures are congruent",
+        ],
+        r,
+      ),
   ],
 
   // ── 4.8 Similarity transformations ──
@@ -1443,6 +2310,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A triangle with a side of ${side} is dilated by a scale factor of ${k}. How long is the matching side of the image?`,
         k * side,
         { hint: "Similar, not congruent" },
+      );
+    },
+    (r) => {
+      const k = r.int(2, 6);
+      const perimeter = r.int(4, 20);
+      return fill(
+        `A similarity transformation with scale factor ${k} is applied to a figure of perimeter ${perimeter}. What is the perimeter of the image?`,
+        k * perimeter,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const k = r.int(2, 9);
+      const side = r.int(2, 6);
+      return slider(
+        `A similarity maps a side of length ${side} onto one of length ${side * k}. Place the scale factor.`,
+        { min: 0, max: 12, step: 1, value: k },
       );
     },
   ],
@@ -1469,6 +2353,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) =>
+      order(
+        "Put the steps of a CPCTC argument in order.",
+        [
+          "Mark what the given tells you about sides and angles",
+          "Name the criterion those parts satisfy",
+          "State that the two triangles are congruent",
+          "Use CPCTC to claim the pair you actually wanted",
+        ],
+        r,
+      ),
   ],
 
   // ── 5.4 SSS and SAS ──
@@ -1487,6 +2382,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const known = r.pick([3, 2]);
+      return fill(
+        `Two triangles have ${known === 3 ? "all three pairs of sides" : "two pairs of sides and the included angle"} equal. How many pairs of angles must then be congruent?`,
+        3,
+        { hint: "a whole number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of an SAS congruence argument in order.",
+        [
+          "Show the first pair of sides is congruent",
+          "Show the angle between them is congruent",
+          "Show the second pair of sides is congruent",
+          "Conclude the triangles are congruent by SAS",
+        ],
+        r,
+      ),
   ],
 
   // ── 5.5 ASA and AAS ──
@@ -1505,6 +2419,35 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const pool = [
+        { name: "SSS", works: true },
+        { name: "SAS", works: true },
+        { name: "ASA", works: true },
+        { name: "AAS", works: true },
+        { name: "SSA", works: false },
+        { name: "AAA", works: false },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `How many of these prove two triangles congruent? ${shown.map((s) => s.name).join(", ")}`,
+        shown.filter((s) => s.works).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
+    (r) => {
+      const a = r.int(25, 85);
+      const b = r.int(25, 85);
+      return slider(
+        `Two triangles are congruent by ASA. One has angles ${a}° and ${b}°. Place its third angle.`,
+        { min: 0, max: 180, step: 1, value: 180 - a - b },
+      );
+    },
   ],
 
   // ── 5.6 HL for right triangles ──
@@ -1519,6 +2462,32 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const [leg, other, hyp] = r.pick([
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [8, 15, 17],
+        [7, 24, 25],
+        [9, 12, 15],
+      ]);
+      return fill(
+        `Two right triangles are congruent by HL. One has hypotenuse ${hyp} and a leg of ${leg}. How long is its other leg?`,
+        other,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of an HL congruence argument in order.",
+        [
+          "Show both triangles contain a right angle",
+          "Show the two hypotenuses are congruent",
+          "Show one pair of legs is congruent",
+          "Conclude the triangles are congruent by HL",
+        ],
+        r,
+      ),
   ],
 
   // ── 5.7 Isosceles and equilateral triangles ──
@@ -1531,6 +2500,33 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { unit: "degrees", hint: "The two base angles are equal" },
       );
     },
+    // Rolled even, so halving the remaining 180 leaves whole base angles.
+    (r) => {
+      const vertex = r.int(10, 70) * 2;
+      return fill(
+        `An isosceles triangle has a vertex angle of ${vertex}°. How large is each base angle?`,
+        (180 - vertex) / 2,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const base = r.int(20, 85);
+      return slider(
+        `An isosceles triangle has base angles of ${base}°. Place its vertex angle.`,
+        { min: 0, max: 180, step: 1, value: 180 - 2 * base },
+      );
+    },
+    // The apex of an isosceles triangle sits above the midpoint of its base,
+    // which is the fact the theorem rests on and the grid shows at once.
+    (r) => {
+      const span = 9;
+      const half = r.int(1, 4);
+      const height = r.int(1, 7);
+      return point(
+        `An isosceles triangle has its base from (${-half}, 0) to (${half}, 0) and a height of ${height}. Place its apex.`,
+        { span, x: 0, y: height, zero: 2 },
+      );
+    },
   ],
 
   // ── 6.1 Bisectors ──
@@ -1541,6 +2537,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A ray bisects an angle of ${2 * half}°. What is each half?`,
         half,
         { unit: "degrees" },
+      );
+    },
+    (r) => {
+      const x = r.int(2, 12);
+      const m = r.int(2, 6);
+      const b = r.nonzero(-9, 9);
+      return fill(
+        `P lies on the perpendicular bisector of AB. If PA = ${m}x${signed(b)} and PB = ${m * x + b}, what is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const mid = r.int(-6, 6);
+      const reach = r.int(1, 3);
+      return point(
+        `Place the point on the x-axis equidistant from (${mid - reach}, 0) and (${mid + reach}, 0).`,
+        { span, x: mid, y: 0, zero: 2 },
       );
     },
   ],
@@ -1574,6 +2589,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) =>
+      order(
+        "Put the steps for locating the circumcenter in order.",
+        [
+          "Construct the perpendicular bisector of one side",
+          "Construct the perpendicular bisector of a second side",
+          "Mark where the two bisectors cross",
+          "Check that point is the same distance from all three vertices",
+        ],
+        r,
+      ),
   ],
 
   // ── 6.3 Medians and the centroid ──
@@ -1585,6 +2611,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A median is ${median} long. How far is the centroid from the vertex it starts at?`,
         2 * third,
         { hint: "The centroid cuts a median two to one" },
+      );
+    },
+    (r) => {
+      const third = r.int(2, 9);
+      return fill(
+        `A median of a triangle is ${3 * third} long. How far along it is the centroid from the vertex?`,
+        2 * third,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const third = r.int(2, 9);
+      return slider(
+        `A median is ${3 * third} long. Place the distance from the centroid to the midpoint of the opposite side.`,
+        { min: 0, max: 30, step: 1, value: third },
       );
     },
   ],
@@ -1623,6 +2664,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number or a fraction" },
       );
     },
+    (r) =>
+      order(
+        "Put the steps for locating the orthocenter in order.",
+        [
+          "Drop an altitude from one vertex to the opposite side",
+          "Drop an altitude from a second vertex",
+          "Extend both altitudes until they meet",
+          "Mark that intersection as the orthocenter",
+        ],
+        r,
+      ),
   ],
 
   // ── 6.7 Inequalities in a triangle ──
@@ -1660,6 +2712,14 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const sides = [r.int(4, 8), r.int(9, 13), r.int(14, 18)];
+      return fill(
+        `A triangle has sides ${sides.join(", ")}. The largest angle faces one of them — which? Enter its length.`,
+        Math.max(...sides),
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 7.1 Ratios and proportions ──
@@ -1672,6 +2732,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `Solve the proportion:   ${a}/${b} = x/${b * k}`,
         a * k,
         { hint: "Cross multiply" },
+      );
+    },
+    (r) => {
+      const per = r.int(2, 6);
+      const people = r.int(2, 6);
+      const wanted = people * r.int(2, 5);
+      return fill(
+        `A recipe uses ${per * people} cups of flour for ${people} people. How many cups are needed for ${wanted} people?`,
+        per * wanted,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const k = r.int(2, 6);
+      const a = r.int(2, 5);
+      const b = r.int(2, 5);
+      return slider(
+        `Place the value of x that satisfies ${a}/${b} = ${a * k}/x.`,
+        { min: 0, max: 40, step: 1, value: b * k },
       );
     },
   ],
@@ -1688,6 +2767,34 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const pool = [
+        { name: "AA", works: true },
+        { name: "SSS with all three ratios equal", works: true },
+        { name: "SAS with the included angle", works: true },
+        { name: "SSA", works: false },
+        { name: "one pair of equal sides alone", works: false },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `How many of these are enough to prove two triangles similar? ${shown.map((s) => s.name).join(", ")}`,
+        shown.filter((s) => s.works).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
+    (r) => {
+      const a = r.int(25, 85);
+      const b = r.int(25, 85);
+      return slider(
+        `Two triangles are similar by AA. One has angles ${a}° and ${b}°. Place its third angle.`,
+        { min: 0, max: 180, step: 1, value: 180 - a - b },
+      );
+    },
   ],
 
   // ── 7.4 The triangle proportionality theorem ──
@@ -1702,6 +2809,36 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "The two sides are cut in the same ratio" },
       );
     },
+    (r) => {
+      const k = r.int(2, 5);
+      const a = r.int(2, 8);
+      const b = r.int(2, 8);
+      return fill(
+        `A line parallel to one side of a triangle cuts the other two. It divides one into ${a} and ${a * k}, and the other into ${b} and x. What is x?`,
+        b * k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const k = r.int(2, 4);
+      const a = r.int(2, 6);
+      const b = r.int(2, 8);
+      return slider(
+        `A line parallel to one side of a triangle splits a second side into ${a} and ${a * k}, and the third side into ${b} and x. Place x.`,
+        { min: 0, max: 40, step: 1, value: b * k },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for using the triangle proportionality theorem in order.",
+        [
+          "Check the line really is parallel to one side",
+          "Match each piece of one side with its partner on the other",
+          "Write the two ratios and set them equal",
+          "Cross-multiply and solve for the unknown piece",
+        ],
+        r,
+      ),
   ],
 
   // ── 7.5 Proportional segments ──
@@ -1713,6 +2850,31 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `Three parallel lines cut one transversal into ${short} and ${short * k}. They cut a second transversal into x and ${short * k * 2}. What is x?`,
         short * 2,
         { hint: "Same ratio on both transversals" },
+      );
+    },
+    (r) => {
+      const k = r.int(2, 5);
+      const first = r.int(2, 8);
+      const second = r.int(2, 8);
+      return fill(
+        `Three parallel lines cut two transversals. On the first they cut off ${first} and ${first * k}; on the second they cut off ${second} and x. What is x?`,
+        second * k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const total = r.int(4, 10) * 3;
+      return slider(
+        `A segment of length ${total} is cut in the ratio 1 : 2. Place the length of the shorter piece.`,
+        { min: 0, max: 40, step: 1, value: total / 3 },
+      );
+    },
+    (r) => {
+      const span = 9;
+      const total = r.int(1, 3) * 3;
+      return point(
+        `The segment from (0, 0) to (${total}, 0) is divided in the ratio 1 : 2. Place the point that divides it.`,
+        { span, x: total / 3, y: 0, zero: 2 },
       );
     },
   ],
@@ -1730,6 +2892,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "The altitude is the geometric mean of the two pieces" },
       );
     },
+    // Both numbers are squares, so their geometric mean comes out whole.
+    (r) => {
+      const p = r.pick([1, 4, 9, 16, 25]);
+      const q = r.pick([4, 9, 16, 25, 36]);
+      return fill(
+        `What is the geometric mean of ${p} and ${q}?`,
+        Math.sqrt(p) * Math.sqrt(q),
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const p = r.pick([4, 9, 16]);
+      const q = r.pick([4, 9, 16]);
+      return slider(
+        `The altitude to the hypotenuse of a right triangle cuts it into pieces of ${p} and ${q}. Place the altitude's length.`,
+        { min: 0, max: 20, step: 1, value: Math.round(Math.sqrt(p * q)) },
+      );
+    },
   ],
 
   // ── 8.5 Solving a right triangle ──
@@ -1742,6 +2922,32 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { unit: "degrees", hint: "The three angles still add to 180°" },
       );
     },
+    (r) => {
+      const half = r.int(2, 14);
+      return fill(
+        `A right triangle has a 30° angle and a hypotenuse of ${2 * half}. How long is the side opposite the 30° angle?`,
+        half,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(20, 70);
+      return slider(
+        `A right triangle has one angle of ${a}°. Place its third angle.`,
+        { min: 0, max: 180, step: 1, value: 90 - a },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for solving a right triangle in order.",
+        [
+          "Label the sides opposite, adjacent and hypotenuse for a known angle",
+          "Pick the ratio that links what you know to what you want",
+          "Substitute and solve for the missing side",
+          "Find the last angle by subtracting from 90 degrees",
+        ],
+        r,
+      ),
   ],
 
   // ── 8.6 Inverse trigonometric ratios ──
@@ -1763,6 +2969,33 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "in degrees" },
       );
     },
+    (r) => {
+      const known = r.pick([
+        { ratio: "sin θ = 1/2", angle: 30 },
+        { ratio: "cos θ = 1/2", angle: 60 },
+        { ratio: "tan θ = 1", angle: 45 },
+      ]);
+      return fill(
+        `θ is acute and ${known.ratio}. What is θ?`,
+        known.angle,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const known = r.pick([
+        { ratio: "tan θ = 1", angle: 45 },
+        { ratio: "sin θ = 1/2", angle: 30 },
+        { ratio: "cos θ = 1/2", angle: 60 },
+      ]);
+      return slider(`θ is acute and ${known.ratio}. Place θ.`, {
+        min: 0,
+        max: 90,
+        step: 1,
+        value: known.angle,
+        full: 1,
+        zero: 12,
+      });
+    },
   ],
 
   // ── 8.7 Angles of elevation and depression ──
@@ -1773,6 +3006,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `From ${distance} m away, the angle of elevation to the top of a tower is 45°. How tall is the tower?`,
         distance,
         { unit: "m", hint: "tan 45° = 1" },
+      );
+    },
+    (r) => {
+      const d = r.int(4, 40);
+      return fill(
+        `From a point ${d} m from the foot of a tower, the angle of elevation to its top is 45°. How tall is the tower?`,
+        d,
+        { unit: "m", hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(15, 75);
+      return slider(
+        `From the ground at A, the angle of elevation to the top of a cliff is ${a}°. Place the angle of depression from the top back down to A.`,
+        { min: 0, max: 90, step: 1, value: a, full: 1, zero: 12 },
       );
     },
   ],
@@ -1789,6 +3037,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a / sin A is the same for every side" },
       );
     },
+    (r) => {
+      const a = r.int(3, 20);
+      return fill(
+        `In triangle ABC, angle A = 30°, angle B = 90°, and side a = ${a}. Using the Law of Sines, how long is side b?`,
+        2 * a,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of using the Law of Sines in order.",
+        [
+          "Find a side and the angle opposite it",
+          "Find the angle opposite the side you want",
+          "Write a/sin A = b/sin B with those four parts",
+          "Cross-multiply and solve for the unknown",
+        ],
+        r,
+      ),
   ],
 
   // ── 8.9 The Law of Cosines ──
@@ -1807,6 +3074,31 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "cos 90° = 0" },
       );
     },
+    (r) => {
+      const [a, b, c] = r.pick([
+        [3, 8, 7],
+        [5, 8, 7],
+        [7, 15, 13],
+        [5, 21, 19],
+        [8, 15, 13],
+      ]);
+      return fill(
+        `In a triangle two sides are ${a} and ${b} with a 60° angle between them. By the Law of Cosines, how long is the third side?`,
+        c,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of using the Law of Cosines in order.",
+        [
+          "Name the side you want and the angle opposite it",
+          "Write c² = a² + b² - 2ab·cos C with the two known sides",
+          "Substitute the angle and work out the right-hand side",
+          "Take the square root to get the side",
+        ],
+        r,
+      ),
   ],
 
   // ── 8.10 Area from two sides and the angle between ──
@@ -1822,6 +3114,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Half of ab sin C" },
       );
     },
+    (r) => {
+      const a = r.int(2, 12) * 2;
+      const b = r.int(2, 12) * 2;
+      return fill(
+        `Two sides of a triangle measure ${a} and ${b}, with a 30° angle between them. What is its area?`,
+        (a * b) / 4,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 10);
+      const b = r.int(2, 10);
+      return slider(
+        `Two sides of a triangle measure ${a} and ${b}, with a right angle between them. Place its area.`,
+        { min: 0, max: 60, step: 1, value: (a * b) / 2, full: 1, zero: 8 },
+      );
+    },
   ],
 
   // ── 9.2 Parallelograms ──
@@ -1833,6 +3142,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `One angle of a parallelogram is ${angle}°. What is the ${opposite ? "opposite" : "adjacent"} angle?`,
         opposite ? angle : 180 - angle,
         { unit: "degrees" },
+      );
+    },
+    // Opposite angles are equal, so the two expressions can be set equal.
+    (r) => {
+      const x = r.int(5, 40);
+      const a = r.int(2, 5);
+      const b = r.int(1, 20);
+      const c = a + r.int(1, 4);
+      return fill(
+        `Opposite angles of a parallelogram measure (${a}x + ${b})° and (${head(c, "x")}${signed(a * x + b - c * x)})°. What is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(30, 150);
+      return slider(
+        `One angle of a parallelogram is ${a}°. Place the angle next to it.`,
+        { min: 0, max: 180, step: 1, value: 180 - a },
       );
     },
   ],
@@ -1851,6 +3179,36 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const x = r.int(2, 12);
+      const m = r.int(2, 6);
+      const b = r.nonzero(-9, 9);
+      return fill(
+        `The diagonals of a rectangle are congruent. If AC = ${m}x${signed(b)} and BD = ${m * x + b}, what is x?`,
+        x,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const pool = [
+        { text: "the diagonals bisect each other", rhombus: true },
+        { text: "the diagonals are perpendicular", rhombus: true },
+        { text: "all four sides are congruent", rhombus: true },
+        { text: "the diagonals are congruent", rhombus: false },
+        { text: "all four angles are right angles", rhombus: false },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `How many of these are always true of a rhombus? ${shown.map((s) => s.text).join("; ")}`,
+        shown.filter((s) => s.rhombus).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
   ],
 
   // ── 9.5 Trapezoids and kites ──
@@ -1862,6 +3220,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A trapezoid has parallel sides of ${a} and ${b}. How long is its midsegment?`,
         (a + b) / 2,
         { hint: "Halfway between the two bases" },
+      );
+    },
+    (r) => {
+      const mid = r.int(4, 20);
+      const shorter = r.int(2, mid - 1);
+      return fill(
+        `A trapezoid has a midsegment of ${mid} and one parallel side of ${shorter}. How long is the other parallel side?`,
+        2 * mid - shorter,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 15);
+      const b = a + r.int(1, 15) * 2;
+      return slider(
+        `A trapezoid has parallel sides of ${a} and ${b}. Place the length of its midsegment.`,
+        { min: 0, max: 40, step: 1, value: (a + b) / 2 },
       );
     },
   ],
@@ -1890,6 +3265,26 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const pool = [
+        { text: "a square", parallelogram: true },
+        { text: "a rectangle", parallelogram: true },
+        { text: "a rhombus", parallelogram: true },
+        { text: "a trapezoid", parallelogram: false },
+        { text: "a kite", parallelogram: false },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `How many of these are always parallelograms? ${shown.map((s) => s.text).join(", ")}`,
+        shown.filter((s) => s.parallelogram).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
   ],
 
   // ── 10.1 Parts of a circle ──
@@ -1901,6 +3296,35 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         2 * radius,
         { hint: "a number" },
       );
+    },
+    (r) => {
+      const pool = [
+        { text: "a segment from the centre to the circle", radius: true },
+        { text: "a segment through the centre with both ends on the circle", radius: false },
+        { text: "a segment joining two points on the circle", radius: false },
+        { text: "a line touching the circle at one point", radius: false },
+        { text: "the distance from the centre to any point on the circle", radius: true },
+      ];
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = r.int(0, i);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const shown = shuffled.slice(0, 4);
+      return fill(
+        `How many of these describe a radius? ${shown.map((s) => s.text).join("; ")}`,
+        shown.filter((s) => s.radius).length,
+        { hint: "a number from 0 to 4" },
+      );
+    },
+    (r) => {
+      const radius = r.int(2, 18);
+      return slider(`A circle has radius ${radius}. Place its diameter.`, {
+        min: 0,
+        max: 40,
+        step: 1,
+        value: 2 * radius,
+      });
     },
   ],
 
@@ -1921,6 +3345,31 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "A tangent meets the radius at a right angle" },
       );
     },
+    (r) => {
+      const [radius, tangent, far] = r.pick([
+        [3, 4, 5],
+        [6, 8, 10],
+        [5, 12, 13],
+        [8, 15, 17],
+        [9, 12, 15],
+      ]);
+      return fill(
+        `A tangent touches a circle of radius ${radius}, and the point outside is ${far} from the centre. How long is the tangent segment?`,
+        tangent,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for finding the length of a tangent segment in order.",
+        [
+          "Draw the radius to the point where the tangent touches",
+          "Note that the radius meets the tangent at a right angle",
+          "Treat the radius, the tangent and the line to the centre as a right triangle",
+          "Use the Pythagorean theorem to find the tangent",
+        ],
+        r,
+      ),
   ],
 
   // ── 10.4 Arc length ──
@@ -1950,6 +3399,17 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a multiple of π" },
       );
     },
+    (r) =>
+      order(
+        "Put the steps for finding an arc length in order.",
+        [
+          "Write the central angle as a fraction of 360°",
+          "Work out the circumference of the whole circle",
+          "Multiply the circumference by that fraction",
+          "Give the answer in the same units as the radius",
+        ],
+        r,
+      ),
   ],
 
   // ── 10.5 Chords ──
@@ -1964,6 +3424,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "The two products are equal" },
       );
     },
+    (r) => {
+      const a = r.int(2, 9);
+      const k = r.int(2, 6);
+      const c = r.int(2, 9);
+      return fill(
+        `Two chords cross inside a circle. One is cut into ${a} and ${c * k}; the other into ${c} and x. What is x?`,
+        a * k,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 8);
+      const b = r.int(2, 8);
+      const c = r.int(2, 8);
+      return slider(
+        `Two chords cross inside a circle. One is cut into ${a} and ${b * c}; the other into ${b} and x. Place x.`,
+        { min: 0, max: 70, step: 1, value: a * c },
+      );
+    },
   ],
 
   // ── 10.6 Inscribed angles ──
@@ -1974,6 +3453,21 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `An inscribed angle measures ${inscribed}°. What is the arc it opens onto?`,
         2 * inscribed,
         { unit: "degrees", hint: "An inscribed angle is half its arc" },
+      );
+    },
+    (r) => {
+      const arc = r.int(10, 89) * 2;
+      return fill(
+        `An inscribed angle cuts off an arc of ${arc}°. How large is the angle?`,
+        arc / 2,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const angle = r.int(15, 85);
+      return slider(
+        `An inscribed angle measures ${angle}°. Place the measure of the arc it cuts off.`,
+        { min: 0, max: 360, step: 1, value: 2 * angle },
       );
     },
   ],
@@ -1989,6 +3483,34 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { unit: "degrees", hint: "Half the difference of the arcs" },
       );
     },
+    (r) => {
+      const far = r.int(20, 80) * 2;
+      const near = r.int(5, 19) * 2;
+      return fill(
+        `Two secants meet outside a circle, cutting off arcs of ${far}° and ${near}°. How large is the angle between them?`,
+        (far - near) / 2,
+        { unit: "degrees", hint: "a number" },
+      );
+    },
+    (r) => {
+      const first = r.int(20, 80) * 2;
+      const second = r.int(20, 80) * 2;
+      return slider(
+        `Two chords cross inside a circle, cutting off arcs of ${first}° and ${second}°. Place the angle between them.`,
+        { min: 0, max: 180, step: 1, value: (first + second) / 2 },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for an angle formed by two secants in order.",
+        [
+          "Decide whether the vertex is inside or outside the circle",
+          "Name the two arcs the secants cut off",
+          "Take their sum inside the circle, or their difference outside it",
+          "Halve that to get the angle",
+        ],
+        r,
+      ),
   ],
 
   // ── 10.8 Segment lengths in circles ──
@@ -2004,6 +3526,27 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Outer times whole is the same for both" },
       );
     },
+    (r) => {
+      const outside = r.int(2, 8);
+      const k = r.int(2, 6);
+      const second = r.int(2, 8);
+      return fill(
+        `From a point outside a circle, one secant has outside part ${outside} and whole length ${second * k}. A second secant has outside part ${second} and whole length x. What is x?`,
+        outside * k,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for a secant segment problem in order.",
+        [
+          "Mark the outside part and the whole length of each secant",
+          "Write whole times outside for the first secant",
+          "Write whole times outside for the second",
+          "Set the two products equal and solve",
+        ],
+        r,
+      ),
   ],
 
   // ── 11.1 Areas of triangles and quadrilaterals ──
@@ -2015,6 +3558,24 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A triangle has base ${base} and height ${height}. What is its area?`,
         (base * height) / 2,
         { hint: "a number" },
+      );
+    },
+    (r) => {
+      const a = r.int(2, 14);
+      const b = a + r.int(2, 14);
+      const h = r.int(2, 12) * 2;
+      return fill(
+        `A trapezoid has parallel sides of ${a} and ${b} and a height of ${h}. What is its area?`,
+        ((a + b) / 2) * h,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const base = r.int(2, 12);
+      const h = r.int(2, 12);
+      return slider(
+        `A triangle has area ${(base * h) / 2} and a base of ${base}. Place its height.`,
+        { min: 0, max: 30, step: 1, value: h },
       );
     },
   ],
@@ -2031,6 +3592,26 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "Half the apothem times the perimeter" },
       );
     },
+    (r) => {
+      const perimeter = r.int(2, 15) * 2;
+      const apothem = r.int(2, 12);
+      return fill(
+        `A regular polygon has perimeter ${perimeter} and area ${(perimeter * apothem) / 2}. What is its apothem?`,
+        apothem,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for the area of a regular polygon in order.",
+        [
+          "Find the length of one side",
+          "Multiply by the number of sides to get the perimeter",
+          "Find the apothem, the distance from the centre to a side",
+          "Take half the apothem times the perimeter",
+        ],
+        r,
+      ),
   ],
 
   // ── 11.3 Composite figures ──
@@ -2043,6 +3624,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `A ${w} by ${h} rectangle has a ${cut} by ${cut} square cut out of one corner. What area is left?`,
         w * h - cut * cut,
         { hint: "Whole minus hole" },
+      );
+    },
+    (r) => {
+      const side = r.int(6, 20);
+      const cut = r.int(2, Math.max(2, side - 2));
+      return fill(
+        `A square of side ${side} has a square of side ${cut} cut out of it. What area is left?`,
+        side * side - cut * cut,
+        { hint: "a number" },
+      );
+    },
+    (r) => {
+      const long = r.int(6, 14);
+      const short = r.int(2, 5);
+      return slider(
+        `An L-shape is a ${long} by ${long} square with a ${short} by ${short} corner removed. Place its area.`,
+        { min: 0, max: 200, step: 1, value: long * long - short * short, full: 1, zero: 20 },
       );
     },
   ],
@@ -2061,6 +3659,26 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const n = r.int(3, 10);
+      const wantFaces = r.bool();
+      return fill(
+        `A prism has a ${n}-sided polygon as its base. How many ${wantFaces ? "faces" : "edges"} does it have?`,
+        wantFaces ? n + 2 : 3 * n,
+        { hint: "a whole number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps for identifying a cross section in order.",
+        [
+          "See which solid is being cut",
+          "See how the plane is angled against the base",
+          "Picture where the plane meets each face",
+          "Name the shape those intersections trace out",
+        ],
+        r,
+      ),
   ],
 
   // ── 11.5 Surface area of prisms and cylinders ──
@@ -2075,6 +3693,37 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number" },
       );
     },
+    (r) => {
+      const radius = r.int(2, 10);
+      const height = r.int(2, 14);
+      return fill(
+        `What is the surface area of a cylinder with radius ${radius} and height ${height}?`,
+        piFrac(2 * radius * (radius + height), 1),
+        { hint: "a multiple of π" },
+      );
+    },
+    (r) => {
+      const side = r.int(2, 5);
+      return slider(`Place the surface area of a cube with edge ${side}.`, {
+        min: 0,
+        max: 160,
+        step: 1,
+        value: 6 * side * side,
+        full: 1,
+        zero: 16,
+      });
+    },
+    (r) =>
+      order(
+        "Put the steps for the surface area of a cylinder in order.",
+        [
+          "Work out the area of one circular end",
+          "Double it for the two ends",
+          "Work out the circumference and multiply by the height for the curved part",
+          "Add the two results together",
+        ],
+        r,
+      ),
   ],
 
   // ── 11.6 Surface area of pyramids and cones ──
@@ -2104,6 +3753,15 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a multiple of π" },
       );
     },
+    (r) => {
+      const radius = r.int(2, 10);
+      const slant = radius + r.int(1, 10);
+      return fill(
+        `A cone of radius ${radius} has total surface area ${piFrac(radius * (radius + slant), 1)}. What is its slant height?`,
+        slant,
+        { hint: "a number" },
+      );
+    },
   ],
 
   // ── 11.10 Cavalieri's principle ──
@@ -2123,6 +3781,25 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         r,
       );
     },
+    (r) => {
+      const volume = r.int(10, 90);
+      return fill(
+        `Two solids stand on the same base and have the same height, and every horizontal slice has equal area in both. If the first has volume ${volume}, what is the volume of the second?`,
+        volume,
+        { hint: "a number" },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of a Cavalieri argument in order.",
+        [
+          "Check the two solids have the same height",
+          "Take a horizontal plane at some height",
+          "Show the two cross sections have equal area, at every height",
+          "Conclude the volumes are equal",
+        ],
+        r,
+      ),
   ],
 
   // ── 11.12 Density and modelling ──
@@ -2136,6 +3813,34 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { unit: "g", hint: "Density times volume" },
       );
     },
+    (r) => {
+      const density = r.int(2, 12);
+      const volume = r.int(2, 15);
+      return fill(
+        `A block of volume ${volume} cm³ has a density of ${density} g/cm³. What is its mass?`,
+        density * volume,
+        { unit: "g", hint: "a number" },
+      );
+    },
+    (r) => {
+      const density = r.int(2, 15);
+      const volume = r.int(2, 12);
+      return slider(
+        `An object of volume ${volume} cm³ has mass ${density * volume} g. Place its density.`,
+        { min: 0, max: 20, step: 1, value: density },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of a density calculation in order.",
+        [
+          "Work out the volume of the solid",
+          "Check the mass and volume units match the density units",
+          "Divide the mass by the volume",
+          "Write the answer with its units",
+        ],
+        r,
+      ),
   ],
 
   // ── 12.1 The counting principle ──
@@ -2148,6 +3853,22 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `${shirts} shirts, ${trousers} pairs of trousers and ${shoes} pairs of shoes. How many outfits?`,
         shirts * trousers * shoes,
         { hint: "a number" },
+      );
+    },
+    (r) => {
+      const coins = r.int(2, 6);
+      return fill(
+        `How many different outcomes are there when ${coins} coins are tossed?`,
+        2 ** coins,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const first = r.int(2, 6);
+      const second = r.int(2, 6);
+      return slider(
+        `A menu has ${first} mains and ${second} puddings. Place the number of different two-course meals.`,
+        { min: 0, max: 40, step: 1, value: first * second },
       );
     },
   ],
@@ -2163,6 +3884,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a fraction" },
       );
     },
+    (r) => {
+      const wanted = r.int(1, 5);
+      const total = wanted + r.int(1, 7);
+      return fill(
+        `A bag holds ${total} counters, ${wanted} of them red. What is the theoretical probability of drawing a red one?`,
+        frac(wanted, total),
+        { hint: "a fraction" },
+      );
+    },
+    (r) => {
+      const trials = r.int(2, 12) * 5;
+      const chance = r.pick([2, 5, 10]);
+      return slider(
+        `An event has probability 1 in ${chance}. Place the expected number of times it happens in ${trials} trials.`,
+        { min: 0, max: 60, step: 1, value: trials / chance, full: 1, zero: 6 },
+      );
+    },
   ],
 
   // ── 12.4 Geometric probability ──
@@ -2176,6 +3914,34 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a fraction" },
       );
     },
+    (r) => {
+      const outer = r.int(3, 10);
+      const inner = r.int(1, outer - 1);
+      return fill(
+        `A dart lands at random on a square of side ${outer}. What is the probability it lands inside a square of side ${inner} drawn inside it?`,
+        frac(inner * inner, outer * outer),
+        { hint: "a fraction" },
+      );
+    },
+    (r) => {
+      const total = r.pick([10, 20, 25, 50]);
+      const shaded = r.int(1, total - 1);
+      return slider(
+        `A spinner is divided into ${total} equal sectors, ${shaded} of them shaded. Place the percentage chance of landing on a shaded one.`,
+        { min: 0, max: 100, step: 1, value: Math.round((shaded / total) * 100), full: 1, zero: 12 },
+      );
+    },
+    (r) =>
+      order(
+        "Put the steps of a geometric probability calculation in order.",
+        [
+          "Work out the area of the whole region",
+          "Work out the area of the favourable part",
+          "Divide the favourable area by the total",
+          "Check the answer sits between 0 and 1",
+        ],
+        r,
+      ),
   ],
 
   // ── 12.6 Conditional probability ──
@@ -2187,6 +3953,23 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `${both + firstOnly} students play football, and ${both} of those also play chess. Given a student plays football, what is the chance they play chess?`,
         frac(both, both + firstOnly),
         { hint: "a fraction" },
+      );
+    },
+    (r) => {
+      const both = r.int(2, 10);
+      const onlyFirst = r.int(2, 10);
+      return fill(
+        `Of ${both + onlyFirst} people who own a bike, ${both} also own a car. Given someone owns a bike, what is the probability they own a car?`,
+        frac(both, both + onlyFirst),
+        { hint: "a fraction" },
+      );
+    },
+    (r) => {
+      const both = r.int(1, 9) * 2;
+      const group = both * r.pick([2, 4, 5]);
+      return slider(
+        `Of ${group} students who play music, ${both} also play sport. Place the percentage of the musicians who play sport.`,
+        { min: 0, max: 100, step: 1, value: (both / group) * 100, full: 1, zero: 12 },
       );
     },
   ],
@@ -2203,6 +3986,28 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         `Of ${total} people, ${onlyA} like tea only, ${onlyB} coffee only, ${both} like both and ${neither} like neither. How many like tea?`,
         onlyA + both,
         { hint: "a number" },
+      );
+    },
+    (r) => {
+      const onlyA = r.int(2, 15);
+      const onlyB = r.int(2, 15);
+      const both = r.int(2, 10);
+      const neither = r.int(1, 10);
+      return fill(
+        `Of ${onlyA + onlyB + both + neither} people, ${onlyA + both} like tea, ${onlyB + both} like coffee and ${both} like both. How many like at least one of them?`,
+        onlyA + onlyB + both,
+        { hint: "a whole number" },
+      );
+    },
+    (r) => {
+      const onlyA = r.int(2, 15);
+      const onlyB = r.int(2, 15);
+      const both = r.int(2, 10);
+      const neither = r.int(1, 12);
+      return fill(
+        `Of ${onlyA + onlyB + both + neither} people, ${onlyA + both} play chess, ${onlyB + both} play cards and ${both} play both. How many play neither?`,
+        neither,
+        { hint: "a whole number" },
       );
     },
   ],
@@ -2565,5 +4370,16 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
         { hint: "a number or a fraction" },
       );
     },
+    (r) =>
+      order(
+        "Put the steps of a coordinate proof about a quadrilateral in order.",
+        [
+          "Place the quadrilateral with a vertex at the origin and a side on an axis",
+          "Write coordinates for all four vertices",
+          "Work out the slopes or lengths the claim depends on",
+          "Compare them and state what kind of quadrilateral it is",
+        ],
+        r,
+      ),
   ],
 };

@@ -30,16 +30,28 @@ import {
 const REVEAL_MS = 1700;
 
 /**
- * A missed question is held longer, because there is now something on the
- * screen to read: the reveal carries why the answer was wrong, and 1.7 seconds
- * is enough to notice a green tick and not enough to take in a sentence. It
- * costs the player nothing — the bot advances when the answer is graded, not
- * as the clock runs, so a longer look at a mistake does not lose the race.
+ * The race, in metres per second.
+ *
+ * You take two for every question answered and give one back for every one
+ * missed. The rival takes two on a clock wound to how quickly you have been
+ * answering. Whoever is quicker when the flag falls has taken it — and the two
+ * cars on the track are placed on these same two numbers, so the one in front
+ * as the line arrives is the one that won.
+ *
+ * A miss costs less than an answer earns, so a race survives a couple of them.
  */
-const REVEAL_MISSED_MS = 4200;
+const PER_ANSWER = 2;
+const PER_MISS = 1;
 
-/** Bot answers this fraction of questions correctly, and takes this long. */
-const BOT = { accuracy: 0.68, minThink: 0.35, maxThink: 0.85 };
+/** A ceiling on either, because a stocked subunit can ask sixty questions. */
+const TOP_PACE = 40;
+
+/**
+ * The rival's handicap, in seconds. Its clock is your own quickest answer plus
+ * this, so the bar is holding roughly the pace you have already shown you can
+ * hold rather than beating it.
+ */
+const GRACE = 4;
 
 type Phase = "asking" | "revealed" | "over";
 
@@ -81,10 +93,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
   const [entered, setEntered] = useState<{ id: string; response: Answered } | null>(
     null,
   );
-  const [you, setYou] = useState(0);
-  const [bot, setBot] = useState(0);
   const [answers, setAnswers] = useState<AnswerDetail[]>([]);
   const [lastGain, setLastGain] = useState<number | null>(null);
+  /** The quickest answer given so far, in ms. It sets the rival's pace. */
+  const [quickest, setQuickest] = useState<number | null>(null);
+  /** The rival's pace. It only ever climbs, and only while a question is up. */
+  const [botPace, setBotPace] = useState(0);
 
   // The correct answer is not in this bundle — it arrives with the verdict.
   const [reveal, setReveal] = useState<Reveal | null>(null);
@@ -122,6 +136,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
       // longer and it is worth nothing. It never goes negative — a slow
       // answer earns less, it is not punished.
       const speed = Math.max(0, Math.min(1, 1 - msTaken / parMs));
+      setQuickest((q) => (q === null ? msTaken : Math.min(q, msTaken)));
       setDraft(response);
 
       let verdict;
@@ -158,22 +173,10 @@ export function Racer({ subunitId }: { subunitId: string }) {
         },
       ]);
 
-      // Distance scales with how right the answer was, plus up to another
-      // length for being quick. Speed is the whole point of a race, so it has
-      // to move the car — and a nearly-right answer has to move it a little,
-      // or the proximity kinds would score like multiple choice after all.
-      const gain = verdict.score * (1 + speed);
-      setLastGain(gain > 0 ? gain : null);
-      if (gain > 0) setYou((d) => d + gain);
-
-      const botRight = Math.random() < BOT.accuracy;
-      if (botRight) {
-        // The bot takes its own share of par to think, so it is racing the
-        // same trade-off you are rather than racing a clock.
-        const botThink =
-          BOT.minThink + Math.random() * (BOT.maxThink - BOT.minThink);
-        setBot((d) => d + 1 + (1 - botThink));
-      }
+      // A step of pace either way. How quickly it came still counts, but
+      // through the rival rather than through you: the clock it is chasing you
+      // on is wound to your own best answer.
+      setLastGain(verdict.correct ? PER_ANSWER : -PER_MISS);
     },
     [question, index, parMs, difficulty, sessionId, setDraft],
   );
@@ -213,27 +216,103 @@ export function Racer({ subunitId }: { subunitId: string }) {
     askedAt.current = Date.now();
   }, [phase, index, question, sessionId]);
 
+  /** The answer was wrong, so there is an explanation on screen to read. */
+  const missed = score !== null && score < PASS;
+
+  const advance = useCallback(() => {
+    if (index >= total - 1) {
+      setPhase("over");
+      return;
+    }
+    setReveal(null);
+    setScore(null);
+    setSteps(undefined);
+    setLastGain(null);
+    setIndex(index + 1);
+    setPhase("asking");
+  }, [index, total]);
+
   // Advance, or end the race.
   useEffect(() => {
     if (phase !== "revealed") return;
 
-    const id = setTimeout(() => {
-      if (index >= total - 1) {
-        setPhase("over");
-        return;
+    // A right answer flicks past; a wrong one waits to be dismissed. No timer
+    // knows how long a sentence takes to read, and this is the one part of a
+    // race worth being slow in — the rival's clock is stopped either way, so
+    // staying with an explanation cannot cost the race.
+    const id = missed ? null : window.setTimeout(advance, REVEAL_MS);
+
+    const onKey = (e: KeyboardEvent) => {
+      // Not on a held key: the same press that submitted the answer would
+      // repeat straight through the reveal it opened.
+      if (e.key !== "Enter" || e.repeat) return;
+      e.preventDefault();
+      advance();
+    };
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      if (id !== null) window.clearTimeout(id);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [phase, missed, advance]);
+
+  // Your pace: two for every question taken, one back for every one missed.
+  //
+  // Floored at every step rather than only at the end, so a standstill is a
+  // standstill: missing one while already stopped costs nothing, where a
+  // running total left free to go negative would have quietly banked the debt
+  // and eaten the next answer.
+  const pace = Math.min(
+    TOP_PACE,
+    answers.reduce(
+      (v, a) => Math.max(0, v + (a.correct ? PER_ANSWER : -PER_MISS)),
+      0,
+    ),
+  );
+
+  // How often the rival finds another step. It is pegged to the quickest
+  // answer given so far plus its grace, so answering in ten seconds is chased
+  // by a rival stepping up every fourteen: hold roughly your own best pace and
+  // you beat it, drift well off it and it goes by. Half of par stands in until
+  // there is an answer to go on, and nothing under four seconds, which nobody
+  // should have to outrun.
+  const botStep = Math.max(4, (quickest ?? parMs / 2) / 1000 + GRACE);
+
+  /**
+   * The rival's clock, one step at a time.
+   *
+   * It runs only while a question is actually up. A reveal is dead time for
+   * you and would otherwise be free pace for it — and since a missed answer is
+   * held on screen for four seconds, reading why you were wrong would have
+   * been the most expensive thing in the race.
+   */
+  const botHeld = useRef(0);
+  const botSince = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (phase !== "asking" || !sessionId || botPace >= TOP_PACE) return;
+
+    botSince.current = Date.now();
+    const wait = Math.max(0, botStep * 1000 - botHeld.current);
+    const id = window.setTimeout(() => {
+      botSince.current = null;
+      botHeld.current = 0;
+      setBotPace((v) => Math.min(TOP_PACE, v + PER_ANSWER));
+    }, wait);
+
+    return () => {
+      window.clearTimeout(id);
+      // Bank the part of the interval already served, so stopping for a reveal
+      // costs the rival nothing and gives it nothing.
+      if (botSince.current !== null) {
+        botHeld.current += Date.now() - botSince.current;
+        botSince.current = null;
       }
-      setReveal(null);
-      setScore(null);
-      setSteps(undefined);
-      setLastGain(null);
-      setIndex(index + 1);
-      setPhase("asking");
-    }, score !== null && score < PASS ? REVEAL_MISSED_MS : REVEAL_MS);
+    };
+  }, [phase, sessionId, botPace, botStep]);
 
-    return () => clearTimeout(id);
-  }, [phase, index, total, score]);
-
-  const won = you > bot;
+  const won = pace > botPace;
 
   // Bank the session exactly once, when it ends. The ref is the guard rather
   // than state, so nothing is set synchronously while the effect runs.
@@ -271,7 +350,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
   const xpEarned =
     answers.reduce((sum, a) => sum + xpForAnswer(a), 0) + (won ? 50 : 0);
-  const lead = you - bot;
+  const lead = pace - botPace;
+
+  // Where the finish line goes: a question that has been revealed is one that
+  // is no longer to come.
+  const remaining =
+    phase === "over" ? 0 : total - index - (phase === "revealed" ? 1 : 0);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -297,11 +381,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
       {/* ── The track. Periphery, but the reason the game is a race. ── */}
       <Track
-        you={you}
-        bot={bot}
-        length={total}
+        pace={pace}
+        botPace={botPace}
+        remaining={remaining}
         lead={lead}
         gain={lastGain}
+        count={answers.length}
         over={phase === "over"}
       />
 
@@ -313,7 +398,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
                 ? "Race stopped."
                 : won
                   ? "You took the race."
-                  : you === bot
+                  : pace === botPace
                     ? "Dead heat."
                     : "The bot took it."
             }
@@ -327,10 +412,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
             onAgain={() => {
               setIndex(0);
               setEntered(null);
-              setYou(0);
-              setBot(0);
               setAnswers([]);
               setLastGain(null);
+              setQuickest(null);
+              setBotPace(0);
+              botHeld.current = 0;
+              botSince.current = null;
               setReveal(null);
               setScore(null);
               setSessionId(null);
@@ -344,22 +431,25 @@ export function Racer({ subunitId }: { subunitId: string }) {
           />
         ) : (
           question && (
-            <QuestionStage
-              question={question}
-              eyebrow={found.subunit.name}
-              draft={draft}
-              reveal={reveal}
-              score={score}
-              steps={steps}
-              onDraft={setDraft}
-              onSubmit={(response) => {
-                // Timed from the answer, not from the last tick, so the
-                // hundredths between ticks are not rounded in your favour.
-                if (phase === "asking") {
-                  resolve(response, Date.now() - askedAt.current);
-                }
-              }}
-            />
+            <div className="flex w-full max-w-3xl flex-col gap-7">
+              <QuestionStage
+                question={question}
+                eyebrow={found.subunit.name}
+                draft={draft}
+                reveal={reveal}
+                score={score}
+                steps={steps}
+                onDraft={setDraft}
+                onSubmit={(response) => {
+                  // Timed from the answer, not from the last tick, so the
+                  // hundredths between ticks are not rounded in your favour.
+                  if (phase === "asking") {
+                    resolve(response, Date.now() - askedAt.current);
+                  }
+                }}
+              />
+              {phase === "revealed" && missed && <Continue onGo={advance} />}
+            </div>
           )
         )}
       </main>
@@ -367,19 +457,47 @@ export function Racer({ subunitId }: { subunitId: string }) {
   );
 }
 
+/**
+ * How a missed question is dismissed. Shown only there: a right answer moves
+ * on by itself in under two seconds and has nothing to read. Said out loud
+ * rather than left to be found, because a screen that is waiting for you looks
+ * exactly like a screen that has stopped working.
+ */
+function Continue({ onGo }: { onGo: () => void }) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={onGo}
+        className="rounded-sm border border-line px-4 py-2 text-[13px] font-medium text-ink transition-colors hover:border-faint hover:bg-surface-2"
+      >
+        Continue
+      </button>
+      <span className="font-mono text-[11px] text-faint">
+        Enter · take as long as you like, the rival is stopped too
+      </span>
+    </div>
+  );
+}
+
 function Track({
-  you,
-  bot,
-  length,
+  pace,
+  botPace,
+  remaining,
   lead,
   gain,
+  count,
   over,
 }: {
-  you: number;
-  bot: number;
-  length: number;
+  /** Both in metres per second. Whoever is quicker at the flag has won. */
+  pace: number;
+  botPace: number;
+  remaining: number;
   lead: number;
+  /** The last answer, as the step of pace it was worth. */
   gain: number | null;
+  /** Answers given. It restarts the flash animation, nothing more. */
+  count: number;
   over: boolean;
 }) {
   return (
@@ -396,29 +514,36 @@ function Track({
             : lead === 0
               ? "Level"
               : lead > 0
-                ? `You lead by ${lead.toFixed(1)}`
-                : `Behind by ${Math.abs(lead).toFixed(1)}`}
+                ? `You lead by ${lead} m/s`
+                : `Behind by ${Math.abs(lead)} m/s`}
         </span>
         {gain !== null && (
           <span
-            key={`${you}`}
-            className="animate-question-in font-mono text-[11px] text-correct tnum"
+            key={count}
+            className={`animate-question-in font-mono text-[11px] tnum ${
+              gain > 0 ? "text-correct" : "text-out"
+            }`}
           >
-            +{gain.toFixed(1)}
+            {gain > 0 ? `+${gain}` : `−${Math.abs(gain)}`}
           </span>
         )}
 
         <span className="ml-auto font-mono text-[11px] text-muted tnum">
-          <span className="text-ink">You {you.toFixed(1)}</span>
+          <span className="text-ink">You {pace}</span>
           <span className="mx-2 text-faint">·</span>
-          Bot {bot.toFixed(1)}
+          Bot {botPace}
         </span>
       </div>
 
-      {/* Two lengths per question is the most anyone can score, so the finish
-          line sits there and the road never rescales mid-race. */}
-      <div className="h-40 overflow-hidden rounded-[10px] border border-line sm:h-60">
-        <Track3D you={you} bot={bot} length={length} over={over} />
+      {/* The finish sits two lengths ahead per question still to come, so it
+          closes in over the race rather than the road rescaling under it. */}
+      <div className="h-44 overflow-hidden rounded-[10px] border border-line sm:h-60">
+        <Track3D
+          speed={pace}
+          botSpeed={botPace}
+          remaining={remaining}
+          over={over}
+        />
       </div>
     </section>
   );

@@ -42,6 +42,12 @@ export type Camera = {
   look: Vec3;
   /** Vertical field of view in radians. */
   fov?: number;
+  /**
+   * Distance haze. Faces mix towards `color` between `near` and `far`, which
+   * is what keeps a long scene from ending in a hard, fully saturated edge:
+   * without it the far end of a road is as vivid as the tarmac underfoot.
+   */
+  fog?: { color: RGB; near: number; far: number };
 };
 
 /* ── Vector maths ───────────────────────────────────────── */
@@ -236,11 +242,37 @@ export function render(
       lit = 0.62 + 0.38 * Math.max(0, dot(n, SUN));
     }
 
-    drawn.push({
-      pts: clipped.map((c) => toScreen(b, c)),
-      depth,
-      fill: css(face.color, lit, face.alpha ?? 1),
-    });
+    const pts = clipped.map((c) => toScreen(b, c));
+
+    // A face under a pixel in both directions is a speck that still costs a
+    // fill, a stroke and a slot in the sort. Far road segments survive it:
+    // they go thin, never narrow.
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of pts) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    if (maxX - minX < 0.8 && maxY - minY < 0.8) continue;
+
+    // Shade first, then mix towards the haze, so distance washes a face out
+    // rather than dimming it.
+    let shaded: RGB = [
+      face.color[0] * lit,
+      face.color[1] * lit,
+      face.color[2] * lit,
+    ];
+    if (cam.fog) {
+      const d = (depth - cam.fog.near) / (cam.fog.far - cam.fog.near);
+      const t = d <= 0 ? 0 : d >= 1 ? 1 : d * d * (3 - 2 * d);
+      if (t > 0) shaded = mix(shaded, cam.fog.color, t);
+    }
+
+    drawn.push({ pts, depth, fill: css(shaded, 1, face.alpha ?? 1) });
   }
 
   drawn.sort((a, z) => z.depth - a.depth);

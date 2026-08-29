@@ -39,6 +39,12 @@ const TOKENS: Record<keyof Palette, string> = {
   out: "--color-out",
 };
 
+/** The mono stack, with a fallback for the frames before the font lands. */
+function readMono(el: Element): string {
+  const value = getComputedStyle(el).getPropertyValue("--font-mono").trim();
+  return value ? `${value}, ui-monospace, monospace` : "ui-monospace, monospace";
+}
+
 function readPalette(el: Element): Palette {
   const style = getComputedStyle(el);
   const out = {} as Palette;
@@ -63,6 +69,8 @@ export type Frame = {
   palette: Palette;
   /** The page's own font stack, for `ctx.font`. */
   font: string;
+  /** The page's mono stack. Figures on a HUD have to hold their column. */
+  mono: string;
 };
 
 /**
@@ -97,6 +105,7 @@ export function SceneCanvas({
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let palette = readPalette(canvas);
     let font = getComputedStyle(canvas).fontFamily;
+    let mono = readMono(canvas);
     let w = 1;
     let h = 1;
 
@@ -112,6 +121,7 @@ export function SceneCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       palette = readPalette(canvas);
       font = getComputedStyle(canvas).fontFamily;
+      mono = readMono(canvas);
     };
 
     resize();
@@ -134,6 +144,7 @@ export function SceneCanvas({
         reduced: motion.matches,
         palette,
         font,
+        mono,
       });
       frame = requestAnimationFrame(tick);
     });

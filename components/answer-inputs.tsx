@@ -463,13 +463,17 @@ function describe(through: [Point, Point]): string {
 // ─── Put the steps in order ──────────────────────────────
 
 /**
- * Reorder a list of steps.
+ * Reorder a list of steps, by dragging them.
  *
- * Moved with buttons rather than dragged. Dragging is the obvious gesture and
- * the wrong one here: these questions are answered under a clock, a drag that
- * misses drops a step somewhere nobody intended, and on a phone it fights the
- * page scroll. A row that moves one place per press is slower to think about
- * and faster to be sure of, and it works from the keyboard for free.
+ * The drag is by the handle rather than by the whole row, which is what keeps
+ * it off the page scroll: `touch-action: none` on a whole list would mean a
+ * phone could not scroll past the question. Rows reorder as the pointer
+ * crosses them rather than following it as a floating copy — the row you are
+ * moving is always the row under your finger, so there is nothing to drop and
+ * nothing to drop in the wrong place.
+ *
+ * The handle is also a button, so the arrangement is still reachable from a
+ * keyboard: focus one and the arrow keys move that step a place at a time.
  *
  * The draft stays null until something is actually moved, which is what tells
  * an untouched question from an answered one. Nothing is given away by showing
@@ -495,6 +499,10 @@ export function OrderAnswer({
   const arrangement = draft ?? question.items.map((_, i) => i);
   const right = reveal?.kind === "order" ? reveal.order : null;
 
+  const listRef = useRef<HTMLOListElement>(null);
+  /** The step currently under a finger, for the lift it is drawn with. */
+  const [held, setHeld] = useState<number | null>(null);
+
   function move(at: number, by: number) {
     const to = at + by;
     if (to < 0 || to >= arrangement.length) return;
@@ -503,9 +511,36 @@ export function OrderAnswer({
     onDraft(next);
   }
 
+  /**
+   * Put `item` wherever the pointer is. Reading the rows back out of the DOM
+   * rather than assuming a row height: a step long enough to wrap is taller
+   * than the rest, and a guessed height would swap the wrong pair.
+   */
+  function dragTo(item: number, y: number) {
+    const rows = listRef.current?.children;
+    if (!rows) return;
+
+    let to = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const box = rows[i].getBoundingClientRect();
+      if (y >= box.top && y <= box.bottom) {
+        to = i;
+        break;
+      }
+    }
+
+    const from = arrangement.indexOf(item);
+    if (to < 0 || to === from) return;
+
+    const next = [...arrangement];
+    next.splice(from, 1);
+    next.splice(to, 0, item);
+    onDraft(next);
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <ol className="flex flex-col gap-2">
+      <ol ref={listRef} className="flex flex-col gap-2">
         {arrangement.map((item, at) => {
           const belongs = right ? right.indexOf(item) : -1;
           const placed = right !== null && belongs === at;
@@ -515,6 +550,8 @@ export function OrderAnswer({
             tone = placed
               ? "box border-correct bg-correct/12"
               : "box border-out bg-out/12";
+          } else if (held === item) {
+            tone = "box border-accent bg-surface-2";
           }
 
           return (
@@ -542,20 +579,48 @@ export function OrderAnswer({
                   {placed ? "correct" : "belongs at " + (belongs + 1)}
                 </span>
               ) : (
-                <span className="flex shrink-0 flex-col justify-center gap-1">
-                  <Nudge
-                    label={"Move step " + (at + 1) + " up"}
-                    glyph="↑"
-                    disabled={locked || at === 0}
-                    onClick={() => move(at, -1)}
-                  />
-                  <Nudge
-                    label={"Move step " + (at + 1) + " down"}
-                    glyph="↓"
-                    disabled={locked || at === arrangement.length - 1}
-                    onClick={() => move(at, 1)}
-                  />
-                </span>
+                <button
+                  type="button"
+                  aria-label={
+                    "Move step " +
+                    (at + 1) +
+                    ", " +
+                    question.items[item] +
+                    ". Drag, or use the arrow keys."
+                  }
+                  disabled={locked}
+                  // `touch-action: none` only here, so the list still scrolls.
+                  className={
+                    "flex w-9 shrink-0 touch-none items-center justify-center " +
+                    "rounded-sm text-[15px] leading-none text-faint select-none " +
+                    "transition-colors hover:bg-surface-2 hover:text-muted " +
+                    "disabled:cursor-default disabled:opacity-40 " +
+                    (held === item ? "cursor-grabbing text-ink" : "cursor-grab")
+                  }
+                  onPointerDown={(e) => {
+                    if (locked) return;
+                    // Stops the press selecting the text of the row instead.
+                    e.preventDefault();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    setHeld(item);
+                  }}
+                  onPointerMove={(e) => {
+                    if (held === item) dragTo(item, e.clientY);
+                  }}
+                  onPointerUp={() => setHeld(null)}
+                  onPointerCancel={() => setHeld(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      move(at, -1);
+                    } else if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      move(at, 1);
+                    }
+                  }}
+                >
+                  ⠿
+                </button>
               )}
             </li>
           );
@@ -566,34 +631,10 @@ export function OrderAnswer({
         <Commit
           onClick={onSubmit}
           disabled={draft === null}
-          hint="Move a step first"
+          hint="Drag a handle to reorder · ↑ ↓ move a focused one"
         />
       )}
     </div>
-  );
-}
-
-function Nudge({
-  label,
-  glyph,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  glyph: string;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex h-5 w-6 items-center justify-center rounded-sm border border-line text-[11px] leading-none text-muted transition-colors hover:border-faint hover:bg-surface-2 disabled:cursor-default disabled:border-line-soft disabled:opacity-40"
-    >
-      {glyph}
-    </button>
   );
 }
 

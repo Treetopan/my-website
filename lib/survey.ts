@@ -57,7 +57,8 @@ export const ANSWER_MAX = 500;
 /**
  * Courses, as the survey offers them: grouped by subject, in the order the
  * library shows them. Built from the curriculum rather than typed out again, so
- * a course added there appears here without anybody remembering to.
+ * a course added there appears here without anybody remembering to. A subject
+ * with no courses yet is skipped — an empty group is a heading over nothing.
  */
 const COURSE_GROUPS = SUBJECTS.map((subject) => ({
   label: subject.name,
@@ -65,7 +66,7 @@ const COURSE_GROUPS = SUBJECTS.map((subject) => ({
     value: course.id,
     label: course.name,
   })),
-}));
+})).filter((group) => group.options.length > 0);
 
 export const SURVEY: SurveyQuestion[] = [
   {

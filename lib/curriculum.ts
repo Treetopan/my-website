@@ -7,9 +7,10 @@
  * down to what they're studying; the difficulty label just tells them what
  * they're walking into.
  *
- * Content here is a stocked slice, not a full syllabus. Courses with no units
- * are deliberate placeholders so the hierarchy reads honestly — swap real
- * curriculum in here and nothing else in the app has to change.
+ * Content here is a stocked slice, not a full syllabus. Math is the stocked
+ * subject; Science and History are listed empty and read as coming soon, so
+ * the hierarchy stays honest about what is missing — fill them in here and
+ * nothing else in the app has to change.
  */
 
 import {
@@ -142,181 +143,30 @@ function outline(courseId: string, specs: UnitSpec[]): Unit[] {
   );
 }
 
-// ─── Science · AP Biology ────────────────────────────────
-const bioU1 = unit("science/ap-biology", "unit-1", "Chemistry of Life", (u) => [
-  sub(u, "1.1", "Structure of Water and Hydrogen Bonding", "easy", [
-    ["Which property of water lets it climb up a narrow tube against gravity?", ["Capillary action", "Surface tension", "Specific heat", "Density"], "Properties of water"],
-    ["Water molecules are held to one another by which type of bond?", ["Ionic bonds", "Hydrogen bonds", "Covalent bonds", "Peptide bonds"], "Hydrogen bonding"],
-    ["Why does ice float on liquid water?", ["It is warmer", "It is less dense", "It is more dense", "It has more mass"], "Density of ice"],
-    ["Water is described as polar because it has", ["An overall charge", "Uneven charge distribution", "Only nonpolar bonds", "No electrons"], "Polarity"],
-    ["Water's high specific heat means it", ["Heats up very quickly", "Resists temperature change", "Cannot dissolve salts", "Boils below 100 °C"], "Specific heat"],
-  ]),
-  sub(u, "1.2", "Elements of Life", "easy", [
-    ["Which four elements make up roughly 96% of living matter?", ["C, H, O, N", "C, H, O, S", "N, O, P, K", "C, N, P, Fe"], "Elements of life"],
-    ["Which element forms the backbone of all organic molecules?", ["Nitrogen", "Carbon", "Oxygen", "Phosphorus"], "Organic molecule structure"],
-    ["Phosphorus is a key component of which molecules?", ["Nucleic acids and ATP", "Only proteins", "Only lipids", "Only carbohydrates"], "Phosphorus in ATP and DNA"],
-    ["Nitrogen is found in which two macromolecule classes?", ["Lipids and carbohydrates", "Proteins and nucleic acids", "Only proteins", "Only nucleic acids"], "Nitrogen in macromolecules"],
-    ["How many bonds can a single carbon atom form?", ["Two", "Three", "Four", "Six"], "Carbon valence"],
-  ]),
-  sub(u, "1.3", "Biological Macromolecules", "medium", [
-    ["Which reaction joins monomers by removing a water molecule?", ["Hydrolysis", "Dehydration synthesis", "Oxidation", "Phosphorylation"], "Building polymers"],
-    ["The monomer of a protein is", ["A nucleotide", "An amino acid", "A monosaccharide", "A fatty acid"], "Protein monomers"],
-    ["Which level of protein structure is the sequence of amino acids?", ["Primary", "Secondary", "Tertiary", "Quaternary"], "Levels of protein structure"],
-    ["Which macromolecule class is not built from repeating monomers?", ["Proteins", "Lipids", "Nucleic acids", "Carbohydrates"], "Polymers and monomers"],
-    ["A phospholipid is amphipathic, meaning it has", ["Two hydrophobic ends", "A hydrophilic head and hydrophobic tails", "No charge anywhere", "Only polar regions"], "Phospholipid structure"],
-  ]),
-]);
-
-const bioU2 = unit("science/ap-biology", "unit-2", "Cell Structure and Function", (u) => [
-  sub(u, "2.1", "Cell Structure and Subcellular Components", "easy", [
-    ["Which organelle is the site of protein synthesis?", ["Ribosome", "Lysosome", "Golgi apparatus", "Vacuole"], "Protein synthesis site"],
-    ["Rough endoplasmic reticulum is 'rough' because it is studded with", ["Lysosomes", "Ribosomes", "Vesicles", "Mitochondria"], "Rough ER"],
-    ["Which structure packages and ships proteins out of the cell?", ["Nucleolus", "Golgi apparatus", "Peroxisome", "Centriole"], "Protein trafficking"],
-    ["Which organelle contains hydrolytic enzymes for breaking down waste?", ["Lysosome", "Ribosome", "Chloroplast", "Nucleus"], "Cellular waste breakdown"],
-    ["Prokaryotic cells are distinguished by lacking", ["A cell membrane", "A membrane-bound nucleus", "Ribosomes", "DNA"], "Prokaryote vs eukaryote"],
-  ]),
-  sub(u, "2.2", "Cell Size and Surface Area to Volume", "medium", [
-    ["As a cell grows, its volume increases", ["Faster than its surface area", "Slower than its surface area", "At the same rate", "Not at all"], "Surface area to volume"],
-    ["A high surface-area-to-volume ratio helps a cell", ["Store more waste", "Exchange materials efficiently", "Divide more slowly", "Reduce its metabolism"], "Surface area to volume"],
-    ["Which shape gives a cell the greatest surface area for a fixed volume?", ["Sphere", "Cube", "Elongated and folded", "Perfectly flat disc"], "Cell shape"],
-    ["Doubling the radius of a spherical cell multiplies its volume by", ["Two", "Four", "Six", "Eight"], "Scaling volume"],
-    ["Root hair cells increase absorption primarily by", ["Increasing surface area", "Reducing volume", "Adding more nuclei", "Thickening the cell wall"], "Surface area adaptations"],
-  ]),
-  sub(u, "2.3", "Plasma Membranes and Transport", "hard", [
-    ["Facilitated diffusion differs from simple diffusion because it", ["Requires ATP", "Uses transport proteins", "Moves against the gradient", "Only moves water"], "Facilitated diffusion"],
-    ["The sodium-potassium pump moves ions", ["Down their gradients using no energy", "Against their gradients using ATP", "Only during osmosis", "Through the lipid bilayer directly"], "Active transport"],
-    ["A cell placed in a hypertonic solution will", ["Swell and burst", "Lose water and shrink", "Stay exactly the same", "Gain solute only"], "Tonicity"],
-    ["Which best describes the fluid mosaic model?", ["A rigid protein sheet", "A lipid bilayer with drifting proteins", "A solid crystalline lattice", "A single layer of phospholipids"], "Fluid mosaic model"],
-    ["Water crosses membranes rapidly through channels called", ["Porins", "Aquaporins", "Ion pumps", "Desmosomes"], "Membrane water channels"],
-  ]),
-]);
-
-// ─── History · AP World History ──────────────────────────
-const worldU1 = unit("history/ap-world", "unit-1", "The Global Tapestry, 1200–1450", (u) => [
-  sub(u, "1.1", "Developments in East Asia", "medium", [
-    ["Which Chinese dynasty was in power at the start of the period in 1200?", ["Tang", "Song", "Ming", "Qing"], "Chinese dynasties"],
-    ["The Song economy was transformed by the introduction of which rice variety?", ["Basmati", "Champa rice", "Japonica", "Wild rice"], "Song agriculture"],
-    ["Neo-Confucianism combined Confucian thought with elements of", ["Islam and Judaism", "Buddhism and Daoism", "Christianity", "Shinto only"], "Neo-Confucianism"],
-    ["The civil service examination system primarily recruited officials based on", ["Noble birth", "Merit through examination", "Military service", "Wealth alone"], "Civil service exams"],
-    ["Which technology, spread from Song China, transformed maritime navigation?", ["The magnetic compass", "The telescope", "The chronometer", "The astrolabe"], "Song technology"],
-  ]),
-  sub(u, "1.2", "Developments in Dar al-Islam", "medium", [
-    ["Which city became the intellectual centre of the Abbasid Caliphate?", ["Cairo", "Baghdad", "Damascus", "Córdoba"], "Abbasid centres of learning"],
-    ["The House of Wisdom was renowned for", ["Military training", "Translation and scholarship", "Coin minting", "Shipbuilding"], "House of Wisdom"],
-    ["Sufism is best described as", ["A legal school", "A mystical tradition within Islam", "A military order", "A trade guild"], "Sufism"],
-    ["Which scholar's medical encyclopedia was used in Europe for centuries?", ["Ibn Sina", "Ibn Battuta", "Al-Khwarizmi", "Ibn Khaldun"], "Islamic scholarship"],
-    ["Turkic peoples entered the Islamic world largely as", ["Missionaries", "Enslaved soldiers and migrants", "Sea traders", "Monastic scholars"], "Turkic migration"],
-  ]),
-  sub(u, "1.3", "State Building in the Americas", "easy", [
-    ["The Inca Empire was centred in which mountain range?", ["Rockies", "Andes", "Sierra Madre", "Appalachians"], "Inca geography"],
-    ["Which system required Incan subjects to provide labour to the state?", ["Mit'a", "Encomienda", "Corvée", "Serfdom"], "Inca labour obligations"],
-    ["The Aztec capital Tenochtitlan was built on", ["A desert plateau", "An island in a lake", "A river delta", "A coastal cliff"], "Tenochtitlan"],
-    ["Chinampas were used by the Aztecs for", ["Burial", "Agriculture", "Defence", "Astronomy"], "Chinampas"],
-    ["The Incas recorded information using knotted cords called", ["Quipu", "Codices", "Glyphs", "Tablets"], "Inca record keeping"],
-  ]),
-]);
-
-const worldU2 = unit("history/ap-world", "unit-2", "Networks of Exchange", (u) => [
-  sub(u, "2.1", "The Silk Roads", "easy", [
-    ["The Silk Roads primarily connected China with", ["The Americas", "The Mediterranean world", "Australia", "Southern Africa"], "Silk Road geography"],
-    ["Which innovation allowed merchants to travel without carrying coin?", ["Flying cash and credit", "The gold standard", "Paper maps", "Bills of lading"], "Credit and flying cash"],
-    ["Caravanserai were best described as", ["Roadside inns for traders", "Border fortresses", "Temples", "Marketplaces for slaves only"], "Caravanserai"],
-    ["Besides goods, the Silk Roads spread", ["Only silk", "Religions and disease", "Only spices", "Only metals"], "Cultural diffusion"],
-    ["Which pack animal made long desert crossings practical?", ["Horse", "Camel", "Ox", "Donkey"], "Desert transport"],
-  ]),
-  sub(u, "2.2", "The Mongol Empire", "medium", [
-    ["Who unified the Mongol tribes in the early 13th century?", ["Kublai Khan", "Genghis Khan", "Timur", "Batu Khan"], "Mongol unification"],
-    ["The Pax Mongolica refers to", ["A peace treaty with China", "A period of safe overland trade", "A Mongol religious code", "A military alliance with Persia"], "Pax Mongolica"],
-    ["Kublai Khan founded which dynasty in China?", ["Ming", "Yuan", "Qing", "Jin"], "Mongol rule in China"],
-    ["Mongol administration commonly relied on", ["Eliminating all local elites", "Employing local bureaucrats", "Direct rule from Mongolia only", "Rotating European advisors"], "Mongol administration"],
-    ["The Mongol relay messenger system was known as the", ["Yam", "Divan", "Kuriltai", "Ordu"], "Mongol communications"],
-  ]),
-  sub(u, "2.3", "Indian Ocean Trade", "medium", [
-    ["Indian Ocean trade depended most on which natural cycle?", ["Ocean currents only", "Monsoon winds", "Tidal ranges", "Solar seasons"], "Indian Ocean seasonality"],
-    ["Which East African cities grew wealthy from this trade?", ["Swahili coast city-states", "Saharan oases", "Nile delta ports only", "Cape colonies"], "Swahili city-states"],
-    ["Swahili emerged as a language blending Bantu with", ["Portuguese", "Arabic", "Hindi", "Persian only"], "Swahili language"],
-    ["Which vessel, with a triangular sail, was characteristic of the region?", ["Junk", "Dhow", "Caravel", "Galley"], "Indian Ocean shipping"],
-    ["Diasporic merchant communities formed mainly to", ["Wage war", "Sustain long-distance trade networks", "Collect taxes for empires", "Spread a single religion"], "Diasporic merchants"],
-  ]),
-]);
-
-// ─── Math · AP Statistics ────────────────────────────────
-const statsU1 = unit("math/ap-statistics", "unit-1", "Exploring One-Variable Data", (u) => [
-  sub(u, "1.1", "Representing Categorical Data", "easy", [
-    ["Which display is appropriate for categorical data?", ["Histogram", "Bar chart", "Boxplot", "Scatterplot"], "Displaying categorical data"],
-    ["A relative frequency table reports each category as", ["A raw count", "A proportion of the total", "A running total", "A standard deviation"], "Relative frequency"],
-    ["Bars in a bar chart are separated by gaps because", ["Categories are not continuous", "It looks better", "The data are sorted", "Counts are estimates"], "Why bars have gaps"],
-    ["A two-way table is used to display", ["One categorical variable", "Two categorical variables", "One quantitative variable", "Residuals"], "Two-way tables"],
-    ["A pie chart is most appropriate when the categories", ["Overlap freely", "Make up a whole", "Are quantitative", "Are time-ordered"], "Pie charts"],
-  ]),
-  sub(u, "1.2", "Describing Distributions", "medium", [
-    ["A distribution with a long right tail is described as", ["Left-skewed", "Right-skewed", "Symmetric", "Uniform"], "Skew"],
-    ["In a right-skewed distribution, the mean is usually", ["Less than the median", "Greater than the median", "Equal to the median", "Undefined"], "Mean vs median"],
-    ["Which measure of centre is resistant to outliers?", ["Mean", "Median", "Range", "Standard deviation"], "Resistant measures"],
-    ["The shape, centre, spread and unusual features should be described", ["In any single one", "All four, in context", "Only shape and centre", "Only spread"], "Describing distributions"],
-    ["A distribution with two distinct peaks is called", ["Uniform", "Bimodal", "Skewed", "Normal"], "Modality"],
-  ]),
-  sub(u, "1.3", "Summary Statistics and Outliers", "medium", [
-    ["The interquartile range is calculated as", ["Q3 − Q1", "Max − Min", "Q3 + Q1", "Mean − Median"], "Interquartile range"],
-    ["By the 1.5 × IQR rule, an outlier lies beyond", ["Q1 − 1.5·IQR or Q3 + 1.5·IQR", "The mean ± 1.5", "Two standard deviations", "The median ± IQR"], "The 1.5 x IQR rule"],
-    ["Standard deviation measures", ["Typical distance from the mean", "The middle value", "The most common value", "The total spread"], "Standard deviation"],
-    ["Adding a constant to every value changes", ["The centre but not the spread", "The spread but not the centre", "Both equally", "Neither"], "Shifting data"],
-    ["Which is most resistant to an extreme value?", ["Mean", "Standard deviation", "IQR", "Range"], "Resistant measures"],
-  ]),
-]);
-
+/**
+ * A subject with no courses is one we have not stocked yet. The library shows
+ * it as coming soon rather than hiding it, because what is missing is part of
+ * what the app is for.
+ */
 export const SUBJECTS: Subject[] = [
   {
     id: "science",
     name: "Science",
     blurb: "Biology, chemistry, physics",
-    courses: [
-      {
-        id: "science/ap-biology",
-        name: "AP Biology",
-        blurb: "Molecules, cells, energetics, genetics",
-        units: [bioU1, bioU2],
-      },
-      {
-        id: "science/ap-chemistry",
-        name: "AP Chemistry",
-        blurb: "Atomic structure, bonding, kinetics",
-        units: [],
-      },
-    ],
+    courses: [],
   },
   {
     id: "history",
     name: "History",
     blurb: "World, regional and thematic history",
-    courses: [
-      {
-        id: "history/ap-world",
-        name: "AP World History",
-        blurb: "1200 to the present, across regions",
-        units: [worldU1, worldU2],
-      },
-      {
-        id: "history/ap-us",
-        name: "AP US History",
-        blurb: "Colonial period to the present",
-        units: [],
-      },
-    ],
+    courses: [],
   },
   {
     id: "math",
     name: "Math",
-    blurb: "Grade 5 through AP Calculus BC, plus statistics",
-    // AP Statistics leads because it is the one course with questions in it.
+    blurb: "Grade 5 through AP Calculus BC",
     // The ten below are the Grade 5 → AP Calculus BC sequence, in order.
     courses: [
-      {
-        id: "math/ap-statistics",
-        name: "AP Statistics",
-        blurb: "Data, sampling, inference",
-        units: [statsU1],
-      },
       {
         id: "math/grade-5",
         name: "Grade 5",

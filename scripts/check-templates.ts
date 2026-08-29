@@ -340,7 +340,7 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
 // is not an instance, so a bank id passing as one would grade against the
 // wrong answer entirely.
 const MUST_NOT_RESOLVE = [
-  "math/ap-statistics/unit-1/1.1/q0",
+  "math/algebra-1/unit-1/1.1/q0",
   "math/algebra-1/unit-1/1.6/gen/99/abc",
   "math/algebra-1/unit-1/1.6/gen/-1/abc",
   "math/algebra-1/unit-9/9.9/gen/0/abc",

@@ -133,15 +133,23 @@ export function Library() {
 
       <Step n="02" title="Choose a subject">
         <div className="grid gap-3 sm:grid-cols-3">
-          {SUBJECTS.map((s) => (
-            <Card
-              key={s.id}
-              on={subject?.id === s.id}
-              onClick={() => chooseSubject(s)}
-              title={s.name}
-              body={s.blurb}
-            />
-          ))}
+          {SUBJECTS.map((s) => {
+            // A subject with no courses has nothing to walk down into, so it
+            // is shown and disabled rather than hidden — it says what is
+            // coming without pretending to be pickable.
+            const soon = s.courses.length === 0;
+            return (
+              <Card
+                key={s.id}
+                on={subject?.id === s.id}
+                disabled={soon}
+                onClick={() => !soon && chooseSubject(s)}
+                title={s.name}
+                body={s.blurb}
+                foot={soon ? "Coming soon" : undefined}
+              />
+            );
+          })}
         </div>
       </Step>
 

@@ -267,6 +267,47 @@ export function describe(subunitId: string) {
   return null;
 }
 
+/**
+ * Two subunit codes, ordered the way the syllabus orders them.
+ *
+ * Codes are dotted numbers, so a plain string sort puts "1.10" before "1.9".
+ * Exported because the pool builder orders siblings by it too, and a second
+ * way of reading a code is a second way of getting it wrong.
+ */
+export function compareCodes(a: string, b: string): number {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const l = left[i] ?? 0;
+    const r = right[i] ?? 0;
+    // A code that is not a dotted number falls back to reading as text, which
+    // is at least stable.
+    if (Number.isNaN(l) || Number.isNaN(r)) return a.localeCompare(b);
+    if (l !== r) return l - r;
+  }
+
+  return 0;
+}
+
+/**
+ * The rest of the unit a subunit belongs to, in code order.
+ *
+ * A subunit too thin to fill a session on its own borrows from these — see
+ * `pool.server.ts`. The unit is the boundary, and deliberately: a student who
+ * picked 4.3 picked a chapter as well as a topic, so a question from 4.2 is
+ * neighbouring material they chose to be in. One from another unit is material
+ * they did not.
+ */
+export function siblingSubunits(subunitId: string): Subunit[] {
+  const found = describe(subunitId);
+  if (!found) return [];
+
+  return [...found.unit.subunits]
+    .sort((a, b) => compareCodes(a.code, b.code))
+    .filter((s) => s.id !== subunitId);
+}
+
 export type Selection = {
   subject: Subject;
   course: Course;

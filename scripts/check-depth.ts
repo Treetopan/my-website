@@ -19,6 +19,14 @@
  *     only one a student experiences. A subunit can hold three forms and still
  *     deal six rounds of one of them, which is what happens when the deal
  *     follows the inventory instead of the forms.
+ *   · effective depth — how many distinct generators that session actually
+ *     reaches, counting the ones borrowed from neighbouring subunits when the
+ *     one picked is too thin to fill a session by itself. The first three
+ *     measure the inventory a subunit owns; this one measures what a student
+ *     sitting down to it gets, which is not the same number and is the one
+ *     that decides whether a course is playable before its generators are
+ *     written. Reported per course, never gated: borrowing is a stopgap and a
+ *     ratchet on it would make the stopgap permanent.
  *
  * A form is a question kind, split further where one kind hosts two different
  * asks: a `fill` that computes a result and a `fill` that recovers a
@@ -28,8 +36,9 @@
  * Run with `npm run check:depth`.
  */
 
-import { SUBJECTS, type Course } from "../lib/curriculum";
-import { GENERATED, instanceId } from "../lib/templates";
+import { SUBJECTS, type Course, type Question } from "../lib/curriculum";
+import { buildPool } from "../lib/pool.server";
+import { GENERATED, instanceId, parseInstanceId } from "../lib/templates";
 import {
   mintInstances,
   questionShape,
@@ -111,6 +120,28 @@ function dealShare(subunitId: string): number {
   return total / DEALS;
 }
 
+/**
+ * How many distinct generators one session reaches, averaged over deals.
+ *
+ * Counted off the instance ids rather than off the deal, because a borrowed
+ * question names the subunit it was minted from — which is exactly what makes
+ * it count as depth rather than as another roll of the same template.
+ */
+function reach(deal: () => Question[]): number {
+  let total = 0;
+
+  for (let i = 0; i < DEALS; i++) {
+    const seen = new Set<string>();
+    for (const question of deal()) {
+      const ref = parseInstanceId(question.id);
+      if (ref) seen.add(`${ref.subunitId}#${ref.generator}`);
+    }
+    total += seen.size;
+  }
+
+  return total / DEALS;
+}
+
 type Row = {
   course: Course;
   subunits: {
@@ -119,6 +150,10 @@ type Row = {
     generators: number;
     forms: number;
     deal: number;
+    /** Distinct generators a session reaches from this subunit alone. */
+    alone: number;
+    /** The same once sibling top-up is counted. */
+    topped: number;
   }[];
 };
 
@@ -143,6 +178,8 @@ for (const subject of SUBJECTS) {
           // reported as one and excluded from the floors below.
           forms: count === 0 ? 0 : shapes.size,
           deal: count === 0 ? 1 : dealShare(su.id),
+          alone: count === 0 ? 0 : reach(() => mintInstances(su.id, SESSION)),
+          topped: count === 0 ? 0 : reach(() => buildPool(su, SESSION, false)),
         };
       })
       .filter((s) => s.generators > 0);
@@ -206,6 +243,49 @@ for (const { course, subunits } of rows) {
       `${s.id}  ${s.generators} generator(s), ${s.forms} form(s) — floor is ${floor!.generators} and ${floor!.forms}  · ${s.name}`,
     );
   }
+}
+
+console.log("");
+
+// ─── Effective depth ─────────────────────────────────────
+//
+// The column that matters for a course written one generator to a subunit:
+// what a student actually meets, rather than what the subunit owns. "alone" is
+// the old behaviour and "borrowed" is the new one, side by side, because the
+// question this answers is whether the top-up did enough to launch on or
+// whether real generators still have to be written first.
+
+console.log(
+  "effective depth — distinct generators a " +
+    SESSION +
+    "-question session on ONE subunit reaches",
+);
+console.log("");
+console.log(
+  "course".padEnd(17) +
+    "subunits".padStart(9) +
+    "alone".padStart(8) +
+    "borrowed".padStart(11) +
+    "     borrowed per subunit",
+);
+console.log(" ".repeat(45) + "     1     2    3+");
+
+for (const { course, subunits } of rows) {
+  const buckets = { "1": 0, "2": 0, "3+": 0 } as Record<string, number>;
+  for (const s of subunits) buckets[bucket(Math.round(s.topped))]++;
+
+  const mean = (pick: (s: (typeof subunits)[number]) => number) =>
+    subunits.reduce((n, s) => n + pick(s), 0) / subunits.length;
+
+  console.log(
+    course.name.padEnd(17) +
+      String(subunits.length).padStart(9) +
+      mean((s) => s.alone).toFixed(1).padStart(8) +
+      mean((s) => s.topped).toFixed(1).padStart(11) +
+      String(buckets["1"]).padStart(6) +
+      String(buckets["2"]).padStart(6) +
+      String(buckets["3+"]).padStart(6),
+  );
 }
 
 console.log("");

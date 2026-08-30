@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { getSubunit, type Question, type Subunit } from "@/lib/curriculum";
+import { buildPool } from "@/lib/pool.server";
 import { MAX_SUBUNITS } from "@/lib/selection";
 import { createSession, mintAllowed } from "@/lib/session-store";
-import { hasSpatial, spatialGenerators } from "@/lib/templates";
-import { hasGenerators, mintInstances } from "@/lib/templates.server";
+import { hasSpatial } from "@/lib/templates";
+import { hasGenerators } from "@/lib/templates.server";
 
 export const dynamic = "force-dynamic";
 
@@ -22,45 +23,6 @@ const GENERATED_LENGTH = 10;
  * advertised.
  */
 const EXTRA_PER_SUBUNIT = 3;
-
-/** Fisher–Yates. Server-side, so nothing about the order is predictable. */
-function shuffle<T>(items: T[]): T[] {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-/**
- * One subunit's questions, up to `want` of them.
- *
- * Generated questions are minted here rather than derived on the client,
- * because building the options means knowing the answer. The browser gets
- * finished questions and cannot tell them from bank ones.
- *
- * A bank is reshuffled each time it is exhausted, so a long game does not
- * repeat in the same order it just played. Never for a duel: a bank question
- * is answered by choosing, so topping up from one would fill a placed-answer
- * game with questions it cannot settle.
- */
-function fill(subunit: Subunit, want: number, placed: boolean): Question[] {
-  const out: Question[] = hasGenerators(subunit.id)
-    ? mintInstances(
-        subunit.id,
-        want,
-        placed ? spatialGenerators(subunit.id) : undefined,
-      )
-    : [];
-
-  while (!placed && out.length < want && subunit.questions.length > 0) {
-    out.push(...shuffle(subunit.questions));
-  }
-
-  out.length = Math.min(want, out.length);
-  return out;
-}
 
 /**
  * Opens a grading session and hands back the question order.
@@ -135,7 +97,12 @@ export async function POST(req: NextRequest) {
   // fronts of them. Pooling everything and shuffling once would let a subunit
   // that mints freely crowd out one with a short bank; dealing in turn gives
   // every subunit picked its share, which is the point of picking several.
-  const pools = subunits.map((s) => fill(s, want, placed));
+  //
+  // A pool is not always all its own: a subunit with too few generators to
+  // fill a session without repeating itself borrows from its neighbours in the
+  // same unit. See `pool.server.ts` — including why the session still reports
+  // the subunit that was picked.
+  const pools = subunits.map((s) => buildPool(s, want, placed));
   const questions: Question[] = [];
 
   for (let round = 0; questions.length < want; round++) {

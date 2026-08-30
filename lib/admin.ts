@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { get, onValue, ref, remove, serverTimestamp, set } from "firebase/database";
-import { realtimeDb } from "@/lib/firebase";
+import { auth, realtimeDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { findByUsername } from "@/lib/social";
-import { readAccounts, type Account } from "@/lib/account";
+import { isOwnerEmail } from "@/lib/owner";
+import type { Account } from "@/lib/account";
 import type { SurveyRecord } from "@/lib/survey";
 
 /**
@@ -26,19 +27,11 @@ import type { SurveyRecord } from "@/lib/survey";
  */
 
 /**
- * The one address that is an admin without being granted it.
- *
- * Verification is deliberately not required. Firebase Auth will not issue two
- * accounts for one address, so this address can only ever belong to whoever
- * registered it first — and requiring a verified email would lock the owner out
- * of their own admin area until they had clicked a link that email/password
- * sign-up never sends.
+ * The owner's address, and the test for it, live in `owner.ts`: the admin
+ * route needs the same test and a route handler cannot import a client module.
+ * Re-exported here because this is where the rest of the app looks for it.
  */
-export const OWNER_EMAIL = "alexleyvalp@gmail.com";
-
-export function isOwnerEmail(email: string | null | undefined): boolean {
-  return (email ?? "").trim().toLowerCase() === OWNER_EMAIL;
-}
+export { OWNER_EMAIL, isOwnerEmail } from "@/lib/owner";
 
 export type AdminEntry = {
   uid: string;
@@ -155,8 +148,16 @@ export async function removeAdmin(uid: string) {
 
 // ─── What the admin area shows ───────────────────────────
 
-/** One account, with whatever it answered attached. */
-export type AdminRow = Account & { survey: SurveyRecord | null };
+/**
+ * One account, with its email and whatever it answered attached.
+ *
+ * The email is not part of `Account` because it is not in the database — it
+ * is in Firebase Auth, and it arrives here from the admin route rather than
+ * from a read every signed-in player could have made for themselves.
+ */
+export type AdminAccount = Account & { email: string | null };
+
+export type AdminRow = AdminAccount & { survey: SurveyRecord | null };
 
 export type AdminData = {
   rows: AdminRow[];
@@ -168,16 +169,56 @@ export type AdminData = {
 };
 
 /**
+ * Every account, newest first, with the email Firebase Auth holds for it.
+ *
+ * Fetched from the server rather than read out of the database, because the
+ * database no longer has it. `users/{uid}` is readable by any signed-in
+ * player — that is what lets a room show a name — so an email stored there is
+ * an email every account in the app can read. The route re-checks admin the
+ * same way the rules do; this call is the interface asking, not the thing
+ * granting.
+ */
+async function readAccounts(idToken: string): Promise<AdminAccount[]> {
+  const res = await fetch("/api/admin/accounts", {
+    headers: { authorization: `Bearer ${idToken}` },
+    cache: "no-store",
+  });
+
+  const body = (await res.json().catch(() => null)) as {
+    accounts?: AdminAccount[];
+    error?: string;
+  } | null;
+
+  if (!res.ok) {
+    throw new Error(body?.error ?? "Couldn't read the accounts.");
+  }
+  return body?.accounts ?? [];
+}
+
+/**
  * Everything the admin screen reads, in one pass.
  *
  * Two reads and a join rather than one denormalised node: the survey is kept
  * out of the profile because a profile is readable by every signed-in player,
  * and copying answers into it to save a read here would undo exactly that.
+ *
+ * The two failures read differently and are worth telling apart — the accounts
+ * come from a route that can say why it refused, the surveys from the database,
+ * where a refusal usually means the rules are not deployed.
  */
 export async function readAdminData(): Promise<AdminData> {
+  const me = auth.currentUser;
+  if (!me) throw new Error("You are not signed in.");
+
+  const idToken = await me.getIdToken();
+
   const [accounts, surveySnap] = await Promise.all([
-    readAccounts(),
-    get(ref(realtimeDb, "surveys")),
+    readAccounts(idToken),
+    get(ref(realtimeDb, "surveys")).catch(() => {
+      throw new Error(
+        "Couldn't read the survey answers. The rules in database.rules.json may not be deployed.",
+      );
+    }),
   ]);
 
   const surveys = (surveySnap.val() ?? {}) as Record<string, SurveyRecord>;

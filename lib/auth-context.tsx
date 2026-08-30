@@ -135,9 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
 
         // Mirror the account into RTDB so rooms and friends can read it
-        // without a second auth lookup per player.
+        // without a second auth lookup per player. The email is deliberately
+        // not mirrored: that node is readable by every signed-in player, so a
+        // copy of it here would be an address book the whole app can read.
+        // Firebase Auth holds the address; the admin route joins it back on.
         await update(ref(realtimeDb, `users/${cred.user.uid}`), {
-          email,
           createdAt: serverTimestamp(),
         });
 

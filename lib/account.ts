@@ -1,6 +1,6 @@
 "use client";
 
-import { get, onValue, ref } from "firebase/database";
+import { onValue, ref } from "firebase/database";
 import { realtimeDb } from "@/lib/firebase";
 import { EMPTY_PROGRESS, type Progress } from "@/lib/progression";
 
@@ -11,17 +11,21 @@ import { EMPTY_PROGRESS, type Progress } from "@/lib/progression";
  * account belongs to and when it started.
  *
  * ```
- * users/{uid}/email        as typed at sign-up
  * users/{uid}/username     the name its owner claimed
  * users/{uid}/createdAt    server time the account was made
  * users/{uid}/progress     xp, streak, played, won
  * ```
+ *
+ * No email. Firebase Auth already holds one per account and this node is
+ * readable by every signed-in player — a room shows names out of it — so a
+ * copy here would be an address book any account in the app could read. The
+ * admin screen gets emails from `/api/admin/accounts` instead, and the rules
+ * refuse a write of `email` so a stale client cannot put one back.
  */
 
 export type Account = {
   uid: string;
   username: string | null;
-  email: string | null;
   createdAt: number | null;
   progress: Progress;
 };
@@ -36,7 +40,6 @@ function toAccount(uid: string, raw: unknown): Account {
   return {
     uid,
     username: typeof row.username === "string" ? row.username : null,
-    email: typeof row.email === "string" ? row.email : null,
     createdAt: typeof row.createdAt === "number" ? row.createdAt : null,
     progress: {
       ...EMPTY_PROGRESS,
@@ -49,23 +52,4 @@ export function watchAccount(uid: string, cb: (account: Account) => void) {
   return onValue(ref(realtimeDb, `users/${uid}`), (snap) => {
     cb(toAccount(uid, snap.val()));
   });
-}
-
-/**
- * Every account, newest first. Only an admin may read this — the rules grant
- * the read at the `users` root, and a signed-in user who is not an admin can
- * still read accounts one uid at a time, which is what rooms need.
- *
- * One read of the whole node rather than a paged query: the node holds a row
- * per player and nothing large, and an admin screen that shows a count has to
- * see all of them anyway. If this ever gets big enough to hurt, the count is
- * the thing to move to a counter, not this read to a cursor.
- */
-export async function readAccounts(): Promise<Account[]> {
-  const snap = await get(ref(realtimeDb, "users"));
-  const raw = (snap.val() ?? {}) as Record<string, unknown>;
-
-  return Object.entries(raw)
-    .map(([uid, row]) => toAccount(uid, row))
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }

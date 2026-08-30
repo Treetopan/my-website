@@ -74,7 +74,7 @@ export function Profile() {
         {username ?? "—"}
       </h1>
       <p className="mt-2 font-mono text-[11px] text-faint">
-        {account?.email ?? user.email ?? "—"}
+        {user.email ?? "—"}
         {account?.createdAt && ` · joined ${monthOf(account.createdAt)}`}
       </p>
 

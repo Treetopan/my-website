@@ -42,7 +42,10 @@ export function Admin() {
   const { isAdmin, isOwner, loading } = useAdmin();
 
   const [data, setData] = useState<AdminData | null>(null);
-  const [failed, setFailed] = useState(false);
+  // The sentence a failed read gave, not just that it failed: the accounts
+  // come from a route that can say why it refused, and "couldn't read them"
+  // is no help when the answer is a missing service account.
+  const [problem, setProblem] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Read once rather than watched. Everything here is a count over every
@@ -57,9 +60,9 @@ export function Admin() {
       (next) => {
         if (!live) return;
         setData(next);
-        setFailed(false);
+        setProblem(null);
       },
-      () => live && setFailed(true),
+      (error: unknown) => live && setProblem(sentence(error)),
     );
 
     return () => {
@@ -71,15 +74,15 @@ export function Admin() {
     setRefreshing(true);
     try {
       setData(await readAdminData());
-      setFailed(false);
-    } catch {
-      setFailed(true);
+      setProblem(null);
+    } catch (error) {
+      setProblem(sentence(error));
     } finally {
       setRefreshing(false);
     }
   }
 
-  const reading = refreshing || (isAdmin && !data && !failed);
+  const reading = refreshing || (isAdmin && !data && !problem);
 
   if (loading) {
     return (
@@ -132,14 +135,12 @@ export function Admin() {
         </button>
       </div>
 
-      {failed && (
+      {problem && (
         <p
           role="alert"
           className="mt-6 rounded-sm border border-out/40 bg-out/8 px-3.5 py-2.5 text-[13px] text-ink"
         >
-          Couldn&apos;t read the accounts. If this keeps happening, the rules in{" "}
-          <code className="font-mono text-[12px]">database.rules.json</code> may
-          not be deployed.
+          {problem}
         </p>
       )}
 
@@ -527,6 +528,13 @@ function Td({
 
 function Faint({ children }: { children: React.ReactNode }) {
   return <span className="text-faint">{children}</span>;
+}
+
+/** Whatever went wrong, as something worth putting on the screen. */
+function sentence(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : "Couldn't read the accounts.";
 }
 
 function num(value: number | undefined): string {

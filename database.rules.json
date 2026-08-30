@@ -58,6 +58,13 @@
     // A player's profile and progress: readable by any signed-in user so
     // rooms can show names, writable only by its owner. An admin may read the
     // node whole, which is the only way to count accounts or list them.
+    //
+    // Because every signed-in user can read a row here, nothing personal may
+    // be kept in one. An email in particular: /usernames maps a name to a uid
+    // and is readable by any signed-in user too, so an address stored here
+    // would be an address book anybody who signed up could walk. Firebase Auth
+    // already holds the address, and /api/admin/accounts is what joins it back
+    // on for the one screen that needs it.
     "users": {
       ".read": "auth != null && (auth.token.email == 'alexleyvalp@gmail.com' || root.child('admins').child(auth.uid).exists())",
       "$uid": {
@@ -68,6 +75,15 @@
         // profile could show one thing while the claim held another.
         "username": {
           ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z][A-Za-z0-9_]{2,15}$/)"
+        },
+
+        // Nothing may write an email here, ever. Sign-up used to, and a client
+        // running that build is still out there; a validate that can never
+        // pass fails the whole write rather than letting the field through.
+        // Deleting one is not a write of it — newData does not exist, so this
+        // does not run — which is what lets the old rows be cleaned out.
+        "email": {
+          ".validate": false
         }
       }
     },

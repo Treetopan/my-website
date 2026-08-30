@@ -1,12 +1,15 @@
 import "server-only";
 
 import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
+import type { App } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import type { Auth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
 import type { Database } from "firebase-admin/database";
 
 /**
- * The Admin SDK, for the one thing the client SDK cannot do: hold data the
- * browser must never read.
+ * The Admin SDK, for the two things the client SDK cannot do: hold data the
+ * browser must never read, and read a user record that is not your own.
  *
  * The web config in `firebase.ts` is public and authorises nothing — what
  * protects data there is `database.rules.json`. Grading sessions cannot be
@@ -17,22 +20,38 @@ import type { Database } from "firebase-admin/database";
  * outside the rules entirely, so `sessions/` can be denied to everyone in the
  * rules and still be readable here.
  *
+ * The auth half is what the admin screen runs on. Emails are not kept in the
+ * database — see `account.ts` — so listing them means asking Firebase Auth,
+ * and only a service account may ask about somebody else's.
+ *
  * Credentials come from a service-account key in the environment. Without one
- * this returns null and the caller falls back to in-process memory, which is
+ * these return null and the caller falls back to in-process memory, which is
  * correct for `next dev` and wrong for anything with more than one instance —
  * see `session-store.ts`.
  */
 
-let cached: Database | null | undefined;
+let cached: App | null | undefined;
 
-/** The Admin database, or null when no service account is configured. */
-export function adminDb(): Database | null {
+/** The Admin app, or null when no service account is configured. */
+function adminApp(): App | null {
   if (cached !== undefined) return cached;
   cached = connect();
   return cached;
 }
 
-function connect(): Database | null {
+/** The Admin database, or null when no service account is configured. */
+export function adminDb(): Database | null {
+  const app = adminApp();
+  return app ? getDatabase(app) : null;
+}
+
+/** Firebase Auth as the server sees it, or null for the same reason. */
+export function adminAuth(): Auth | null {
+  const app = adminApp();
+  return app ? getAuth(app) : null;
+}
+
+function connect(): App | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   const databaseURL =
     process.env.FIREBASE_DATABASE_URL ??
@@ -77,9 +96,7 @@ function connect(): Database | null {
   }
 
   // Next re-evaluates modules on HMR, and initializeApp twice throws.
-  const app = getApps().length
+  return getApps().length
     ? getApp()
     : initializeApp({ credential: cert(credentials), databaseURL });
-
-  return getDatabase(app);
 }

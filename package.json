@@ -11,7 +11,8 @@
     "check:mix": "tsx --conditions=react-server scripts/question-mix.ts",
     "check:duel": "tsx --conditions=react-server scripts/check-duel.ts",
     "check:coaching": "tsx --conditions=react-server scripts/check-coaching.ts",
-    "check:depth": "tsx --conditions=react-server scripts/check-depth.ts"
+    "check:depth": "tsx --conditions=react-server scripts/check-depth.ts",
+    "strip:emails": "tsx --conditions=react-server scripts/strip-emails.ts"
   },
   "dependencies": {
     "firebase": "^12.18.0",

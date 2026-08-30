@@ -44,8 +44,42 @@ export type Session = {
 const SESSION_TTL_MS = 60 * 60 * 1000;
 const MAX_SESSIONS = 5_000;
 
-const MINT_WINDOW_MS = 60_000;
-const MINT_LIMIT = 30;
+const WINDOW_MS = 60_000;
+
+/**
+ * Two budgets on the same limiter, because the two endpoints are asked for at
+ * very different rates and must not share a counter — a burst of answering
+ * cannot be allowed to lock a class out of starting a game.
+ *
+ * Both are sized for a room rather than for a person, and that is the whole
+ * story. The key is the caller's IP; a school is one IP; so thirty students
+ * on the same wifi are one caller here. The numbers that read as generous for
+ * an individual are the numbers that lock out the back half of a class the
+ * first time they all press play together — which is exactly what 30 sessions
+ * a minute did.
+ *
+ * These are ceilings on abuse, not on use. Set them where a plausible room
+ * never reaches them and a script still does:
+ *
+ *   · 300 sessions/min — a class of thirty starting, restarting and picking
+ *     new subunits for a whole period, without any of them waiting.
+ *   · 2000 answers/min — the same class answering flat out, plus duels, where
+ *     one request grades a whole table.
+ *
+ * The real fix is not a bigger number. It is keying on the authenticated uid
+ * instead of the IP, so the limit applies per student and a school stops being
+ * one caller. That needs `/api/answer` to verify an ID token, which it does
+ * not do today — grading is gated by holding a live session and by the
+ * one-claim-per-position rule, neither of which says who you are. Deliberately
+ * not done now, and written down here so it is not argued out again: the IP
+ * key is a stopgap with a known failure mode, and the failure mode is a
+ * classroom.
+ *
+ * Every refusal is logged — see `refused` — because both numbers are guesses
+ * about a room and the only way to learn one is wrong is to watch it fire.
+ */
+const MINT_LIMIT = 300;
+const GRADE_LIMIT = 2000;
 
 // ─── The two backings ────────────────────────────────────
 
@@ -60,7 +94,8 @@ type Store = {
   get(id: string, now: number): Promise<Session | null>;
   /** Marks a position graded. False if it was already claimed. */
   claim(id: string, position: number): Promise<boolean>;
-  mintAllowed(key: string, now: number): Promise<boolean>;
+  /** Whether `key` is still under `limit` calls in the current window. */
+  allow(key: string, now: number, limit: number): Promise<boolean>;
 };
 
 // ── In-process ──
@@ -101,11 +136,9 @@ const memoryStore: Store = {
     return true;
   },
 
-  async mintAllowed(key, now) {
-    const recent = (mints.get(key) ?? []).filter(
-      (t) => now - t < MINT_WINDOW_MS,
-    );
-    if (recent.length >= MINT_LIMIT) {
+  async allow(key, now, limit) {
+    const recent = (mints.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
+    if (recent.length >= limit) {
       mints.set(key, recent);
       return false;
     }
@@ -114,7 +147,7 @@ const memoryStore: Store = {
 
     if (mints.size > 10_000) {
       for (const [k, times] of mints) {
-        if (times.every((t) => now - t >= MINT_WINDOW_MS)) mints.delete(k);
+        if (times.every((t) => now - t >= WINDOW_MS)) mints.delete(k);
       }
     }
     return true;
@@ -176,20 +209,20 @@ function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
       return result.committed && result.snapshot.val() === true;
     },
 
-    async mintAllowed(key, now) {
+    async allow(key, now, limit) {
       // Bucketed by window so the counter expires on its own rather than
       // needing a sweep: last window's bucket is simply never read again.
-      const bucket = Math.floor(now / MINT_WINDOW_MS);
+      const bucket = Math.floor(now / WINDOW_MS);
       const ref = db.ref(`mints/${bucket}/${encodeKey(key)}`);
 
       const result = await ref.transaction((count: number | null) =>
-        (count ?? 0) >= MINT_LIMIT ? undefined : (count ?? 0) + 1,
+        (count ?? 0) >= limit ? undefined : (count ?? 0) + 1,
       );
 
       if (result.committed) {
         // Old buckets are cleared opportunistically, cheaply, and only by the
         // request that happens to roll over into a new one.
-        if (now % MINT_WINDOW_MS < 1000) {
+        if (now % WINDOW_MS < 1000) {
           db.ref(`mints/${bucket - 2}`).remove().catch(() => {});
         }
         return true;
@@ -199,7 +232,8 @@ function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
   };
 }
 
-/** RTDB keys cannot contain . $ # [ ] / — an IP or header value might. */
+/** RTDB keys cannot contain . $ # [ ] / — an IP or header value might. The
+ *  `grade:` prefix a grading counter carries survives this untouched. */
 function encodeKey(key: string): string {
   return key.replace(/[.$#[\]/]/g, "-");
 }
@@ -270,10 +304,45 @@ export async function claimPosition(
 }
 
 /**
+ * Says so out loud when a limiter turns a request away.
+ *
+ * A student who hits one of these sees "wait a minute" and, in all likelihood,
+ * stops playing rather than reporting it. The ceilings are guesses about how
+ * busy a room gets, so a refusal is either a script — worth knowing about — or
+ * a guess that was wrong, which is worth knowing about sooner. Names the limit
+ * it broke and the key it was counted under, because with an IP key that key
+ * is often a whole school and that is the tell.
+ */
+function refused(what: string, key: string, limit: number): void {
+  console.warn(
+    `[rate] refused ${what} for ${key}: over ${limit} per ${WINDOW_MS / 1000}s. ` +
+      "Counted per IP, so this may be a whole school rather than one person — " +
+      "if it is, raise the limit in session-store.ts rather than leaving them stuck.",
+  );
+}
+
+/**
  * Minting sessions is the one thing left that a determined cheat can loop on,
- * so it is rate limited per caller. Generous enough that a real student
- * replaying a subunit never notices.
+ * so it is rate limited per caller. Sized so that a class all starting at once
+ * never reaches it — see the constants above for why that is the bar.
  */
 export async function mintAllowed(key: string, now: number): Promise<boolean> {
-  return backing().mintAllowed(key, now);
+  const ok = await backing().allow(key, now, MINT_LIMIT);
+  if (!ok) refused("a session", key, MINT_LIMIT);
+  return ok;
+}
+
+/**
+ * The same limiter over grading, on a counter of its own.
+ *
+ * Grading is already the narrow door — it needs a live session and each
+ * position in one can be claimed exactly once, so there is no oracle to loop
+ * on here the way there is on minting. This is about load rather than cheating:
+ * an endpoint that resolves a generator and writes a transaction per call
+ * should not be free to hammer, and a caller who is hammering it is not playing.
+ */
+export async function gradeAllowed(key: string, now: number): Promise<boolean> {
+  const ok = await backing().allow(`grade:${key}`, now, GRADE_LIMIT);
+  if (!ok) refused("a grading", key, GRADE_LIMIT);
+  return ok;
 }

@@ -205,8 +205,9 @@
       ".write": false
     },
 
-    // Per-caller session-minting counters, bucketed by time window. Same
-    // reasoning: server-only, and readable by nobody.
+    // Per-caller rate-limit counters — session minting and grading, on
+    // separate keys — bucketed by time window. Same reasoning: server-only,
+    // and readable by nobody.
     "mints": {
       ".read": false,
       ".write": false

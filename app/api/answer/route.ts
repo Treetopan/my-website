@@ -5,7 +5,7 @@ import {
   type Question,
 } from "@/lib/curriculum";
 import { answerFor } from "@/lib/answers.server";
-import { claimPosition, getSession } from "@/lib/session-store";
+import { claimPosition, getSession, gradeAllowed } from "@/lib/session-store";
 import { resolveInstance } from "@/lib/templates.server";
 import { botResponse, grade, type Answer } from "@/lib/grading.server";
 import { coachingFor } from "@/lib/coaching.server";
@@ -61,6 +61,20 @@ export async function POST(req: NextRequest) {
     return Response.json(
       { error: "Missing session or position." },
       { status: 400 },
+    );
+  }
+
+  // Before the session is fetched, so a caller in a loop costs a counter
+  // rather than a read and a transaction. Session minting is limited the same
+  // way and on a separate budget — see `session-store.ts` for why a
+  // school sharing one address needs the two kept apart.
+  const caller =
+    req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
+
+  if (!(await gradeAllowed(caller, Date.now()))) {
+    return Response.json(
+      { error: "Too many answers at once. Wait a minute." },
+      { status: 429 },
     );
   }
 

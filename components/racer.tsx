@@ -47,9 +47,9 @@ const PER_MISS = 1;
 const TOP_PACE = 40;
 
 /**
- * The rival's handicap, in seconds. Its clock is your own quickest answer plus
- * this, so the bar is holding roughly the pace you have already shown you can
- * hold rather than beating it.
+ * The rival's handicap, in seconds, added to your typical answer. The bar is
+ * holding roughly the pace you have already shown you can hold, rather than
+ * beating it.
  */
 const GRACE = 4;
 
@@ -95,8 +95,8 @@ export function Racer({ subunitId }: { subunitId: string }) {
   );
   const [answers, setAnswers] = useState<AnswerDetail[]>([]);
   const [lastGain, setLastGain] = useState<number | null>(null);
-  /** The quickest answer given so far, in ms. It sets the rival's pace. */
-  const [quickest, setQuickest] = useState<number | null>(null);
+  /** How long each answer took, in ms. Their middle sets the rival's pace. */
+  const [times, setTimes] = useState<number[]>([]);
   /** The rival's pace. It only ever climbs, and only while a question is up. */
   const [botPace, setBotPace] = useState(0);
 
@@ -136,7 +136,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
       // longer and it is worth nothing. It never goes negative — a slow
       // answer earns less, it is not punished.
       const speed = Math.max(0, Math.min(1, 1 - msTaken / parMs));
-      setQuickest((q) => (q === null ? msTaken : Math.min(q, msTaken)));
+      setTimes((t) => [...t, msTaken]);
       setDraft(response);
 
       let verdict;
@@ -271,13 +271,26 @@ export function Racer({ subunitId }: { subunitId: string }) {
     ),
   );
 
-  // How often the rival finds another step. It is pegged to the quickest
-  // answer given so far plus its grace, so answering in ten seconds is chased
-  // by a rival stepping up every fourteen: hold roughly your own best pace and
-  // you beat it, drift well off it and it goes by. Half of par stands in until
-  // there is an answer to go on, and nothing under four seconds, which nobody
-  // should have to outrun.
-  const botStep = Math.max(4, (quickest ?? parMs / 2) / 1000 + GRACE);
+  // How often the rival finds another step: your typical answer plus the
+  // grace, so answering in ten seconds is chased by a rival stepping up every
+  // fourteen. The *middle* of your answers rather than the quickest of them,
+  // because the quickest is always the same kind of question — one press on an
+  // option — and charging that rate against a question where five steps have
+  // to be dragged into order asks you to sort a list as fast as you can click
+  // a button. Half of par stands in until there is an answer to go on, and
+  // nothing under four seconds, which nobody should have to outrun.
+  const botStep = Math.max(4, (middle(times) ?? parMs / 2) / 1000 + GRACE);
+
+  // And it can hold no more than a question's worth of pace per question you
+  // have already been through — so it is always one question behind, and a
+  // faultless race always takes it.
+  //
+  // Its clock is a rate, and a rate alone is the wrong shape for this: one
+  // slow question — an ordering one, where the answer is known and the
+  // dragging is the whole cost — hands it four steps against the single step
+  // it cost you, and a race is lost on the question types it happened to deal
+  // you rather than on the answers.
+  const botCap = Math.min(TOP_PACE, index * PER_ANSWER);
 
   /**
    * The rival's clock, one step at a time.
@@ -291,14 +304,14 @@ export function Racer({ subunitId }: { subunitId: string }) {
   const botSince = useRef<number | null>(null);
 
   useEffect(() => {
-    if (phase !== "asking" || !sessionId || botPace >= TOP_PACE) return;
+    if (phase !== "asking" || !sessionId || botPace >= botCap) return;
 
     botSince.current = Date.now();
     const wait = Math.max(0, botStep * 1000 - botHeld.current);
     const id = window.setTimeout(() => {
       botSince.current = null;
       botHeld.current = 0;
-      setBotPace((v) => Math.min(TOP_PACE, v + PER_ANSWER));
+      setBotPace((v) => Math.min(botCap, v + PER_ANSWER));
     }, wait);
 
     return () => {
@@ -310,7 +323,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
         botSince.current = null;
       }
     };
-  }, [phase, sessionId, botPace, botStep]);
+  }, [phase, sessionId, botPace, botCap, botStep]);
 
   const won = pace > botPace;
 
@@ -414,7 +427,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
               setEntered(null);
               setAnswers([]);
               setLastGain(null);
-              setQuickest(null);
+              setTimes([]);
               setBotPace(0);
               botHeld.current = 0;
               botSince.current = null;
@@ -455,6 +468,14 @@ export function Racer({ subunitId }: { subunitId: string }) {
       </main>
     </div>
   );
+}
+
+/** The middle answer, or null for none yet. An even count takes both middles. */
+function middle(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[at] : (sorted[at - 1] + sorted[at]) / 2;
 }
 
 /**

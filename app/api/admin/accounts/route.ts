@@ -40,7 +40,7 @@ type WithEmail = Account & { email: string | null };
 const PAGE = 1000;
 
 export async function GET(req: NextRequest) {
-  const auth = adminAuth();
+  const auth = await adminAuth();
   const db = adminDb();
 
   if (!auth || !db) {

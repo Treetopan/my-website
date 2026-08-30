@@ -2,7 +2,6 @@ import "server-only";
 
 import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 import type { App } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
 import type { Auth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
 import type { Database } from "firebase-admin/database";
@@ -45,10 +44,29 @@ export function adminDb(): Database | null {
   return app ? getDatabase(app) : null;
 }
 
-/** Firebase Auth as the server sees it, or null for the same reason. */
-export function adminAuth(): Auth | null {
+/**
+ * Firebase Auth as the server sees it, or null for the same reason.
+ *
+ * The import is deferred rather than written at the top of this file, and that
+ * is load-bearing rather than tidiness. `firebase-admin/auth` reaches
+ * jwks-rsa, which reaches jose; jose ships ES modules only, and jwks-rsa still
+ * `require`s it. Node has been able to require an ES module since 22.12, so
+ * that resolves on a new enough runtime and throws ERR_REQUIRE_ESM on an older
+ * one — `engines` in `package.json` is what holds the floor.
+ *
+ * `firebase-admin` is on Next's default list of packages left unbundled, so
+ * the require runs on the server at request time rather than being resolved
+ * during the build. A top-level import here would therefore put that chain in
+ * the graph of every route that touches a session, and only the admin screen
+ * ever reads a user record. Deferring it keeps the game endpoints off the
+ * chain, so they cannot fail over a dependency they never call.
+ */
+export async function adminAuth(): Promise<Auth | null> {
   const app = adminApp();
-  return app ? getAuth(app) : null;
+  if (!app) return null;
+
+  const { getAuth } = await import("firebase-admin/auth");
+  return getAuth(app);
 }
 
 function connect(): App | null {

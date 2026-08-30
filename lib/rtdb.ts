@@ -28,6 +28,14 @@ import {
 
 export type GameId = "racer" | "last-one-standing" | "mirror";
 
+/**
+ * What produced a result in the history: any of the games, plus practice —
+ * which is not one of them. Practice has no opponent to invite and no room to
+ * open, so it is kept out of `GameId`, where every member is something a
+ * second player can be sent a link to.
+ */
+export type SessionGame = GameId | "practice";
+
 export type RoomPlayer = {
   displayName: string;
   isBot: boolean;
@@ -152,7 +160,7 @@ export type Room = {
 export type AnswerEntry = { response: Response; at: number };
 
 export type SessionResult = {
-  game: GameId;
+  game: SessionGame;
   subunitIds: string[];
   /**
    * What a result written before a session could mix subunits carried instead.

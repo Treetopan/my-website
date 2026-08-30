@@ -19,9 +19,21 @@ import {
 import { MAX_SUBUNITS, encodeSelection } from "@/lib/selection";
 import { spatialGenerators } from "@/lib/templates";
 
-type GameId = "racer" | "last-one-standing" | "mirror";
+/**
+ * Practice is in this list without being a game — it is the way to sit with
+ * the questions and nothing else, and putting it anywhere but the first step
+ * would make it a mode hidden behind a game rather than an alternative to one.
+ */
+type GameId = "practice" | "racer" | "last-one-standing" | "mirror";
 
 const GAMES: { id: GameId; name: string; blurb: string; meta: string }[] = [
+  {
+    id: "practice",
+    name: "Practice",
+    blurb:
+      "Just the questions, at your own pace. A report at the end says what landed and what to go back to.",
+    meta: "1 player · no clock, no opponent",
+  },
   {
     id: "racer",
     name: "Racer",
@@ -45,12 +57,14 @@ const GAMES: { id: GameId; name: string; blurb: string; meta: string }[] = [
 
 /** Where each game lives. Kept beside the list so adding one means one place. */
 const PATHS: Record<GameId, string> = {
+  practice: "/play/practice",
   racer: "/play/racer",
   mirror: "/play/duel",
   "last-one-standing": "/play/room",
 };
 
 const LAUNCH: Record<GameId, string> = {
+  practice: "Start practising",
   racer: "Start Racer",
   mirror: "Open a duel",
   "last-one-standing": "Open a room",

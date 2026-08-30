@@ -207,6 +207,12 @@ than a second way into a room.
 
 ## The games
 
+**Practice** — not a game, and the first thing in the list of them. Just the
+questions, one after another, with no rival, no room, no clock and nothing in
+the periphery. It is picked and started exactly as a game is, mixes subunits the
+same way, and earns the same XP and the same daily streak; what it does instead
+of a result is a report (below).
+
 **Racer** — you against a bot. A correct answer moves you one length plus up to
 another for speed, so answering efficiently is what wins races.
 
@@ -239,7 +245,9 @@ still in the game, `inRound` is still answering this round. The rules live in
 
 Neither game shows how many questions are left — knowing the end is coming
 changes how people play. Last One Standing wraps the question bank when it runs
-out, since a turn-based round burns a question per turn.
+out, since a turn-based round burns a question per turn. Practice shows it, and
+a running tally with it: a set you are working through is meant to have a
+visible end, which is most of what separates it from a game.
 
 ## The game spaces
 
@@ -344,6 +352,19 @@ concepts were missed (worst first), which were clean sweeps, and the full text
 of every question to go back to with the right answer beside what you picked.
 Questions carry a `topic` so the summary can name the idea, not just the score.
 Timed-out turns count as missed rather than vanishing. Tested.
+
+Practice ends on a longer version of the same thing, `components/practice-report.tsx`.
+Accuracy, the longest run of correct answers and the typical time per answer,
+then the session read three ways — **by concept**, **by how the question was
+asked** (multiple choice, typed, placed on a scale or a grid, drawn, ordered)
+and **by difficulty**. Three rankings rather than one because "what you
+struggled with" is three questions: a student who knows the material and loses
+every question they have to type has a different problem from one who cannot do
+quadratics, and only the split by format tells them apart. The format line is
+only drawn when one format went clearly worse — missed at least twice and
+beaten by a wide margin — since with a dozen questions something is always
+nominally last. Every screen shares the missed-question list,
+`components/review-list.tsx`.
 
 ## Content
 

@@ -12,6 +12,7 @@ import {
 import { realtimeDb } from "@/lib/firebase";
 import type { GameId } from "@/lib/rtdb";
 import { checkUsername, usernameKey } from "@/lib/username";
+import { encodeSelection } from "@/lib/selection";
 
 /**
  * Everything that connects one player to another: the name they are known by,
@@ -25,7 +26,7 @@ import { checkUsername, usernameKey } from "@/lib/username";
  * users/{uid}/username            the name as its owner typed it
  * friends/{uid}/{friendUid}       { username, since }
  * friendRequests/{uid}/{fromUid}  { username, at }   — incoming, unanswered
- * invites/{uid}/{fromUid}         { username, roomId, code, subunitId, at }
+ * invites/{uid}/{fromUid}         { username, roomId, code, subunitIds, at }
  * ```
  *
  * Each of those is keyed by the *reader*: your friends, your requests, your
@@ -42,7 +43,12 @@ export type Invite = {
   username: string;
   roomId: string;
   code: string;
-  subunitId: string;
+  subunitIds: string[];
+  /**
+   * What an invitation written before a room could mix subunits carried. Read
+   * when following one and never written again.
+   */
+  subunitId?: string;
   /**
    * Which game the room is running. Optional because an invitation written
    * before there was more than one game does not carry it, and those all led
@@ -245,13 +251,13 @@ export function watchInvites(uid: string, cb: (invites: Invite[]) => void) {
 export async function inviteFriend(
   me: Me,
   toUid: string,
-  room: { roomId: string; code: string; subunitId: string; game: GameId },
+  room: { roomId: string; code: string; subunitIds: string[]; game: GameId },
 ) {
   await set(ref(realtimeDb, `invites/${toUid}/${me.uid}`), {
     username: me.username,
     roomId: room.roomId,
     code: room.code,
-    subunitId: room.subunitId,
+    subunitIds: room.subunitIds,
     game: room.game,
     at: serverTimestamp(),
   });
@@ -268,5 +274,7 @@ export async function dismissInvite(uid: string, fromUid: string) {
  */
 export function inviteHref(invite: Invite): string {
   const path = invite.game === "mirror" ? "/play/duel" : "/play/room";
-  return `${path}?s=${encodeURIComponent(invite.subunitId)}&join=${encodeURIComponent(invite.code)}`;
+  const picked =
+    invite.subunitIds ?? (invite.subunitId ? [invite.subunitId] : []);
+  return `${path}?s=${encodeSelection(picked)}&join=${encodeURIComponent(invite.code)}`;
 }

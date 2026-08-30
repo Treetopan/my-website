@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { getSubunit, type Question } from "@/lib/curriculum";
+import { getSubunit, type Question, type Subunit } from "@/lib/curriculum";
+import { MAX_SUBUNITS } from "@/lib/selection";
 import { createSession, mintAllowed } from "@/lib/session-store";
 import { hasSpatial, spatialGenerators } from "@/lib/templates";
 import { hasGenerators, mintInstances } from "@/lib/templates.server";
@@ -12,6 +13,16 @@ const MAX_LENGTH = 60;
  *  a natural size to default to; a generator does not. */
 const GENERATED_LENGTH = 10;
 
+/**
+ * What each subunit past the first adds to a game nobody asked a length for.
+ *
+ * Picking four subunits mixes them; it does not stack four games end to end.
+ * A few more questions is enough for every subunit to come round several
+ * times, and the session still finishes in about the time the library
+ * advertised.
+ */
+const EXTRA_PER_SUBUNIT = 3;
+
 /** Fisher–Yates. Server-side, so nothing about the order is predictable. */
 function shuffle<T>(items: T[]): T[] {
   const out = [...items];
@@ -19,6 +30,35 @@ function shuffle<T>(items: T[]): T[] {
     const j = Math.floor(Math.random() * (i + 1));
     [out[i], out[j]] = [out[j], out[i]];
   }
+  return out;
+}
+
+/**
+ * One subunit's questions, up to `want` of them.
+ *
+ * Generated questions are minted here rather than derived on the client,
+ * because building the options means knowing the answer. The browser gets
+ * finished questions and cannot tell them from bank ones.
+ *
+ * A bank is reshuffled each time it is exhausted, so a long game does not
+ * repeat in the same order it just played. Never for a duel: a bank question
+ * is answered by choosing, so topping up from one would fill a placed-answer
+ * game with questions it cannot settle.
+ */
+function fill(subunit: Subunit, want: number, placed: boolean): Question[] {
+  const out: Question[] = hasGenerators(subunit.id)
+    ? mintInstances(
+        subunit.id,
+        want,
+        placed ? spatialGenerators(subunit.id) : undefined,
+      )
+    : [];
+
+  while (!placed && out.length < want && subunit.questions.length > 0) {
+    out.push(...shuffle(subunit.questions));
+  }
+
+  out.length = Math.min(want, out.length);
   return out;
 }
 
@@ -38,56 +78,76 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Expected a JSON body." }, { status: 400 });
   }
 
-  const { subunitId, length, spatial } = (body ?? {}) as {
-    subunitId?: unknown;
+  const { subunitIds: asked, length, spatial } = (body ?? {}) as {
+    subunitIds?: unknown;
     length?: unknown;
     spatial?: unknown;
   };
 
-  if (typeof subunitId !== "string") {
-    return Response.json({ error: "Missing subunit." }, { status: 400 });
+  if (
+    !Array.isArray(asked) ||
+    asked.length === 0 ||
+    !asked.every((id) => typeof id === "string")
+  ) {
+    return Response.json({ error: "Missing subunits." }, { status: 400 });
   }
 
-  const subunit = getSubunit(subunitId);
-  const generated = hasGenerators(subunitId);
-
-  if (!subunit || (subunit.questions.length === 0 && !generated)) {
-    return Response.json({ error: "Unknown subunit." }, { status: 400 });
-  }
-
-  // A duel asks for placed answers only, because it is settled on which of
-  // two answers was closer. Refused here as well as hidden in the library:
-  // the library is a convenience, and this is the rule.
-  const placed = spatial === true;
-  if (placed && !hasSpatial(subunitId)) {
+  if (asked.length > MAX_SUBUNITS) {
     return Response.json(
-      { error: "Nothing here is answered on a grid." },
+      { error: `A session mixes at most ${MAX_SUBUNITS} subunits.` },
       { status: 400 },
     );
   }
 
+  const subunitIds = [...new Set(asked as string[])];
+
+  // A duel asks for placed answers only, because it is settled on which of
+  // two answers was closer. Refused here as well as hidden in the library:
+  // the library is a convenience, and this is the rule. Every subunit in the
+  // mix has to pass it — one that cannot be settled would deal dead rounds.
+  const placed = spatial === true;
+
+  const subunits: Subunit[] = [];
+  for (const id of subunitIds) {
+    const subunit = getSubunit(id);
+    if (!subunit || (subunit.questions.length === 0 && !hasGenerators(id))) {
+      return Response.json({ error: "Unknown subunit." }, { status: 400 });
+    }
+    if (placed && !hasSpatial(id)) {
+      return Response.json(
+        { error: "Nothing here is answered on a grid." },
+        { status: 400 },
+      );
+    }
+    subunits.push(subunit);
+  }
+
+  const base = Math.max(
+    ...subunits.map((s) => s.questions.length || GENERATED_LENGTH),
+  );
+
   const want =
     typeof length === "number" && Number.isInteger(length) && length > 0
       ? Math.min(length, MAX_LENGTH)
-      : subunit.questions.length || GENERATED_LENGTH;
+      : Math.min(MAX_LENGTH, base + EXTRA_PER_SUBUNIT * (subunits.length - 1));
 
-  // Generated questions are minted here rather than derived on the client,
-  // because building the options means knowing the answer. The browser gets
-  // finished questions and cannot tell them from bank ones.
-  const questions: Question[] = generated
-    ? mintInstances(subunitId, want, placed ? spatialGenerators(subunitId) : undefined)
-    : [];
+  // Each subunit fills its own pool and the game is dealt round-robin off the
+  // fronts of them. Pooling everything and shuffling once would let a subunit
+  // that mints freely crowd out one with a short bank; dealing in turn gives
+  // every subunit picked its share, which is the point of picking several.
+  const pools = subunits.map((s) => fill(s, want, placed));
+  const questions: Question[] = [];
 
-  // Reshuffle each time the bank is exhausted, so a long game does not repeat
-  // in the same order it just played. Minted questions are already unique and
-  // already in a random order, so they only need topping up.
-  //
-  // Never for a duel: a bank question is answered by choosing, so topping up
-  // from one would fill a placed-answer game with questions it cannot settle.
-  while (!placed && questions.length < want && subunit.questions.length > 0) {
-    questions.push(...shuffle(subunit.questions));
+  for (let round = 0; questions.length < want; round++) {
+    let dealt = false;
+    for (const pool of pools) {
+      if (round >= pool.length) continue;
+      questions.push(pool[round]);
+      dealt = true;
+      if (questions.length === want) break;
+    }
+    if (!dealt) break;
   }
-  questions.length = Math.min(want, questions.length);
 
   const order = questions.map((q) => q.id);
 
@@ -102,7 +162,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const session = await createSession(subunitId, order, now);
+  const session = await createSession(subunitIds, order, now);
 
   // The question text goes out with the order. A bank question could still be
   // looked up locally, but a generated one exists nowhere else, so every game

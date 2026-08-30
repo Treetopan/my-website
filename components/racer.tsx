@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DIFFICULTY,
-  describe,
+  describeAll,
+  difficultyOfQuestion,
+  selectionDifficulty,
+  selectionLabel,
+  selectionNames,
+  subunitOfQuestion,
   type Question,
 } from "@/lib/curriculum";
 import { useAuth } from "@/lib/auth-context";
@@ -55,8 +60,8 @@ const GRACE = 4;
 
 type Phase = "asking" | "revealed" | "over";
 
-export function Racer({ subunitId }: { subunitId: string }) {
-  const found = describe(subunitId);
+export function Racer({ subunitIds }: { subunitIds: string[] }) {
+  const found = useMemo(() => describeAll(subunitIds), [subunitIds]);
   const { user } = useAuth();
 
   const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
@@ -74,14 +79,12 @@ export function Racer({ subunitId }: { subunitId: string }) {
   // nothing in this bundle to look them up in.
   const [questions, setQuestions] = useState<Question[]>([]);
 
-  const difficulty = found?.subunit.difficulty ?? "medium";
-
-  // Par, not a deadline, and not shown. The race has no clock at all now —
-  // no countdown, no stopwatch, no rail draining. All par sets is how long an
-  // answer can take before it stops earning the speed half of the distance,
-  // which prices efficiency without ever putting a number in front of you to
-  // race. Nothing is displayed and nothing is ever submitted on your behalf.
-  const parMs = DIFFICULTY[difficulty].seconds * 1000;
+  // What a question here is typically worth on the clock. Only the rival's
+  // opening pace reads it — every answer is priced against the par of the
+  // subunit it actually came from, since a race can mix several. Mixed
+  // difficulties have no one number, so the middle one stands in.
+  const typical = found ? selectionDifficulty(found) : null;
+  const typicalMs = DIFFICULTY[typical ?? "medium"].seconds * 1000;
 
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("asking");
@@ -132,6 +135,19 @@ export function Racer({ subunitId }: { subunitId: string }) {
     async (response: Answered, msTaken: number) => {
       if (!question || !sessionId) return;
 
+      // The subunit this question came from sets its par and pays its XP. A
+      // race can mix several, and a hard question answered in a mixed race is
+      // still a hard question.
+      const difficulty = difficultyOfQuestion(question.id);
+
+      // Par, not a deadline, and not shown. The race has no clock at all now —
+      // no countdown, no stopwatch, no rail draining. All par sets is how long
+      // an answer can take before it stops earning the speed half of the
+      // distance, which prices efficiency without ever putting a number in
+      // front of you to race. Nothing is displayed and nothing is ever
+      // submitted on your behalf.
+      const parMs = DIFFICULTY[difficulty].seconds * 1000;
+
       // Answer instantly and speed is worth its full share; take par or
       // longer and it is worth nothing. It never goes negative — a slow
       // answer earns less, it is not punished.
@@ -178,7 +194,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
       // on is wound to your own best answer.
       setLastGain(verdict.correct ? PER_ANSWER : -PER_MISS);
     },
-    [question, index, parMs, difficulty, sessionId, setDraft],
+    [question, index, sessionId, setDraft],
   );
 
   // One grading session per race. The stamp below waits on it, so that time
@@ -187,7 +203,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
     if (!found || sessionId) return;
     let live = true;
 
-    openSession(subunitId)
+    openSession(subunitIds)
       .then(({ sessionId: id, questions: asked }) => {
         if (!live) return;
         setQuestions(asked);
@@ -204,7 +220,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
     return () => {
       live = false;
     };
-  }, [found, subunitId, sessionId]);
+  }, [found, subunitIds, sessionId]);
 
   // When the question went up. A single wall-clock stamp rather than a ticking
   // counter: nothing on the screen reads it, so nothing needs it to tick. It is
@@ -279,7 +295,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
   // to be dragged into order asks you to sort a list as fast as you can click
   // a button. Half of par stands in until there is an answer to go on, and
   // nothing under four seconds, which nobody should have to outrun.
-  const botStep = Math.max(4, (middle(times) ?? parMs / 2) / 1000 + GRACE);
+  const botStep = Math.max(4, (middle(times) ?? typicalMs / 2) / 1000 + GRACE);
 
   // And it can hold no more than a question's worth of pace per question you
   // have already been through — so it is always one question behind, and a
@@ -341,7 +357,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
 
     recordSession(user.uid, {
       game: "racer",
-      subunitId,
+      subunitIds,
       correct,
       total,
       xp,
@@ -355,7 +371,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
         setBefore(snapshot);
         setAfter(null);
       });
-  }, [phase, user, found, answers, won, progress, subunitId, total]);
+  }, [phase, user, found, answers, won, progress, subunitIds, total]);
 
   if (!found) {
     return <Missing />;
@@ -376,7 +392,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
         <Wordmark />
         <span className="font-medium">Racer</span>
         <span className="font-mono text-[11px] text-faint tnum">
-          {found.subunit.code} · {found.course.name}
+          {selectionLabel(found)} · {found.course.name}
         </span>
 
         {/* No clock, no stopwatch, no draining rail. Nothing here counts
@@ -416,7 +432,10 @@ export function Racer({ subunitId }: { subunitId: string }) {
                     : "The bot took it."
             }
             detail={
-              fault ?? `${found.subunit.name} · ${DIFFICULTY[difficulty].name}`
+              fault ??
+              `${selectionNames(found)} · ${
+                typical ? DIFFICULTY[typical].name : "Mixed difficulty"
+              }`
             }
             details={answers}
             xpEarned={xpEarned}
@@ -447,7 +466,7 @@ export function Racer({ subunitId }: { subunitId: string }) {
             <div className="flex w-full max-w-3xl flex-col gap-7">
               <QuestionStage
                 question={question}
-                eyebrow={found.subunit.name}
+                eyebrow={subunitOfQuestion(question.id)?.name ?? found.unit.name}
                 draft={draft}
                 reveal={reveal}
                 score={score}
@@ -574,11 +593,11 @@ function Missing() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
       <h1 className="text-2xl font-semibold tracking-[-0.03em]">
-        That subunit isn&apos;t stocked yet.
+        That isn&apos;t a subunit we can race on.
       </h1>
       <p className="max-w-sm text-[15px] text-muted">
-        Pick another subunit from the library — the ones with a question count
-        are ready to play.
+        Pick again from the library — the subunits with a question count are
+        ready to play, and they have to come from one unit.
       </p>
       <Link
         href="/"

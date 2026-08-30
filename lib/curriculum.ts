@@ -267,6 +267,93 @@ export function describe(subunitId: string) {
   return null;
 }
 
+export type Selection = {
+  subject: Subject;
+  course: Course;
+  unit: Unit;
+  /** In the order the unit lists them, not the order they were picked. */
+  subunits: Subunit[];
+};
+
+/**
+ * The same, for the several subunits a session actually mixes.
+ *
+ * A selection has to sit inside one unit. That is what the library offers, and
+ * it is what lets everything downstream name a single unit in a header rather
+ * than trailing a list of them — so a hand-made link that spans two units is
+ * refused here instead of being half-rendered.
+ */
+export function describeAll(subunitIds: string[]): Selection | null {
+  if (subunitIds.length === 0) return null;
+
+  const first = describe(subunitIds[0]);
+  if (!first) return null;
+
+  const picked = new Set(subunitIds);
+  if (!subunitIds.every((id) => first.unit.subunits.some((s) => s.id === id))) {
+    return null;
+  }
+
+  return {
+    subject: first.subject,
+    course: first.course,
+    unit: first.unit,
+    subunits: first.unit.subunits.filter((s) => picked.has(s.id)),
+  };
+}
+
+/**
+ * How a selection names itself in a header. One subunit says its own code; a
+ * mix says the unit it came out of and how many of it were taken, because a
+ * run of four codes is longer than the header and says less.
+ */
+export function selectionLabel(s: Selection): string {
+  if (s.subunits.length === 1) return s.subunits[0].code;
+  return `${s.unit.code.replace("unit-", "Unit ")} · ${s.subunits.length} subunits`;
+}
+
+/** The subunits picked, named in full. For a summary, which has the room. */
+export function selectionNames(s: Selection): string {
+  return s.subunits.map((su) => su.name).join(" · ");
+}
+
+/**
+ * The difficulty a whole selection reads as, or null when they differ — in
+ * which case there is no one number to show, and saying so is more honest
+ * than showing whichever subunit happened to be first.
+ */
+export function selectionDifficulty(s: Selection): Difficulty | null {
+  const first = s.subunits[0].difficulty;
+  return s.subunits.every((su) => su.difficulty === first) ? first : null;
+}
+
+/**
+ * The subunit a question came from, read straight off its id.
+ *
+ * Bank ids are `<subunitId>/q<n>` and generated ones are
+ * `<subunitId>/gen/<generator>/<seed>`, so a question always says where it is
+ * from. That matters once a session mixes subunits: the clock and the XP are
+ * set by the difficulty of the subunit the question came from, not by whichever
+ * one happened to be picked first.
+ */
+export function subunitIdOfQuestion(questionId: string): string | null {
+  const generated = questionId.lastIndexOf("/gen/");
+  if (generated > 0) return questionId.slice(0, generated);
+
+  const slash = questionId.lastIndexOf("/");
+  return slash > 0 ? questionId.slice(0, slash) : null;
+}
+
+export function subunitOfQuestion(questionId: string): Subunit | undefined {
+  const id = subunitIdOfQuestion(questionId);
+  return id ? getSubunit(id) : undefined;
+}
+
+/** A question's difficulty, which is its subunit's. Medium if it is unknown. */
+export function difficultyOfQuestion(questionId: string): Difficulty {
+  return subunitOfQuestion(questionId)?.difficulty ?? "medium";
+}
+
 /** Look a question up by the id the server hands back in a session order. */
 export function questionById(id: string): Question | undefined {
   return SUBJECTS.flatMap((s) => s.courses)

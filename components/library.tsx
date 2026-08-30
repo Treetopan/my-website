@@ -16,6 +16,7 @@ import {
   type Subunit,
   type Unit,
 } from "@/lib/curriculum";
+import { MAX_SUBUNITS, encodeSelection } from "@/lib/selection";
 import { spatialGenerators } from "@/lib/templates";
 
 type GameId = "racer" | "last-one-standing" | "mirror";
@@ -67,7 +68,11 @@ export function Library() {
   const [subject, setSubject] = useState<Subject | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
   const [unit, setUnit] = useState<Unit | null>(null);
-  const [subunit, setSubunit] = useState<Subunit | null>(null);
+  /**
+   * The subunits to play, in the order the unit lists them rather than the
+   * order they were tapped — the launch bar reads as the syllabus does.
+   */
+  const [picked, setPicked] = useState<Subunit[]>([]);
 
   /**
    * A duel is won by whichever answer was closer, so it can only be played
@@ -81,9 +86,25 @@ export function Library() {
   function chooseGame(next: GameId) {
     setGame(next);
     // A subunit that suited the last game may not suit this one. Everything
-    // above it still does, so only the choice that has actually stopped being
-    // valid is dropped.
-    if (subunit && next === "mirror" && !canDuel(subunit)) setSubunit(null);
+    // above it still does, so only the choices that have actually stopped
+    // being valid are dropped, one by one rather than all of them.
+    if (next === "mirror") setPicked((prev) => prev.filter(canDuel));
+  }
+
+  /**
+   * Picking a subunit is a toggle, because a session mixes several. The cap is
+   * held here rather than by disabling the rest: it is the tap that is
+   * refused, and the row says why it is refused before you reach for it.
+   */
+  function toggleSubunit(su: Subunit) {
+    setPicked((prev) => {
+      if (prev.some((s) => s.id === su.id)) {
+        return prev.filter((s) => s.id !== su.id);
+      }
+      if (prev.length >= MAX_SUBUNITS) return prev;
+      const next = [...prev, su];
+      return unit ? unit.subunits.filter((s) => next.includes(s)) : next;
+    });
   }
 
   // Each choice invalidates everything downstream of it — a stale unit from a
@@ -92,27 +113,40 @@ export function Library() {
     setSubject(next);
     setCourse(null);
     setUnit(null);
-    setSubunit(null);
+    setPicked([]);
   }
 
   function chooseCourse(next: Course) {
     setCourse(next);
     setUnit(null);
-    setSubunit(null);
+    setPicked([]);
   }
 
   function chooseUnit(next: Unit) {
     setUnit(next);
-    setSubunit(null);
+    setPicked([]);
   }
 
-  const ready = game !== null && subunit !== null;
+  const ready = game !== null && picked.length > 0;
+  const full = picked.length >= MAX_SUBUNITS;
 
   function start() {
     if (!ready) return;
-    const s = encodeURIComponent(subunit.id);
-    router.push(`${PATHS[game]}?s=${s}`);
+    router.push(`${PATHS[game]}?s=${encodeSelection(picked.map((su) => su.id))}`);
   }
+
+  // What the launch bar says. A single subunit still states its difficulty and
+  // its clock; a mix has neither to state, so it says how many were taken.
+  const only = picked.length === 1 ? picked[0] : null;
+  const summary = [
+    subject?.name,
+    course?.name,
+    picked.map((su) => su.code).join(" + "),
+    only ? DIFFICULTY[only.difficulty].name : count(picked.length, "subunit"),
+    only ? `${DIFFICULTY[only.difficulty].seconds}s` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 pt-14 pb-24">
@@ -210,30 +244,39 @@ export function Library() {
       )}
 
       {unit && (
-        <Step n="05" title="Choose a subunit">
+        <Step
+          n="05"
+          title="Choose what to practise"
+          note={`Take up to ${MAX_SUBUNITS} subunits. They are dealt in turn into one session, so a mix is one game rather than several.`}
+        >
           <div className="flex flex-col gap-2.5">
             {unit.subunits.map((su) => {
               const d = DIFFICULTY[su.difficulty];
               const ready = offerable(su);
+              const on = picked.some((s) => s.id === su.id);
+              // Held back by the cap rather than by having nothing to ask, and
+              // the meta says which — a row that is simply dimmed reads as broken.
+              const blocked = full && !on;
               const placed = spatialGenerators(su.id).length;
               return (
                 <Row
                   key={su.id}
-                  on={subunit?.id === su.id}
-                  disabled={!ready}
-                  onClick={() => ready && setSubunit(su)}
+                  multi
+                  on={on}
+                  disabled={!ready || blocked}
+                  onClick={() => ready && toggleSubunit(su)}
                   label={su.name}
                   lead={su.code}
                   meta={
-                    duelling
-                      ? ready
-                        ? `${count(placed, "generator")} · answered on a grid`
-                        : hasContent(su)
-                          ? "typed or chosen answers only"
-                          : "nothing to ask yet"
-                      : ready
-                        ? subunitStockLabel(su)
+                    !ready
+                      ? duelling && hasContent(su)
+                        ? "typed or chosen answers only"
                         : "nothing to ask yet"
+                      : blocked
+                        ? `${MAX_SUBUNITS} already picked`
+                        : duelling
+                          ? `${count(placed, "generator")} · answered on a grid`
+                          : subunitStockLabel(su)
                   }
                   tag={d.name}
                   tagNote={`${d.note} · ${d.seconds}s a question`}
@@ -257,15 +300,7 @@ export function Library() {
         </button>
 
         <p className="font-mono text-[11px] text-faint tnum">
-          {ready
-            ? [
-                subject?.name,
-                course?.name,
-                subunit?.code,
-                `${DIFFICULTY[subunit.difficulty].name}`,
-                `${DIFFICULTY[subunit.difficulty].seconds}s`,
-              ].join(" · ")
-            : "Pick a game and work down to a subunit"}
+          {ready ? summary : "Pick a game and work down to a subunit or four"}
         </p>
       </div>
     </main>
@@ -275,19 +310,23 @@ export function Library() {
 function Step({
   n,
   title,
+  note,
   children,
 }: {
   n: string;
   title: string;
+  /** A line under the heading, for a step whose rule is not self-evident. */
+  note?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="flex flex-col border-t border-line-soft pt-8 pb-10 first:border-t-0 first:pt-0">
       <span className="eyebrow">Step {n}</span>
-      <h2 className="mt-2 mb-5 text-[22px] font-medium tracking-[-0.02em]">
+      <h2 className="mt-2 text-[22px] font-medium tracking-[-0.02em]">
         {title}
       </h2>
-      {children}
+      {note && <p className="mt-2 text-[13px] text-faint">{note}</p>}
+      <div className="mt-5">{children}</div>
     </section>
   );
 }
@@ -331,6 +370,7 @@ function Card({
 
 function Row({
   on,
+  multi,
   disabled,
   onClick,
   lead,
@@ -340,6 +380,8 @@ function Row({
   tagNote,
 }: {
   on: boolean;
+  /** One of several that can be on at once, so it carries a box to tick. */
+  multi?: boolean;
   disabled?: boolean;
   onClick: () => void;
   lead: string;
@@ -360,6 +402,19 @@ function Row({
         disabled ? "cursor-not-allowed" : "",
       ].join(" ")}
     >
+      {multi && (
+        <span
+          aria-hidden
+          className={[
+            "flex size-4 shrink-0 items-center justify-center rounded-[3px] border text-[10px] leading-none",
+            on
+              ? "border-accent bg-accent text-accent-ink"
+              : "border-line text-transparent",
+          ].join(" ")}
+        >
+          ✓
+        </span>
+      )}
       <span className="font-mono text-[11px] text-faint tnum">{lead}</span>
       <span className="flex-1 text-[14.5px] text-ink">{label}</span>
 

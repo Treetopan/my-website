@@ -104,7 +104,8 @@ export type DuelReveal = {
 export type Room = {
   code: string;
   game: GameId;
-  subunitId: string;
+  /** Every subunit the room is playing across. A game mixes a few of them. */
+  subunitIds: string[];
   hostUid: string;
   status: "lobby" | "playing" | "choosing" | "finished";
   seats: number;
@@ -152,7 +153,13 @@ export type AnswerEntry = { response: Response; at: number };
 
 export type SessionResult = {
   game: GameId;
-  subunitId: string;
+  subunitIds: string[];
+  /**
+   * What a result written before a session could mix subunits carried instead.
+   * Read by the history and never written again — old results are still the
+   * player's record and are not worth rewriting to a new shape.
+   */
+  subunitId?: string;
   correct: number;
   total: number;
   xp: number;
@@ -213,7 +220,7 @@ export function makeRoomCode(): string {
 export async function createRoom(opts: {
   hostUid: string;
   displayName: string;
-  subunitId: string;
+  subunitIds: string[];
   seats: number;
   /** Stated rather than defaulted: two games run out of this one node now. */
   game: GameId;
@@ -224,7 +231,7 @@ export async function createRoom(opts: {
   const room: Room = {
     code: makeRoomCode(),
     game: opts.game,
-    subunitId: opts.subunitId,
+    subunitIds: opts.subunitIds,
     hostUid: opts.hostUid,
     status: "lobby",
     seats: opts.seats,

@@ -226,12 +226,12 @@ export function Friends() {
 export function InviteFriends({
   roomId,
   code,
-  subunitId,
+  subunitIds,
   game,
 }: {
   roomId: string;
   code: string;
-  subunitId: string;
+  subunitIds: string[];
   /** Which game the room is running, so the invitation leads to it. */
   game: GameId;
 }) {
@@ -263,7 +263,7 @@ export function InviteFriends({
                 await inviteFriend({ uid: user.uid, username }, friend.uid, {
                   roomId,
                   code,
-                  subunitId,
+                  subunitIds,
                   game,
                 });
                 setSent((prev) => ({ ...prev, [friend.uid]: true }));

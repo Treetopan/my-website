@@ -43,7 +43,8 @@ export type OpenedSession = {
 export class GradeError extends Error {}
 
 export async function openSession(
-  subunitId: string,
+  /** Every subunit the player picked. The server deals the game across them. */
+  subunitIds: string[],
   length?: number,
   options: {
     /**
@@ -56,7 +57,7 @@ export async function openSession(
   const res = await fetch("/api/session", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ subunitId, length, spatial: options.spatial }),
+    body: JSON.stringify({ subunitIds, length, spatial: options.spatial }),
   });
 
   if (!res.ok) throw new GradeError(await reason(res, "Could not start the game."));

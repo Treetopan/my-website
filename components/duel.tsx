@@ -5,7 +5,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onValue, ref } from "firebase/database";
 import { realtimeDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
-import { DIFFICULTY, canDuel, describe, type Question } from "@/lib/curriculum";
+import {
+  DIFFICULTY,
+  canDuel,
+  describeAll,
+  difficultyOfQuestion,
+  selectionLabel,
+  selectionNames,
+  subunitOfQuestion,
+  type Question,
+} from "@/lib/curriculum";
 import {
   closeRoomCode,
   createRoom,
@@ -81,13 +90,13 @@ function useServerOffset() {
 }
 
 export function Duel({
-  subunitId,
+  subunitIds,
   joinCode,
 }: {
-  subunitId: string;
+  subunitIds: string[];
   joinCode?: string;
 }) {
-  const found = describe(subunitId);
+  const found = useMemo(() => describeAll(subunitIds), [subunitIds]);
   const { user, username } = useAuth();
   const offset = useServerOffset();
 
@@ -139,9 +148,6 @@ export function Duel({
     return () => clearInterval(id);
   }, []);
 
-  const difficulty = found?.subunit.difficulty ?? "medium";
-  const totalMs = DIFFICULTY[difficulty].seconds * 1000;
-
   const questions: Question[] = useMemo(
     () => room?.questions ?? [],
     [room?.questions],
@@ -149,6 +155,13 @@ export function Duel({
 
   const index = room?.currentIndex ?? 0;
   const question = questions[index];
+
+  // The clock belongs to the question showing, not to the selection: a duel
+  // can mix subunits, and a hard round should still be given its thirty
+  // seconds. Every client reads it off the same question, so the clocks agree.
+  const totalMs =
+    DIFFICULTY[question ? difficultyOfQuestion(question.id) : "medium"].seconds *
+    1000;
 
   const startedAt =
     typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
@@ -206,13 +219,13 @@ export function Duel({
         question: pick.question,
         reveal: pick.answer,
         response: pick.result.response,
-        difficulty,
+        difficulty: difficultyOfQuestion(pick.question.id),
         correct: pick.result.correct,
         score: pick.result.score,
         speed: pick.speed,
         steps: pick.steps,
       })),
-    [myPicks, difficulty],
+    [myPicks],
   );
 
   // ── Create / join ──────────────────────────────────────
@@ -224,7 +237,7 @@ export function Duel({
       const id = await createRoom({
         hostUid: user.uid,
         displayName: username ?? user.displayName ?? "You",
-        subunitId,
+        subunitIds,
         seats: SEATS,
         game: "mirror",
       });
@@ -316,7 +329,7 @@ export function Duel({
     // whatever this client asks for.
     let opened;
     try {
-      opened = await openSession(subunitId, ROUNDS, { spatial: true });
+      opened = await openSession(subunitIds, ROUNDS, { spatial: true });
     } catch (e) {
       setError(e instanceof GradeError ? e.message : "Could not start the duel.");
       return;
@@ -427,7 +440,7 @@ export function Duel({
       Object.entries(graded.results).map(([uid, r]) => ({ uid, score: r.score })),
     );
 
-    const perQuestion = DIFFICULTY[difficulty].xp;
+    const perQuestion = DIFFICULTY[difficultyOfQuestion(asked.id)].xp;
     const results: Record<string, DuelResult> = {};
     const next: Record<string, RoomPlayer> = { ...playersRef.current };
 
@@ -465,7 +478,7 @@ export function Duel({
       },
       committed: null,
     });
-  }, [roomId, difficulty]);
+  }, [roomId]);
 
   const resolveRef = useRef(resolve);
   useEffect(() => {
@@ -614,7 +627,7 @@ export function Duel({
 
     recordSession(user.uid, {
       game: "mirror",
-      subunitId,
+      subunitIds,
       correct: myAnswers.filter((a) => a.correct).length,
       total: myAnswers.length,
       xp,
@@ -628,7 +641,7 @@ export function Duel({
         setBefore(snapshot);
         setAfter(null);
       });
-  }, [room?.status, user, found, myAnswers, won, progress, subunitId]);
+  }, [room?.status, user, found, myAnswers, won, progress, subunitIds]);
 
   // Host: bin the room once it is over, leaving the other client a moment to
   // take its snapshot first.
@@ -645,9 +658,14 @@ export function Duel({
   // Checked here as well as in the library, because a link is a way in too.
   // The server refuses to open the session either way; this is so that being
   // refused reads as an explanation rather than as a failure.
-  if (!canDuel(found.subunit)) return <NotForDuelling name={found.subunit.name} />;
+  // Every subunit in the mix has to be duellable, not just the first: one that
+  // is answered by choosing would deal rounds nobody can be closest on.
+  const flat = found.subunits.filter((su) => !canDuel(su));
+  if (flat.length > 0) {
+    return <NotForDuelling name={flat.map((su) => su.name).join(", ")} />;
+  }
 
-  const subtitle = `${found.subunit.code} · ${found.course.name}`;
+  const subtitle = `${selectionLabel(found)} · ${found.course.name}`;
 
   // ── Finished ───────────────────────────────────────────
   if (finalRoom) {
@@ -665,7 +683,7 @@ export function Duel({
           headline={
             !winner ? "Dead level." : won ? "You were closer." : `${winner} was closer.`
           }
-          detail={`${found.subunit.name} · ${mine} to ${theirs.join(" and ")}`}
+          detail={`${selectionNames(found)} · ${mine} to ${theirs.join(" and ")}`}
           details={myAnswers}
           xpEarned={
             myAnswers.reduce((s, a) => s + xpForAnswer(a), 0) + (won ? 50 : 0)
@@ -810,7 +828,7 @@ export function Duel({
           <InviteFriends
             roomId={roomId}
             code={room.code}
-            subunitId={subunitId}
+            subunitIds={subunitIds}
             game="mirror"
           />
         </div>
@@ -873,7 +891,7 @@ export function Duel({
 
               <QuestionStage
                 question={question}
-                eyebrow={found.subunit.name}
+                eyebrow={subunitOfQuestion(question.id)?.name ?? found.unit.name}
                 draft={mine ? mine.response : draft}
                 reveal={settled ? settled.answer : null}
                 score={mine ? mine.score : null}

@@ -1,5 +1,9 @@
 import type { NextRequest } from "next/server";
-import { getSubunit, type Question } from "@/lib/curriculum";
+import {
+  getSubunit,
+  subunitIdOfQuestion,
+  type Question,
+} from "@/lib/curriculum";
 import { answerFor } from "@/lib/answers.server";
 import { claimPosition, getSession } from "@/lib/session-store";
 import { resolveInstance } from "@/lib/templates.server";
@@ -87,11 +91,16 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "No such question." }, { status: 400 });
   }
 
-  const found = resolve(session.subunitId, session.order[at]);
+  const found = resolve(session.subunitIds, session.order[at]);
   if (!found) {
     return Response.json({ error: "No answer on file." }, { status: 500 });
   }
   const { question, answer } = found;
+
+  // A session mixes several subunits, so the method a miss is explained with
+  // is the one belonging to the question that was actually asked rather than
+  // to whichever subunit was picked first.
+  const from = subunitIdOfQuestion(question.id) ?? session.subunitIds[0];
 
   // Claimed only once there is definitely a verdict to give, so a question that
   // fails to resolve does not silently burn the player's single attempt at it.
@@ -137,7 +146,7 @@ export async function POST(req: NextRequest) {
       reveal,
       pass: PASS,
       ...(missed
-        ? { steps: coachingFor(found.steps, question.topic, session.subunitId) }
+        ? { steps: coachingFor(found.steps, question.topic, from) }
         : {}),
     });
   }
@@ -165,7 +174,7 @@ export async function POST(req: NextRequest) {
     // question is a hint, and this is a game.
     ...(correct
       ? {}
-      : { steps: coachingFor(found.steps, question.topic, session.subunitId) }),
+      : { steps: coachingFor(found.steps, question.topic, from) }),
   });
 }
 
@@ -218,18 +227,28 @@ function parseTable(value: unknown): Seat[] | null {
  * generator and the seed. Re-running them rebuilds the same question and
  * recomputes the same answer, so there is nothing to have stored and nothing
  * to have gone stale. A bank question keeps its answer in the key.
+ *
+ * A bank question is looked for across every subunit the session was opened
+ * on, and nowhere else: the position already fixes which question this is, and
+ * keeping the search inside the session is what stops an id from somewhere
+ * else in the curriculum being graded here.
  */
 function resolve(
-  subunitId: string,
+  subunitIds: string[],
   questionId: string,
 ): { question: Question; answer: Answer; steps?: string[] } | null {
   const instance = resolveInstance(questionId);
   if (instance) return instance;
 
-  const subunit = getSubunit(subunitId);
-  const question = subunit?.questions.find((q) => q.id === questionId);
   const banked = answerFor(questionId);
+  if (banked === undefined) return null;
 
-  if (!question || banked === undefined) return null;
-  return { question, answer: { kind: "choice", index: banked } };
+  for (const subunitId of subunitIds) {
+    const question = getSubunit(subunitId)?.questions.find(
+      (q) => q.id === questionId,
+    );
+    if (question) return { question, answer: { kind: "choice", index: banked } };
+  }
+
+  return null;
 }

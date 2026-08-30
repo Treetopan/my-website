@@ -7,7 +7,11 @@ import { realtimeDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import {
   DIFFICULTY,
-  describe,
+  describeAll,
+  difficultyOfQuestion,
+  selectionLabel,
+  selectionNames,
+  subunitOfQuestion,
   type Question,
 } from "@/lib/curriculum";
 import {
@@ -71,14 +75,14 @@ function useServerOffset() {
 }
 
 export function Room({
-  subunitId,
+  subunitIds,
   joinCode,
 }: {
-  subunitId: string;
+  subunitIds: string[];
   /** A code arrived at from a friend's invitation rather than typed in. */
   joinCode?: string;
 }) {
-  const found = describe(subunitId);
+  const found = useMemo(() => describeAll(subunitIds), [subunitIds]);
   const { user, username } = useAuth();
   const offset = useServerOffset();
 
@@ -149,9 +153,6 @@ export function Room({
     return () => clearInterval(id);
   }, []);
 
-  const difficulty = found?.subunit.difficulty ?? "medium";
-  const totalMs = DIFFICULTY[difficulty].seconds * 1000;
-
   // Both come from the room, which got them from the server at kick-off. The
   // questions travel rather than being looked up locally, because a generated
   // subunit mints fresh ones per session and no client has them otherwise.
@@ -163,6 +164,13 @@ export function Room({
 
   const index = room?.currentIndex ?? 0;
   const question = questions[index];
+
+  // The clock belongs to the question showing rather than to the selection: a
+  // room can mix subunits, and a hard turn should still be given its thirty
+  // seconds. Every client reads it off the same question, so the clocks agree.
+  const totalMs =
+    DIFFICULTY[question ? difficultyOfQuestion(question.id) : "medium"].seconds *
+    1000;
 
   const startedAt =
     typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
@@ -219,7 +227,7 @@ export function Room({
         question: q,
         reveal: entry.answer,
         response: entry.response,
-        difficulty,
+        difficulty: difficultyOfQuestion(q.id),
         correct: entry.correct,
         score: entry.score,
         steps: entry.steps,
@@ -227,7 +235,7 @@ export function Room({
         speed: 0,
       };
     });
-  }, [myPicks, questions, difficulty]);
+  }, [myPicks, questions]);
 
   // ── Create / join ──────────────────────────────────────
   async function create() {
@@ -238,7 +246,7 @@ export function Room({
       const id = await createRoom({
         hostUid: user.uid,
         displayName: username ?? user.displayName ?? "You",
-        subunitId,
+        subunitIds,
         seats: SEATS,
         game: "last-one-standing",
       });
@@ -337,7 +345,7 @@ export function Room({
     // bank holds — the server reshuffles to fill the order.
     let opened;
     try {
-      opened = await openSession(subunitId, 40);
+      opened = await openSession(subunitIds, 40);
     } catch (e) {
       setError(
         e instanceof GradeError ? e.message : "Could not start the game.",
@@ -405,7 +413,8 @@ export function Room({
           inRound: correct,
           correct: player.correct + (correct ? 1 : 0),
           score:
-            player.score + Math.round(DIFFICULTY[difficulty].xp * score),
+            player.score +
+            Math.round(DIFFICULTY[difficultyOfQuestion(question.id)].xp * score),
         },
       },
     });
@@ -587,7 +596,7 @@ export function Room({
 
     recordSession(user.uid, {
       game: "last-one-standing",
-      subunitId,
+      subunitIds,
       correct: myAnswers.filter((a) => a.correct).length,
       total: myAnswers.length,
       xp,
@@ -601,7 +610,7 @@ export function Room({
         setBefore(snapshot);
         setAfterP(null);
       });
-  }, [room?.status, user, found, myAnswers, won, progress, subunitId]);
+  }, [room?.status, user, found, myAnswers, won, progress, subunitIds]);
 
   // Host: bin the room once it is over. The delay gives the other clients a
   // moment to take their snapshot before the data disappears.
@@ -615,7 +624,7 @@ export function Room({
 
   if (!found) return <Missing />;
 
-  const subtitle = `${found.subunit.code} · ${found.course.name}`;
+  const subtitle = `${selectionLabel(found)} · ${found.course.name}`;
 
   // ── Finished ───────────────────────────────────────────
   // Rendered from the local snapshot, because by now the host has deleted
@@ -625,7 +634,7 @@ export function Room({
       <Shell subtitle={subtitle}>
         <SessionSummary
           headline={won ? "Last one standing." : "You were removed."}
-          detail={`${found.subunit.name} · won by ${
+          detail={`${selectionNames(found)} · won by ${
             finalRoom.players[finalRoom.winnerUid ?? ""]?.displayName ?? "nobody"
           }`}
           details={myAnswers}
@@ -777,7 +786,7 @@ export function Room({
           <InviteFriends
             roomId={roomId}
             code={room.code}
-            subunitId={subunitId}
+            subunitIds={subunitIds}
             game="last-one-standing"
           />
         </div>
@@ -931,7 +940,9 @@ export function Room({
 
                 <QuestionStage
                   question={question}
-                  eyebrow={found.subunit.name}
+                  eyebrow={
+                    subunitOfQuestion(question.id)?.name ?? found.unit.name
+                  }
                   draft={
                     reveal && reveal.uid === user?.uid ? reveal.response : draft
                   }

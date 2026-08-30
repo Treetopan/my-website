@@ -27,7 +27,8 @@ import { adminDb } from "./firebase-admin";
 
 export type Session = {
   id: string;
-  subunitId: string;
+  /** Every subunit the session may serve from. A game mixes a few of them. */
+  subunitIds: string[];
   createdAt: number;
   /**
    * The question order, fixed by the server when the session opens. Grading
@@ -124,7 +125,7 @@ const memoryStore: Store = {
 
 /** What a session looks like on the wire. Sets do not survive JSON. */
 type StoredSession = {
-  subunitId: string;
+  subunitIds: string[];
   createdAt: number;
   order: string[];
   /** Position → true. An object rather than an array so claims can be
@@ -138,7 +139,7 @@ function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
   return {
     async create(session) {
       const stored: StoredSession = {
-        subunitId: session.subunitId,
+        subunitIds: session.subunitIds,
         createdAt: session.createdAt,
         order: session.order,
       };
@@ -157,7 +158,7 @@ function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
 
       return {
         id,
-        subunitId: stored.subunitId,
+        subunitIds: stored.subunitIds ?? [],
         createdAt: stored.createdAt,
         order: stored.order ?? [],
         graded: new Set(Object.keys(stored.graded ?? {}).map(Number)),
@@ -233,13 +234,13 @@ export function sessionsAreShared(): boolean {
 // ─── The API the routes use ──────────────────────────────
 
 export async function createSession(
-  subunitId: string,
+  subunitIds: string[],
   order: string[],
   now: number,
 ): Promise<Session> {
   const session: Session = {
     id: crypto.randomUUID(),
-    subunitId,
+    subunitIds,
     createdAt: now,
     order,
     graded: new Set(),

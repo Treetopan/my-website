@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { watchAccount, type Account } from "@/lib/account";
 import { readResults, type SessionResult } from "@/lib/rtdb";
-import { describe } from "@/lib/curriculum";
+import { describeAll, selectionNames } from "@/lib/curriculum";
 import { levelProgress, streakIsLive } from "@/lib/progression";
 import { SurveyGate } from "@/components/survey-gate";
 import {
@@ -157,7 +157,12 @@ export function Profile() {
         ) : (
           <ul className="flex flex-col gap-2.5">
             {results.slice(0, 12).map((result) => {
-              const where = describe(result.subunitId);
+              // A session mixes subunits now; one written before it could says
+              // so with the single id it carried instead.
+              const picked =
+                result.subunitIds ??
+                (result.subunitId ? [result.subunitId] : []);
+              const where = describeAll(picked);
               return (
                 <li
                   key={result.id}
@@ -165,7 +170,7 @@ export function Profile() {
                 >
                   <span className="flex-1 min-w-40">
                     <span className="text-[14.5px]">
-                      {where?.subunit.name ?? result.subunitId}
+                      {where ? selectionNames(where) : picked.join(" · ")}
                     </span>
                     <span className="block font-mono text-[10.5px] tracking-[0.1em] text-faint uppercase">
                       {where ? where.course.name : "Removed course"}

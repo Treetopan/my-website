@@ -50,13 +50,13 @@ export function adminDb(): Database | null {
  * The import is deferred rather than written at the top of this file, and that
  * is load-bearing rather than tidiness. `firebase-admin/auth` reaches
  * jwks-rsa, which reaches jose; jose ships ES modules only, and jwks-rsa still
- * `require`s it. Node has been able to require an ES module since 22.12, so
- * that resolves on a new enough runtime and throws ERR_REQUIRE_ESM on an older
- * one — `engines` in `package.json` is what holds the floor.
+ * `require`s it, so loading that chain is only safe on a runtime that can
+ * require an ES module — Node has done so since 22.12, and it throws
+ * ERR_REQUIRE_ESM before that.
  *
  * `firebase-admin` is on Next's default list of packages left unbundled, so
- * the require runs on the server at request time rather than being resolved
- * during the build. A top-level import here would therefore put that chain in
+ * none of that is settled during the build; it is a real import on the server
+ * at request time. A top-level import here would therefore put the chain in
  * the graph of every route that touches a session, and only the admin screen
  * ever reads a user record. Deferring it keeps the game endpoints off the
  * chain, so they cannot fail over a dependency they never call.

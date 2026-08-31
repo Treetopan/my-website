@@ -152,6 +152,41 @@
       }
     },
 
+    // Feedback, written by players and read by admins.
+    //
+    // The write is open to any signed-in player and the read is closed to all
+    // of them, which is the asymmetry the feature is: saying something about
+    // this app must not mean saying it to everybody using it. A note under
+    // the account that wrote it would have been readable by every signed-in
+    // player, because /users is — a room shows names out of it — so it lives
+    // here instead, where nothing but an admin may read.
+    //
+    // Write-once, and never by anybody but the account it is stamped with:
+    // the key must be new, and the uid in it must be the one asking. That
+    // refuses a delete too — newData does not exist, so its uid is not
+    // yours — which is what makes this a record rather than a draft.
+    "feedback": {
+      ".read": "auth != null && (auth.token.email == 'alexleyvalp@gmail.com' || root.child('admins').child(auth.uid).exists())",
+      "$note": {
+        ".write": "auth != null && !data.exists() && newData.child('uid').val() == auth.uid",
+        ".validate": "newData.hasChildren(['uid', 'text', 'at'])",
+        "uid": { ".validate": "newData.val() == auth.uid" },
+
+        // A ceiling on the note, and nothing else allowed beside it, for the
+        // same reason the survey's free-text answer has one: this is the only
+        // node in the database any player may write to, and it must not be
+        // usable as somewhere to keep something else entirely.
+        "text": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000"
+        },
+        "at": { ".validate": "newData.isNumber()" },
+        "username": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
     // Session history is private to the player it belongs to.
     "results": {
       "$uid": {

@@ -11,7 +11,6 @@ import {
   watchAdmins,
   type AdminData,
   type AdminEntry,
-  type AdminRow,
 } from "@/lib/admin";
 import {
   SURVEY,
@@ -19,7 +18,7 @@ import {
   type SurveyQuestion,
   type SurveyRecord,
 } from "@/lib/survey";
-import { levelFor } from "@/lib/progression";
+import { watchFeedback, type FeedbackNote } from "@/lib/feedback";
 import { USERNAME_MAX } from "@/lib/username";
 
 /**
@@ -31,11 +30,14 @@ import { USERNAME_MAX } from "@/lib/username";
  * there appears here counted, in the order it is asked, without this file
  * changing. That is the whole reason the survey is declared rather than built.
  *
- * What is *not* here is as deliberate: no per-player session history, no
- * answers, no way to act on somebody's account. Those are private to the player
- * under the database rules, and this screen deliberately asks for nothing the
- * rules would refuse — a dashboard whose rows half-load is worse than one that
- * never promised them.
+ * What is *not* here is as deliberate: no list of accounts, no addresses, no
+ * per-player session history, no way to act on somebody's account. Accounts are
+ * a number — counted on the server, so the identities behind it never reach
+ * this page — and an answer is what somebody said rather than who said it. The
+ * question this screen exists to answer is how the beta is going, and none of
+ * that is needed to answer it. The rest is private to the player under the
+ * database rules, and this screen asks for nothing the rules would refuse: a
+ * dashboard whose rows half-load is worse than one that never promised them.
  */
 export function Admin() {
   const { user, username } = useAuth();
@@ -110,11 +112,10 @@ export function Admin() {
     );
   }
 
-  // Only the records that actually carry answers. A skip is counted in the
-  // tile above, but it must not sit in the denominator of every question.
-  const answered = (data?.rows ?? []).flatMap((row) =>
-    row.survey?.answers ? [row.survey] : [],
-  );
+  // The records that carry answers, which is what every tally below counts.
+  // A skip has its own tile and must not sit in the denominator of a question
+  // nobody was ever shown.
+  const answered = data?.answered ?? [];
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 pt-14 pb-24">
@@ -149,14 +150,19 @@ export function Admin() {
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Accounts" value={num(data?.accounts)} accent />
           <Stat label="Named" value={num(data?.named)} />
-          <Stat label="Answered" value={num(data?.answered)} />
+          <Stat label="Answered" value={num(data?.answered.length)} />
           <Stat label="Skipped" value={num(data?.skipped)} />
         </dl>
         {data && data.accounts > 0 && (
           <p className="mt-3.5 text-[13.5px] text-faint">
-            {pct(data.answered, data.accounts)} of accounts answered the survey;{" "}
-            {pct(data.accounts - data.answered - data.skipped, data.accounts)}{" "}
-            have not been asked yet or have not finished signing in.
+            {pct(data.answered.length, data.accounts)} of accounts answered the
+            survey;{" "}
+            {pct(
+              data.accounts - data.answered.length - data.skipped,
+              data.accounts,
+            )}{" "}
+            have not been asked yet or have not finished signing in. Accounts are
+            counted on the server; nothing that says who they are is read.
           </p>
         )}
       </section>
@@ -176,7 +182,7 @@ export function Admin() {
               <FreeText
                 key={question.id}
                 question={question}
-                rows={data?.rows ?? []}
+                records={answered}
               />
             ) : (
               <Tally
@@ -189,59 +195,8 @@ export function Admin() {
         </div>
       </section>
 
-      {/* ── People ──────────────────────────────────────── */}
-      <section className="border-t border-line-soft pt-8 pb-10">
-        <h2 className="text-[22px] font-medium tracking-[-0.02em]">Accounts</h2>
-        <p className="mt-2 mb-5 text-[13.5px] text-faint">
-          Newest first. Session history stays private to the player it belongs
-          to, so it is not here.
-        </p>
-
-        {!data || data.rows.length === 0 ? (
-          <p className="text-[14px] text-faint">No accounts yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-lg border-collapse text-left">
-              <thead>
-                <tr className="border-b border-line">
-                  <Th>Username</Th>
-                  <Th>Email</Th>
-                  <Th>Joined</Th>
-                  <Th right>Level</Th>
-                  <Th right>Sessions</Th>
-                  <Th right>Survey</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((row) => (
-                  <tr key={row.uid} className="border-b border-line-soft">
-                    <Td>{row.username ?? <Faint>unnamed</Faint>}</Td>
-                    <Td>
-                      <span className="font-mono text-[11.5px] text-muted">
-                        {row.email ?? "—"}
-                      </span>
-                    </Td>
-                    <Td>
-                      <span className="font-mono text-[11.5px] text-faint tnum">
-                        {row.createdAt ? dayOf(row.createdAt) : "—"}
-                      </span>
-                    </Td>
-                    <Td right mono>
-                      {levelFor(row.progress.xp)}
-                    </Td>
-                    <Td right mono>
-                      {row.progress.played}
-                    </Td>
-                    <Td right>
-                      <SurveyMark row={row} />
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {/* ── Feedback ────────────────────────────────────── */}
+      <Feedback />
 
       {/* ── Admins ──────────────────────────────────────── */}
       <Admins me={username} isOwner={isOwner} meUid={user?.uid ?? null} />
@@ -298,22 +253,25 @@ function Tally({
 }
 
 /**
- * Free text, shown whole and attributed. It is the one answer that cannot be
- * counted, so it is the one that is read — and reading it without knowing who
- * said it makes it impossible to follow up.
+ * Free text, shown whole. It is the one answer that cannot be counted, so it is
+ * the one that is read.
+ *
+ * Unattributed, now that the accounts are only a number here: an answer to a
+ * survey question is a thing somebody said, and the screen has no business
+ * knowing which account said it. Anybody with something to say to whoever runs
+ * this can say it in the feedback below, where it does come with a name —
+ * because they chose to write it.
  */
 function FreeText({
   question,
-  rows,
+  records,
 }: {
   question: SurveyQuestion;
-  rows: AdminRow[];
+  records: SurveyRecord[];
 }) {
-  const said = rows
-    .map((row) => ({ row, text: row.survey?.answers?.[question.id] }))
-    .filter((entry): entry is { row: AdminRow; text: string } =>
-      Boolean(entry.text),
-    );
+  const said = records
+    .map((record) => record.answers?.[question.id])
+    .filter((text): text is string => Boolean(text));
 
   return (
     <div>
@@ -328,12 +286,9 @@ function FreeText({
         <p className="text-[13.5px] text-faint">Nothing written yet.</p>
       ) : (
         <ul className="flex flex-col gap-2.5">
-          {said.map(({ row, text }) => (
-            <li key={row.uid} className="box px-4 py-3.5">
+          {said.map((text, i) => (
+            <li key={i} className="box px-4 py-3.5">
               <p className="text-[14.5px] whitespace-pre-wrap">{text}</p>
-              <p className="mt-2 font-mono text-[10.5px] tracking-[0.1em] text-faint uppercase">
-                {row.username ?? "unnamed"}
-              </p>
             </li>
           ))}
         </ul>
@@ -342,14 +297,53 @@ function FreeText({
   );
 }
 
-function SurveyMark({ row }: { row: AdminRow }) {
-  if (row.survey?.answers) {
-    return <span className="font-mono text-[11px] text-correct">answered</span>;
-  }
-  if (row.survey?.skipped) {
-    return <span className="font-mono text-[11px] text-faint">skipped</span>;
-  }
-  return <span className="font-mono text-[11px] text-line">not asked</span>;
+// ─── Feedback ────────────────────────────────────────────
+
+/**
+ * What people have written from the bubble in the top bar.
+ *
+ * Watched rather than read with the rest of the screen: the counts are a
+ * snapshot with a Refresh button beside them because re-tallying every account
+ * on every write would be silly, and a note is the opposite — there are few of
+ * them, they arrive one at a time, and one arriving while somebody has this
+ * page open should appear.
+ *
+ * The name is the one the player plays under. It is here and not on the survey
+ * answers above because this was written *to* somebody: a bug report with
+ * nobody to ask about it is half a bug report.
+ */
+function Feedback() {
+  const [notes, setNotes] = useState<FeedbackNote[]>([]);
+
+  useEffect(() => watchFeedback(setNotes), []);
+
+  return (
+    <section className="border-t border-line-soft pt-8 pb-10">
+      <h2 className="text-[22px] font-medium tracking-[-0.02em]">Feedback</h2>
+      <p className="mt-2 mb-5 text-[13.5px] text-faint">
+        Newest first. Written from the bubble in the top bar, and readable by
+        admins only.
+      </p>
+
+      {notes.length === 0 ? (
+        <p className="text-[14px] text-faint">Nothing sent yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-2.5">
+          {notes.map((note) => (
+            <li key={note.id} className="box px-4 py-3.5">
+              <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap">
+                {note.text}
+              </p>
+              <p className="mt-2.5 flex flex-wrap items-baseline gap-x-3 font-mono text-[10.5px] tracking-[0.1em] text-faint uppercase">
+                <span>{note.username ?? "unnamed"}</span>
+                <span className="tnum">{note.at ? dayOf(note.at) : "—"}</span>
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 // ─── Who else gets in ────────────────────────────────────
@@ -495,46 +489,11 @@ function Stat({
   );
 }
 
-function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
-  return (
-    <th
-      scope="col"
-      className={`eyebrow pb-2.5 font-medium ${right ? "text-right" : ""}`}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({
-  children,
-  right,
-  mono,
-}: {
-  children: React.ReactNode;
-  right?: boolean;
-  mono?: boolean;
-}) {
-  return (
-    <td
-      className={`py-2.5 text-[13.5px] ${right ? "text-right" : ""} ${
-        mono ? "font-mono text-muted tnum" : ""
-      }`}
-    >
-      {children}
-    </td>
-  );
-}
-
-function Faint({ children }: { children: React.ReactNode }) {
-  return <span className="text-faint">{children}</span>;
-}
-
 /** Whatever went wrong, as something worth putting on the screen. */
 function sentence(error: unknown): string {
   return error instanceof Error && error.message
     ? error.message
-    : "Couldn't read the accounts.";
+    : "Couldn't count the accounts.";
 }
 
 function num(value: number | undefined): string {

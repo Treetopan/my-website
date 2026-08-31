@@ -19,8 +19,9 @@ import { EMPTY_PROGRESS, type Progress } from "@/lib/progression";
  * No email. Firebase Auth already holds one per account and this node is
  * readable by every signed-in player — a room shows names out of it — so a
  * copy here would be an address book any account in the app could read. The
- * admin screen gets emails from `/api/admin/accounts` instead, and the rules
- * refuse a write of `email` so a stale client cannot put one back.
+ * rules refuse a write of `email` so a stale client cannot put one back, and
+ * nothing reads the ones Auth holds: the admin screen counts accounts rather
+ * than listing them.
  */
 
 export type Account = {

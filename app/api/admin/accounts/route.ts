@@ -1,43 +1,30 @@
 import type { NextRequest } from "next/server";
-import type { Auth } from "firebase-admin/auth";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isOwnerEmail } from "@/lib/owner";
-import { EMPTY_PROGRESS, type Progress } from "@/lib/progression";
-import type { Account } from "@/lib/account";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The account list the admin screen shows, emails included.
+ * How many accounts there are. That is the whole of what this hands over.
  *
- * Emails used to be mirrored into `users/{uid}` and read straight off it. That
- * node is readable by every signed-in player — it is what lets a room show a
- * name — and `usernames` maps a name to a uid, so between the two, any account
- * that signed up could walk the whole app and read everybody's address. The
- * audience is school students; that had to go.
+ * It used to hand over a row per account with the address beside it, joined on
+ * from Firebase Auth with a service account — the one place an address still
+ * lives, now that nothing copies one into the database. An admin screen does
+ * not need to know who anybody is to know how a beta is going, and an address
+ * that is never read cannot leak, so the join is gone: the rows are counted
+ * here and what crosses to the browser is two integers.
  *
- * So the address lives in exactly one place, which is where it already lived:
- * Firebase Auth. Only a service account may ask about somebody else's, which
- * makes this a server's job rather than the browser's.
+ * Counted on the server rather than in the browser for the same reason. The
+ * rules let an admin read the whole of `users`, so a client could count them
+ * itself — but that pulls every account into a page to arrive at a number,
+ * which is collecting the thing this stopped collecting and then throwing it
+ * away. The identities never leave this function.
  *
  * The admin check here is the same one the rules make — the owner by the
- * address on their token, or a row under `admins/{uid}` — because this route
- * hands over more than the rules would and must not be the softer of the two.
- * The ID token is verified rather than trusted: a uid in the body would be a
- * claim, a signed token is a fact.
- *
- * The accounts themselves are read with the Admin SDK rather than passed up
- * from the client, so there is one answer to "who exists" and it is the
- * server's. `toAccount` is duplicated from `account.ts` in miniature rather
- * than imported: that module is a client module, and a route handler that
- * imports one gets a reference to it, not the function.
+ * address on their token, or a row under `admins/{uid}`. The ID token is
+ * verified rather than trusted: a uid in the body would be a claim, a signed
+ * token is a fact.
  */
-
-/** An account as this screen needs it: the row, plus the address beside it. */
-type WithEmail = Account & { email: string | null };
-
-/** Firebase Auth's page size for `listUsers`, and its maximum. */
-const PAGE = 1000;
 
 export async function GET(req: NextRequest) {
   const auth = await adminAuth();
@@ -47,7 +34,7 @@ export async function GET(req: NextRequest) {
     return Response.json(
       {
         error:
-          "The server has no Firebase service account, so it cannot read emails. Set FIREBASE_SERVICE_ACCOUNT.",
+          "The server has no Firebase service account, so it cannot count the accounts. Set FIREBASE_SERVICE_ACCOUNT.",
       },
       { status: 503 },
     );
@@ -78,50 +65,15 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "This area is for admins." }, { status: 403 });
   }
 
-  const [snapshot, emails] = await Promise.all([db.ref("users").get(), all(auth)]);
-  const raw = (snapshot.val() ?? {}) as Record<string, unknown>;
+  const snapshot = await db.ref("users").get();
+  const rows = Object.values(
+    (snapshot.val() ?? {}) as Record<string, { username?: unknown } | null>,
+  );
 
-  const accounts: WithEmail[] = Object.entries(raw)
-    .map(([uid, row]) => toAccount(uid, row, emails.get(uid) ?? null))
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-
-  return Response.json({ accounts });
-}
-
-/**
- * Every account's address, keyed by uid.
- *
- * Paged, because `listUsers` caps a page at a thousand and a beta that outgrows
- * that should keep working rather than quietly showing the first thousand.
- */
-async function all(auth: Auth): Promise<Map<string, string | null>> {
-  const out = new Map<string, string | null>();
-
-  let pageToken: string | undefined;
-  do {
-    const page = await auth.listUsers(PAGE, pageToken);
-    for (const user of page.users) out.set(user.uid, user.email ?? null);
-    pageToken = page.pageToken;
-  } while (pageToken);
-
-  return out;
-}
-
-/**
- * The database drops keys whose value is null and an account created before a
- * field existed simply lacks it, so every field is read defensively rather than
- * trusted — a missing `progress` is an empty one, not a crash.
- */
-function toAccount(uid: string, raw: unknown, email: string | null): WithEmail {
-  const row = (raw ?? {}) as Record<string, unknown>;
-  return {
-    uid,
-    username: typeof row.username === "string" ? row.username : null,
-    email,
-    createdAt: typeof row.createdAt === "number" ? row.createdAt : null,
-    progress: {
-      ...EMPTY_PROGRESS,
-      ...((row.progress ?? {}) as Partial<Progress>),
-    },
-  };
+  return Response.json({
+    accounts: rows.length,
+    // An account that has not claimed a name yet has not finished signing in,
+    // which is worth telling apart from one that never came back.
+    named: rows.filter((row) => typeof row?.username === "string").length,
+  });
 }

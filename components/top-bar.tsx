@@ -90,6 +90,28 @@ export function TopBar() {
           )}
         </Link>
 
+        {/* One press from any screen that has a top bar, and it looks like
+            what it is rather than like another word in a row of words. */}
+        <Link
+          href="/feedback"
+          aria-label="Send feedback"
+          title="Send feedback"
+          className="text-faint transition-colors hover:text-ink"
+        >
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M4 3.5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8.5L5 16.5v-3H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z" />
+          </svg>
+        </Link>
+
         {user && <AccountMenu />}
       </div>
     </header>

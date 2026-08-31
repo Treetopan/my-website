@@ -6,7 +6,6 @@ import { auth, realtimeDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { findByUsername } from "@/lib/social";
 import { isOwnerEmail } from "@/lib/owner";
-import type { Account } from "@/lib/account";
 import type { SurveyRecord } from "@/lib/survey";
 
 /**
@@ -149,60 +148,63 @@ export async function removeAdmin(uid: string) {
 // ─── What the admin area shows ───────────────────────────
 
 /**
- * One account, with its email and whatever it answered attached.
+ * What the admin screen knows about the people using this: how many there are,
+ * and what they said when they were asked.
  *
- * The email is not part of `Account` because it is not in the database — it
- * is in Firebase Auth, and it arrives here from the admin route rather than
- * from a read every signed-in player could have made for themselves.
+ * There is no list of accounts here and no account attached to an answer. The
+ * screen used to carry a row per player with the address beside it, and the
+ * question it was answering — how is the beta going — never needed to know who
+ * anybody was. So the accounts are counted on the server and arrive as two
+ * numbers, and the survey records arrive with their uids dropped: what is
+ * kept is what was said, not who said it.
  */
-export type AdminAccount = Account & { email: string | null };
-
-export type AdminRow = AdminAccount & { survey: SurveyRecord | null };
-
 export type AdminData = {
-  rows: AdminRow[];
   /** Accounts that exist, whether or not they ever answered anything. */
   accounts: number;
   named: number;
-  answered: number;
+  /** The records that carry answers. Everything on the screen counts these. */
+  answered: SurveyRecord[];
   skipped: number;
 };
 
 /**
- * Every account, newest first, with the email Firebase Auth holds for it.
+ * The two counts, from the server.
  *
- * Fetched from the server rather than read out of the database, because the
- * database no longer has it. `users/{uid}` is readable by any signed-in
- * player — that is what lets a room show a name — so an email stored there is
- * an email every account in the app can read. The route re-checks admin the
- * same way the rules do; this call is the interface asking, not the thing
- * granting.
+ * Counted there rather than here: the rules would let an admin read the whole
+ * of `users` and count it in the browser, but that is collecting every account
+ * in order to arrive at how many there are. The route re-checks admin the same
+ * way the rules do; this call is the interface asking, not the thing granting.
  */
-async function readAccounts(idToken: string): Promise<AdminAccount[]> {
+async function readCounts(
+  idToken: string,
+): Promise<{ accounts: number; named: number }> {
   const res = await fetch("/api/admin/accounts", {
     headers: { authorization: `Bearer ${idToken}` },
     cache: "no-store",
   });
 
   const body = (await res.json().catch(() => null)) as {
-    accounts?: AdminAccount[];
+    accounts?: number;
+    named?: number;
     error?: string;
   } | null;
 
   if (!res.ok) {
-    throw new Error(body?.error ?? "Couldn't read the accounts.");
+    throw new Error(body?.error ?? "Couldn't count the accounts.");
   }
-  return body?.accounts ?? [];
+  return { accounts: body?.accounts ?? 0, named: body?.named ?? 0 };
 }
 
 /**
  * Everything the admin screen reads, in one pass.
  *
- * Two reads and a join rather than one denormalised node: the survey is kept
- * out of the profile because a profile is readable by every signed-in player,
- * and copying answers into it to save a read here would undo exactly that.
+ * Two reads and no join. The survey is kept out of the profile because a
+ * profile is readable by every signed-in player, and it is read back the same
+ * way here — as answers, with `Object.values` dropping the uid each one was
+ * filed under, so nothing on this screen can be traced to an account even by
+ * whoever is looking at it.
  *
- * The two failures read differently and are worth telling apart — the accounts
+ * The two failures read differently and are worth telling apart — the counts
  * come from a route that can say why it refused, the surveys from the database,
  * where a refusal usually means the rules are not deployed.
  */
@@ -212,8 +214,8 @@ export async function readAdminData(): Promise<AdminData> {
 
   const idToken = await me.getIdToken();
 
-  const [accounts, surveySnap] = await Promise.all([
-    readAccounts(idToken),
+  const [counts, surveySnap] = await Promise.all([
+    readCounts(idToken),
     get(ref(realtimeDb, "surveys")).catch(() => {
       throw new Error(
         "Couldn't read the survey answers. The rules in database.rules.json may not be deployed.",
@@ -221,18 +223,13 @@ export async function readAdminData(): Promise<AdminData> {
     }),
   ]);
 
-  const surveys = (surveySnap.val() ?? {}) as Record<string, SurveyRecord>;
-
-  const rows: AdminRow[] = accounts.map((account) => ({
-    ...account,
-    survey: surveys[account.uid] ?? null,
-  }));
+  const surveys = Object.values(
+    (surveySnap.val() ?? {}) as Record<string, SurveyRecord>,
+  );
 
   return {
-    rows,
-    accounts: rows.length,
-    named: rows.filter((row) => row.username).length,
-    answered: rows.filter((row) => row.survey?.answers).length,
-    skipped: rows.filter((row) => row.survey?.skipped).length,
+    ...counts,
+    answered: surveys.filter((record) => record.answers),
+    skipped: surveys.filter((record) => record.skipped).length,
   };
 }

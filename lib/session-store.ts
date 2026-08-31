@@ -25,6 +25,32 @@ import { adminDb } from "./firebase-admin";
  * loudly at startup rather than failing mysteriously under load.
  */
 
+/**
+ * A verdict as it went to the client: the whole response body, kept verbatim.
+ *
+ * Verbatim is the point. Re-serving one is a copy of an answer already given,
+ * never a second derivation of it — so a repeat request cannot re-run a
+ * generator, cannot re-roll a bot's answer, and cannot disagree with the
+ * verdict the first request got.
+ *
+ * Field for field rather than byte for byte: the database returns an object's
+ * keys in its own order, so a re-served verdict can serialise differently from
+ * the one that was sent first. Every value is the same and clients read by
+ * key, so this matters only to anybody comparing two responses as strings.
+ */
+export type StoredVerdict = Record<string, unknown>;
+
+/**
+ * What asking for a position produced.
+ *
+ * `claimed` is the right to grade it, and exactly one caller ever gets it.
+ * Everybody else gets `verdict` — the answer the winner recorded, or null
+ * while the winner is still working it out.
+ */
+export type Claim =
+  | { claimed: true }
+  | { claimed: false; verdict: StoredVerdict | null };
+
 export type Session = {
   id: string;
   /** Every subunit the session may serve from. A game mixes a few of them. */
@@ -37,8 +63,12 @@ export type Session = {
    * again without handing anyone a second free look at the answer.
    */
   order: string[];
-  /** Positions already graded. A second attempt at one is refused. */
-  graded: Set<number>;
+  /**
+   * Positions already spoken for, and what came of them. A position maps to
+   * its verdict once one exists, and to null in the window between the claim
+   * being won and the grading finishing.
+   */
+  graded: Map<number, StoredVerdict | null>;
 };
 
 const SESSION_TTL_MS = 60 * 60 * 1000;
@@ -92,8 +122,18 @@ const GRADE_LIMIT = 2000;
 type Store = {
   create(session: Session): Promise<void>;
   get(id: string, now: number): Promise<Session | null>;
-  /** Marks a position graded. False if it was already claimed. */
-  claim(id: string, position: number): Promise<boolean>;
+  /**
+   * Takes the right to grade a position, or reports what is already there.
+   * One operation rather than a read then a write, because between those two
+   * a second request for the same position slips through and is graded twice.
+   */
+  claim(id: string, position: number): Promise<Claim>;
+  /** Records the verdict against a claim this caller won. */
+  remember(id: string, position: number, verdict: StoredVerdict): Promise<void>;
+  /** Hands back a claim that produced no verdict, so it is not burnt. */
+  release(id: string, position: number): Promise<void>;
+  /** The verdict stored for a position, or null while there is none. */
+  recall(id: string, position: number): Promise<StoredVerdict | null>;
   /** Whether `key` is still under `limit` calls in the current window. */
   allow(key: string, now: number, limit: number): Promise<boolean>;
 };
@@ -131,9 +171,29 @@ const memoryStore: Store = {
 
   async claim(id, position) {
     const s = sessions.get(id);
-    if (!s || s.graded.has(position)) return false;
-    s.graded.add(position);
-    return true;
+    // No session is not a claim to give. The route has already fetched it and
+    // answered 404, so this only happens if it expired in between.
+    if (!s) return { claimed: false, verdict: null };
+
+    if (s.graded.has(position)) {
+      return { claimed: false, verdict: s.graded.get(position) ?? null };
+    }
+
+    // Single-threaded, so between the check and the set nothing else runs.
+    s.graded.set(position, null);
+    return { claimed: true };
+  },
+
+  async remember(id, position, verdict) {
+    sessions.get(id)?.graded.set(position, verdict);
+  },
+
+  async release(id, position) {
+    sessions.get(id)?.graded.delete(position);
+  },
+
+  async recall(id, position) {
+    return sessions.get(id)?.graded.get(position) ?? null;
   },
 
   async allow(key, now, limit) {
@@ -161,9 +221,15 @@ type StoredSession = {
   subunitIds: string[];
   createdAt: number;
   order: string[];
-  /** Position → true. An object rather than an array so claims can be
-   *  written independently without read-modify-write on the whole list. */
-  graded?: Record<string, boolean>;
+  /**
+   * Position → the claim. `true` while the caller who won it is still
+   * grading, and the verdict itself once there is one — the same node, so
+   * taking the claim and reading what came of it are the one operation.
+   *
+   * An object rather than an array so a claim can be written on its own
+   * without read-modify-write over the whole list.
+   */
+  graded?: Record<string, true | StoredVerdict>;
 };
 
 function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
@@ -194,7 +260,12 @@ function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
         subunitIds: stored.subunitIds ?? [],
         createdAt: stored.createdAt,
         order: stored.order ?? [],
-        graded: new Set(Object.keys(stored.graded ?? {}).map(Number)),
+        graded: new Map(
+          Object.entries(stored.graded ?? {}).map(([at, held]) => [
+            Number(at),
+            held === true ? null : held,
+          ]),
+        ),
       };
     },
 
@@ -202,11 +273,34 @@ function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
       // A transaction on the single position, not on the session. Two requests
       // racing for the same position both read "not graded" if this is a read
       // then a write; the transaction makes exactly one of them win.
+      //
+      // Aborting leaves the current value in the snapshot, which is how a
+      // loser learns what the winner did without a second read: `true` if the
+      // winner is still grading, the verdict itself once it has finished.
       const result = await sessionRef(id)
         .child(`graded/${position}`)
         .transaction((current) => (current ? undefined : true));
 
-      return result.committed && result.snapshot.val() === true;
+      if (result.committed) return { claimed: true };
+      return { claimed: false, verdict: verdictOf(result.snapshot.val()) };
+    },
+
+    async remember(id, position, verdict) {
+      // Through JSON on the way in, because the database refuses `undefined`
+      // and an optional field that was never set is exactly that. What is
+      // stored is then what the client was sent, key for key.
+      await sessionRef(id)
+        .child(`graded/${position}`)
+        .set(JSON.parse(JSON.stringify(verdict)));
+    },
+
+    async release(id, position) {
+      await sessionRef(id).child(`graded/${position}`).remove();
+    },
+
+    async recall(id, position) {
+      const snapshot = await sessionRef(id).child(`graded/${position}`).get();
+      return verdictOf(snapshot.val());
     },
 
     async allow(key, now, limit) {
@@ -230,6 +324,15 @@ function rtdbStore(db: NonNullable<ReturnType<typeof adminDb>>): Store {
       return false;
     },
   };
+}
+
+/**
+ * A stored position read back: the verdict if one was recorded, null if the
+ * node holds only the bare claim or nothing at all.
+ */
+function verdictOf(value: unknown): StoredVerdict | null {
+  if (!value || value === true || typeof value !== "object") return null;
+  return value as StoredVerdict;
 }
 
 /** RTDB keys cannot contain . $ # [ ] / — an IP or header value might. The
@@ -277,7 +380,7 @@ export async function createSession(
     subunitIds,
     createdAt: now,
     order,
-    graded: new Set(),
+    graded: new Map(),
   };
 
   await backing().create(session);
@@ -292,15 +395,81 @@ export async function getSession(
 }
 
 /**
- * Claims a position for grading. False means it was already graded, and the
- * caller must refuse rather than grade it again — this is the single point
- * where the one-verdict-per-position guarantee is enforced.
+ * Claims a position for grading.
+ *
+ * This is the single point where "graded exactly once" is enforced. Exactly
+ * one caller is told `claimed`, and only that caller may go on to grade. A
+ * caller told otherwise must never grade: it either serves the verdict handed
+ * back with the refusal, or waits for one with `awaitVerdict`.
  */
 export async function claimPosition(
   id: string,
   position: number,
-): Promise<boolean> {
+): Promise<Claim> {
   return backing().claim(id, position);
+}
+
+/**
+ * Records what a position was graded to, so the next request for it is a read.
+ *
+ * Written after the verdict has been built and before it is sent, which is the
+ * order that matters: a request arriving in between finds the bare claim and
+ * waits, rather than finding nothing and being turned away.
+ */
+export async function rememberVerdict(
+  id: string,
+  position: number,
+  verdict: StoredVerdict,
+): Promise<void> {
+  return backing().remember(id, position, verdict);
+}
+
+/**
+ * Hands a claim back, for a caller that won one and then found it had nothing
+ * to grade. Without this, a question that cannot be resolved would silently
+ * spend the player's single attempt at it on a data problem of ours.
+ */
+export async function releasePosition(
+  id: string,
+  position: number,
+): Promise<void> {
+  return backing().release(id, position);
+}
+
+/**
+ * How long to wait for the caller holding a claim to record its verdict, and
+ * how often to look.
+ *
+ * The gap being waited out is one grading — resolving a generator and scoring
+ * an answer — plus the write that follows it. That is milliseconds, so the
+ * first looks are close together and the rest back off; almost every wait ends
+ * on the first or second. The tail is there for a peer on a cold instance, and
+ * it is bounded because a request that hangs on this is worse than one that
+ * gives a definite answer.
+ */
+const RECALL_WAITS_MS = [20, 40, 80, 150, 250, 400, 500, 500, 500, 500];
+
+/**
+ * The verdict for a position somebody else has claimed, waited for.
+ *
+ * Null means the holder never recorded one inside the budget — it died between
+ * claiming and grading, or it is slower than we are prepared to hold a request
+ * open for. The caller then answers 409, which is what this endpoint has
+ * always said and what every client already knows how to take.
+ */
+export async function awaitVerdict(
+  id: string,
+  position: number,
+): Promise<StoredVerdict | null> {
+  const store = backing();
+
+  for (const wait of RECALL_WAITS_MS) {
+    await new Promise((done) => setTimeout(done, wait));
+    const verdict = await store.recall(id, position);
+    if (verdict) return verdict;
+  }
+
+  return null;
 }
 
 /**

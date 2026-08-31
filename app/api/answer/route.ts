@@ -5,7 +5,14 @@ import {
   type Question,
 } from "@/lib/curriculum";
 import { answerFor } from "@/lib/answers.server";
-import { claimPosition, getSession, gradeAllowed } from "@/lib/session-store";
+import {
+  awaitVerdict,
+  claimPosition,
+  getSession,
+  gradeAllowed,
+  releasePosition,
+  rememberVerdict,
+} from "@/lib/session-store";
 import { resolveInstance } from "@/lib/templates.server";
 import { botResponse, grade, type Answer } from "@/lib/grading.server";
 import { coachingFor } from "@/lib/coaching.server";
@@ -105,8 +112,42 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "No such question." }, { status: 400 });
   }
 
+  // The claim comes first, before the question is rebuilt and long before
+  // anything is graded. That ordering is the whole of this endpoint's
+  // idempotency:
+  //
+  //   · Exactly one caller is told `claimed`, and only that caller grades.
+  //     Two requests racing for the same position cannot both win it — the
+  //     guarantee the session mechanism exists for, and untouched by any of
+  //     what follows.
+  //
+  //   · Everybody else is served the verdict the winner recorded. That is a
+  //     read of a stored object and nothing else: no generator re-run, no
+  //     second scoring, and above all no second roll of a bot's answer, which
+  //     is the one thing here that would come out different if it ran twice.
+  //
+  // So a repeat request is safe to send. A double tap, a retry over a
+  // connection that dropped the first reply, a turn resolved by both the
+  // answer listener and the clock — all of them get the one verdict this
+  // position will ever have.
+  const claim = await claimPosition(sessionId, at);
+  if (!claim.claimed) {
+    // Either the winner has already recorded it, or it is still grading and
+    // worth waiting a moment for.
+    const stored = claim.verdict ?? (await awaitVerdict(sessionId, at));
+    if (stored) return Response.json(stored);
+
+    // Claimed, but no verdict inside the budget. Nothing can be said about
+    // this position now or later, which is what 409 has always meant here.
+    return Response.json({ error: "Already answered." }, { status: 409 });
+  }
+
   const found = resolve(session.subunitIds, session.order[at]);
   if (!found) {
+    // Nothing to grade after all. The claim is handed back rather than
+    // spending the player's single attempt at this question on a fault of
+    // ours, which is what holding the claim until now would have done.
+    await releasePosition(sessionId, at);
     return Response.json({ error: "No answer on file." }, { status: 500 });
   }
   const { question, answer } = found;
@@ -115,14 +156,6 @@ export async function POST(req: NextRequest) {
   // is the one belonging to the question that was actually asked rather than
   // to whichever subunit was picked first.
   const from = subunitIdOfQuestion(question.id) ?? session.subunitIds[0];
-
-  // Claimed only once there is definitely a verdict to give, so a question that
-  // fails to resolve does not silently burn the player's single attempt at it.
-  // The claim is atomic: two requests racing for the same position cannot both
-  // win it, which is the guarantee the whole session mechanism exists for.
-  if (!(await claimPosition(sessionId, at))) {
-    return Response.json({ error: "Already answered." }, { status: 409 });
-  }
 
   // ── A whole table at once: the duel ──────────────────
   //
@@ -155,14 +188,19 @@ export async function POST(req: NextRequest) {
     // One explanation for the table rather than one per seat: it is a property
     // of the question, not of who missed it, and the duel is eight rounds of
     // this going over the wire. Each client shows it only if it was their miss.
-    return Response.json({
+    const payload = {
       results,
       reveal,
       pass: PASS,
       ...(missed
         ? { steps: coachingFor(found.steps, question.topic, from) }
         : {}),
-    });
+    };
+
+    // Recorded before it is sent, so a repeat that arrives while this reply is
+    // still in flight finds the verdict rather than an unfinished claim.
+    await rememberVerdict(sessionId, at, payload);
+    return Response.json(payload);
   }
 
   // ── One player, one turn ─────────────────────────────
@@ -176,7 +214,7 @@ export async function POST(req: NextRequest) {
 
   const { score, correct, reveal } = grade(answer, submitted);
 
-  return Response.json({
+  const payload = {
     score,
     correct,
     reveal,
@@ -189,7 +227,13 @@ export async function POST(req: NextRequest) {
     ...(correct
       ? {}
       : { steps: coachingFor(found.steps, question.topic, from) }),
-  });
+  };
+
+  // Recorded before it is sent. A bot's answer was rolled once, above, and
+  // what is stored here is the only copy of it that will ever exist for this
+  // position — every later request for it is served from this.
+  await rememberVerdict(sessionId, at, payload);
+  return Response.json(payload);
 }
 
 type Graded = { score: number; correct: boolean; response: Answered };

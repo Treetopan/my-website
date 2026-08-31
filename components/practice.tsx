@@ -12,7 +12,12 @@ import {
 } from "@/lib/curriculum";
 import { useAuth } from "@/lib/auth-context";
 import { recordSession, watchProgress } from "@/lib/rtdb";
-import { EMPTY_PROGRESS, xpForAnswer, type Progress } from "@/lib/progression";
+import {
+  EMPTY_PROGRESS,
+  applySession,
+  xpForAnswer,
+  type Progress,
+} from "@/lib/progression";
 import { QuestionStage } from "@/components/question-stage";
 import { Wordmark } from "@/components/wordmark";
 import { PracticeReport } from "@/components/practice-report";
@@ -83,6 +88,11 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
   const [score, setScore] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
+  /** Something the set can carry on from, unlike `fault`, which ends it. */
+  const [notice, setNotice] = useState<string | null>(null);
+
+  /** The position currently being graded. See `racer.tsx` for why. */
+  const grading = useRef<number | null>(null);
 
   const total = questions.length;
   const question = questions[index];
@@ -108,6 +118,10 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
     async (response: Answered, msTaken: number) => {
       if (!question || !sessionId) return;
 
+      // One submission per position; a second press is the same answer.
+      if (grading.current === index) return;
+      grading.current = index;
+
       // The subunit this question came from sets its par and pays its XP. A
       // set can mix several, and a hard question answered in a mixed set is
       // still a hard question.
@@ -124,6 +138,17 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
       try {
         verdict = await grade(sessionId, index, response);
       } catch (e) {
+        // An earlier copy of this same answer won the position, so its verdict
+        // is already on its way. Nothing to do, and nothing to end the set for.
+        if (e instanceof GradeError && e.alreadyAnswered) return;
+
+        // Refused before the position was claimed, so it is still live.
+        if (e instanceof GradeError && e.retryable) {
+          grading.current = null;
+          setNotice(e.message);
+          return;
+        }
+
         // A set that cannot be graded is over. Better to say so than to
         // quietly mark every remaining question wrong.
         setFault(
@@ -133,6 +158,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
         return;
       }
 
+      setNotice(null);
       setReveal(verdict.reveal);
       setScore(verdict.score);
       setSteps(verdict.steps);
@@ -259,7 +285,12 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
     })
       .then(() => {
         setBefore(snapshot);
-        setAfter({ ...snapshot, xp: snapshot.xp + xpEarned });
+        // The same function the server ran inside its transaction, on the same
+        // inputs — so the summary shows the progress that was actually
+        // written, streak and all. Rebuilding it by hand here is what showed
+        // somebody a fresh "0d" on the day they started their streak: the xp
+        // was added and every other field was copied from before the session.
+        setAfter(applySession(snapshot, { xp: xpEarned, won: false, at: new Date() }));
       })
       .catch(() => {
         setBefore(snapshot);
@@ -337,6 +368,8 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
                 setSessionId(null);
                 setQuestions([]);
                 setFault(null);
+                setNotice(null);
+                grading.current = null;
                 savedRef.current = false;
                 setBefore(null);
                 setAfter(null);
@@ -361,6 +394,15 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
                   }
                 }}
               />
+              {notice && (
+                <p
+                  role="alert"
+                  className="rounded-sm border border-out/40 bg-out/8 px-3.5 py-2.5 text-[13px] text-ink"
+                >
+                  {notice} Your answer is still on the screen — send it again.
+                </p>
+              )}
+
               {phase === "revealed" && missed && (
                 <Continue onGo={advance} last={index >= total - 1} />
               )}

@@ -33,6 +33,7 @@ import {
 } from "@/lib/rtdb";
 import {
   EMPTY_PROGRESS,
+  applySession,
   xpForAnswer,
   type Progress,
 } from "@/lib/progression";
@@ -436,9 +437,24 @@ export function Room({
     taken: Record<string, number>;
   }>({ round: 0, missAt: {}, taken: {} });
 
+  /**
+   * A position the server has already graded for us.
+   *
+   * Two things race to resolve one turn — the listener that fires when the
+   * player writes their answer, and the clock that fires when their time runs
+   * out — and the server settles it: whichever arrives second is refused. This
+   * remembers that refusal, so the clock coming round again does not spend
+   * another request asking a question that can only be answered once.
+   */
+  const spentRef = useRef<number | null>(null);
+
   // ── Host: resolve a turn, then move around the table ───
   async function resolveTurn(response: Answered) {
     if (!roomId || !room || !question || !room.turnUid || !room.sessionId) return;
+
+    // Nothing here can produce a verdict for a turn already graded, so asking
+    // again only spends a request to be told so.
+    if (spentRef.current === index) return;
 
     const turnUid = room.turnUid;
     const player = room.players[turnUid];
@@ -470,9 +486,16 @@ export function Room({
       verdict = player.isBot
         ? await gradeBot(room.sessionId, index, accuracy)
         : await grade(room.sessionId, index, response);
-    } catch {
-      // Grading failed. Leave the turn open rather than guessing an outcome;
-      // the clock will come round again.
+    } catch (e) {
+      // Already answered — the other of the two racers won the claim, wrote
+      // the reveal and moved the table on. Ordinary, and nothing to add.
+      if (e instanceof GradeError && e.alreadyAnswered) {
+        spentRef.current = index;
+        return;
+      }
+
+      // Anything else left the position unclaimed. Leave the turn open rather
+      // than guessing an outcome; the clock will come round again.
       return;
     }
 
@@ -709,7 +732,12 @@ export function Room({
     })
       .then(() => {
         setBefore(snapshot);
-        setAfterP({ ...snapshot, xp: snapshot.xp + xp });
+        // The same function the server ran inside its transaction, on the same
+        // inputs — so the summary shows the progress that was actually
+        // written, streak and all. Rebuilding it by hand here is what showed
+        // somebody a fresh "0d" on the day they started their streak: the xp
+        // was added and every other field was copied from before the session.
+        setAfterP(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
       })
       .catch(() => {
         setBefore(snapshot);
@@ -753,6 +781,10 @@ export function Room({
             setRoom(null);
             setFinalRoom(null);
             setMyPicks({});
+            // A new room is a new session, and its positions start again from
+            // the beginning — so a position spent in the last game must not
+            // read as spent in this one.
+            spentRef.current = null;
             savedRef.current = false;
             setBefore(null);
             setAfterP(null);

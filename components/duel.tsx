@@ -36,7 +36,12 @@ import {
 } from "@/lib/rtdb";
 import { champion, pointsFor, settle } from "@/lib/duel";
 import { seated } from "@/lib/table";
-import { EMPTY_PROGRESS, xpForAnswer, type Progress } from "@/lib/progression";
+import {
+  EMPTY_PROGRESS,
+  applySession,
+  xpForAnswer,
+  type Progress,
+} from "@/lib/progression";
 import { ClockRail, QuestionStage } from "@/components/question-stage";
 import { Wordmark } from "@/components/wordmark";
 import { InviteFriends } from "@/components/friends";
@@ -429,9 +434,19 @@ export function Duel({
     let graded;
     try {
       graded = await gradeTable(current.sessionId, at, table);
-    } catch {
-      // Leave the round open rather than inventing an outcome. The clock will
-      // come round again and this will retry.
+    } catch (e) {
+      // Already answered. This position was graded once and cannot be graded
+      // again, so re-arming would retry a request that is refused by design —
+      // and `settledRef` re-arming on every failure is exactly what would turn
+      // that into a loop against the endpoint. The round that won the claim is
+      // the one that writes the results, and every client reads them off the
+      // room, so there is nothing for this copy to do but stand down.
+      if (e instanceof GradeError && e.alreadyAnswered) return;
+
+      // Anything else — a refusal by the limiter, a connection that dropped —
+      // left the position unclaimed. Leave the round open rather than
+      // inventing an outcome; the clock will come round again and this will
+      // retry.
       settledRef.current = null;
       return;
     }
@@ -635,7 +650,12 @@ export function Duel({
     })
       .then(() => {
         setBefore(snapshot);
-        setAfter({ ...snapshot, xp: snapshot.xp + xp });
+        // The same function the server ran inside its transaction, on the same
+        // inputs — so the summary shows the progress that was actually
+        // written, streak and all. Rebuilding it by hand here is what showed
+        // somebody a fresh "0d" on the day they started their streak: the xp
+        // was added and every other field was copied from before the session.
+        setAfter(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
       })
       .catch(() => {
         setBefore(snapshot);

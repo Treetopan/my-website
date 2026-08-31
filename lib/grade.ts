@@ -40,7 +40,45 @@ export type OpenedSession = {
   questions: Question[];
 };
 
-export class GradeError extends Error {}
+/**
+ * A grading request that did not come back with a verdict.
+ *
+ * It carries the status, because not every refusal means the same thing and
+ * two of them must never end a session:
+ *
+ *   · **409 Already answered.** The position may only be claimed once, and the
+ *     claim is atomic — so a 409 is proof that an *earlier* submission won it.
+ *     Two taps on Answer, a retry over a slow connection, a second tab: one
+ *     request gets the verdict and the other gets this. There is nothing wrong
+ *     and nothing to report; the verdict for that position is already on its
+ *     way to the screen, or already on it.
+ *
+ *   · **429 Too many at once.** The limiter turns the request away *before*
+ *     the position is claimed, so nothing has been spent. The same answer can
+ *     simply be sent again once the window rolls.
+ *
+ * Everything else — a session that expired, a question with no answer on file,
+ * a malformed request — is a session that genuinely cannot continue.
+ */
+export class GradeError extends Error {
+  /** The HTTP status behind it, or 0 when the request never landed at all. */
+  readonly status: number;
+
+  constructor(message: string, status = 0) {
+    super(message);
+    this.status = status;
+  }
+
+  /** The position was already graded, so an earlier submission of ours won. */
+  get alreadyAnswered(): boolean {
+    return this.status === 409;
+  }
+
+  /** Refused before anything was claimed, so sending it again is legitimate. */
+  get retryable(): boolean {
+    return this.status === 429;
+  }
+}
 
 export async function openSession(
   /** Every subunit the player picked. The server deals the game across them. */
@@ -60,7 +98,12 @@ export async function openSession(
     body: JSON.stringify({ subunitIds, length, spatial: options.spatial }),
   });
 
-  if (!res.ok) throw new GradeError(await reason(res, "Could not start the game."));
+  if (!res.ok) {
+    throw new GradeError(
+      await reason(res, "Could not start the game."),
+      res.status,
+    );
+  }
   return (await res.json()) as OpenedSession;
 }
 
@@ -123,7 +166,9 @@ async function post<T>(body: Record<string, unknown>): Promise<T> {
     body: JSON.stringify(body),
   });
 
-  if (!res.ok) throw new GradeError(await reason(res, "Could not grade that."));
+  if (!res.ok) {
+    throw new GradeError(await reason(res, "Could not grade that."), res.status);
+  }
   return (await res.json()) as T;
 }
 

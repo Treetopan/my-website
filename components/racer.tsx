@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth-context";
 import { recordSession, watchProgress } from "@/lib/rtdb";
 import {
   EMPTY_PROGRESS,
+  applySession,
   xpForAnswer,
   type Progress,
 } from "@/lib/progression";
@@ -110,6 +111,21 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
   const [score, setScore] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
+  /**
+   * Something went wrong that the race can carry on from — as opposed to
+   * `fault`, which ends it. Cleared by the next answer that lands.
+   */
+  const [notice, setNotice] = useState<string | null>(null);
+
+  /**
+   * The position currently being graded, so a second press while the first is
+   * still in the air is recognised as the same answer rather than another one.
+   *
+   * The server would refuse the duplicate anyway — a position is claimed once
+   * — but the cheapest duplicate is the one never sent, and stopping it here
+   * also keeps the answer out of `times`, which the rival's pace is read off.
+   */
+  const grading = useRef<number | null>(null);
 
   const total = questions.length;
   const question = questions[index];
@@ -135,6 +151,12 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
     async (response: Answered, msTaken: number) => {
       if (!question || !sessionId) return;
 
+      // One submission per position. A double tap, an impatient second press
+      // on a slow connection, Enter held down — all of them are this same
+      // answer, and only the first of them is worth a request.
+      if (grading.current === index) return;
+      grading.current = index;
+
       // The subunit this question came from sets its par and pays its XP. A
       // race can mix several, and a hard question answered in a mixed race is
       // still a hard question.
@@ -152,15 +174,28 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
       // longer and it is worth nothing. It never goes negative — a slow
       // answer earns less, it is not punished.
       const speed = Math.max(0, Math.min(1, 1 - msTaken / parMs));
-      setTimes((t) => [...t, msTaken]);
       setDraft(response);
 
       let verdict;
       try {
         verdict = await grade(sessionId, index, response);
       } catch (e) {
-        // A race that cannot be graded is over. Better to say so than to
-        // quietly mark every remaining question wrong.
+        // Already answered. An earlier submission of this same answer won the
+        // position, so its verdict is already arriving or already shown —
+        // there is nothing to do here, and ending the race over the *second*
+        // copy of an answer that worked is the worst possible reading of it.
+        if (e instanceof GradeError && e.alreadyAnswered) return;
+
+        // Turned away before the position was claimed, so the question is
+        // still live and the same answer can go again. Say so and leave it up.
+        if (e instanceof GradeError && e.retryable) {
+          grading.current = null;
+          setNotice(e.message);
+          return;
+        }
+
+        // Anything else is a race that cannot be graded, and it is over.
+        // Better to say so than to quietly mark every remaining question wrong.
         setFault(
           e instanceof GradeError ? e.message : "Lost contact with the server.",
         );
@@ -168,6 +203,10 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
         return;
       }
 
+      // Timed answers feed the rival's pace, so only an answer that actually
+      // graded is counted — a refused one took no thinking time of its own.
+      setTimes((t) => [...t, msTaken]);
+      setNotice(null);
       setReveal(verdict.reveal);
       setScore(verdict.score);
       setSteps(verdict.steps);
@@ -365,7 +404,12 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
     })
       .then(() => {
         setBefore(snapshot);
-        setAfter({ ...snapshot, xp: snapshot.xp + xp });
+        // The same function the server ran inside its transaction, on the same
+        // inputs — so the summary shows the progress that was actually
+        // written, streak and all. Rebuilding it by hand here is what showed
+        // somebody a fresh "0d" on the day they started their streak: the xp
+        // was added and every other field was copied from before the session.
+        setAfter(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
       })
       .catch(() => {
         setBefore(snapshot);
@@ -447,6 +491,8 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
               setAnswers([]);
               setLastGain(null);
               setTimes([]);
+              setNotice(null);
+              grading.current = null;
               setBotPace(0);
               botHeld.current = 0;
               botSince.current = null;
@@ -480,6 +526,15 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
                   }
                 }}
               />
+              {notice && (
+                <p
+                  role="alert"
+                  className="rounded-sm border border-out/40 bg-out/8 px-3.5 py-2.5 text-[13px] text-ink"
+                >
+                  {notice} Your answer is still on the screen — send it again.
+                </p>
+              )}
+
               {phase === "revealed" && missed && <Continue onGo={advance} />}
             </div>
           )

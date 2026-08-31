@@ -181,6 +181,13 @@ export type AdminData = {
   /** The records that carry answers. Everything on the screen counts these. */
   answered: SurveyRecord[];
   skipped: number;
+  /**
+   * Whether grading sessions are shared between server instances, or null when
+   * the server could not be asked. Not a count and not about anybody — it is
+   * here because it is a fault that shows up nowhere else on a running
+   * deployment, and this is a page somebody actually looks at.
+   */
+  sessionsShared: boolean | null;
 };
 
 /** How recently a session has to have been played to count as this week. */
@@ -189,7 +196,10 @@ const RECENT_DAYS = 7;
 /** One row of `users`, as much of it as any of this reads. */
 type Row = { username?: unknown; progress?: Partial<Progress> } | null;
 
-function countAccounts(rows: Row[]): Omit<AdminData, "answered" | "skipped"> {
+/** The tiles that are a count over the accounts, which is most of them. */
+type Counts = Omit<AdminData, "answered" | "skipped" | "sessionsShared">;
+
+function countAccounts(rows: Row[]): Counts {
   const today = dateKey(new Date());
 
   // Read defensively: the database drops a key whose value is null, and an
@@ -236,7 +246,7 @@ function countAccounts(rows: Row[]): Omit<AdminData, "answered" | "skipped"> {
  * that were never deployed.
  */
 export async function readAdminData(): Promise<AdminData> {
-  const [usersSnap, surveySnap] = await Promise.all([
+  const [usersSnap, surveySnap, sessionsShared] = await Promise.all([
     get(ref(realtimeDb, "users")).catch(() => {
       throw new Error(
         "Couldn't read the accounts. Either this account is no longer an admin, or the rules in database.rules.json are not deployed.",
@@ -247,6 +257,7 @@ export async function readAdminData(): Promise<AdminData> {
         "Couldn't read the survey answers. The rules in database.rules.json may not be deployed.",
       );
     }),
+    readSessionStore(),
   ]);
 
   const rows = Object.values((usersSnap.val() ?? {}) as Record<string, Row>);
@@ -258,5 +269,26 @@ export async function readAdminData(): Promise<AdminData> {
     ...countAccounts(rows),
     answered: surveys.filter((record) => record.answers),
     skipped: surveys.filter((record) => record.skipped).length,
+    sessionsShared,
   };
+}
+
+/**
+ * Which backing the grading sessions are on, from the server that would know.
+ *
+ * The one thing on this screen that has to be asked rather than read: the
+ * store is chosen inside a server module, from an environment variable no
+ * browser can see. A server that will not answer is reported as an unknown
+ * rather than as either state — "no idea" and "in process memory" are
+ * different things, and only one of them is a deploy to go and look at.
+ */
+async function readSessionStore(): Promise<boolean | null> {
+  try {
+    const res = await fetch("/api/session", { cache: "no-store" });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { shared?: unknown };
+    return typeof body.shared === "boolean" ? body.shared : null;
+  } catch {
+    return null;
+  }
 }

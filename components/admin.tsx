@@ -152,8 +152,11 @@ export function Admin() {
 
       {/* ── Counts ──────────────────────────────────────── */}
       <section className="mt-9 border-t border-line-soft pt-8">
-        {/* Accounts first, then what they did with them. All seven are counts
-            over the same two nodes, read and dropped — see `readAdminData`. */}
+        {/* Accounts first, then what they did with them, all of them counts
+            over the same two nodes, read and dropped — see `readAdminData`.
+            The last tile is the odd one out and is here for the same reason
+            anything is on a dashboard: it is a fault that shows up nowhere
+            else until it costs somebody a game. */}
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Accounts" value={num(data?.accounts)} accent />
           <Stat label="Never played" value={num(data?.neverPlayed)} />
@@ -162,7 +165,29 @@ export function Admin() {
           <Stat label="Named" value={num(data?.named)} />
           <Stat label="Answered" value={num(data?.answered.length)} />
           <Stat label="Skipped" value={num(data?.skipped)} />
+          <Stat
+            label="Session store"
+            value={
+              data ? (data.sessionsShared ? "Firebase" : "In memory") : "—"
+            }
+            note={data && data.sessionsShared === false ? "fallback" : undefined}
+            warn={data?.sessionsShared === false}
+          />
         </dl>
+
+        {data?.sessionsShared === false && (
+          <p
+            role="alert"
+            className="mt-3.5 rounded-sm border border-out/40 bg-out/8 px-3.5 py-2.5 text-[13px] text-ink"
+          >
+            Grading sessions are being kept in one server&apos;s memory, because
+            it has no <code className="font-mono text-[12px]">FIREBASE_SERVICE_ACCOUNT</code>{" "}
+            to reach the database with. That is fine on a single instance and
+            broken on more than one: a game opened on one server and graded by
+            another is graded by a server that never saw it, and the player gets
+            an error halfway through a race.
+          </p>
+        )}
 
         {data && data.accounts > 0 && (
           <div className="mt-3.5 flex flex-col gap-1.5 text-[13.5px] text-faint">
@@ -553,19 +578,34 @@ function Admins({
 function Stat({
   label,
   value,
+  note,
   accent,
+  warn,
 }: {
   label: string;
   value: string;
+  /** A word under the value, for a tile that is a state rather than a count. */
+  note?: string;
   accent?: boolean;
+  /** A value that is not a problem to read about but a problem to have. */
+  warn?: boolean;
 }) {
+  const tone = warn ? "text-out" : accent ? "text-accent" : "text-ink";
+
   return (
-    <div className="box flex flex-col gap-1.5 px-4 py-3">
+    <div
+      className={`box flex flex-col gap-1.5 px-4 py-3 ${
+        warn ? "border-out/50 bg-out/8" : ""
+      }`}
+    >
       <dt className="eyebrow">{label}</dt>
-      <dd
-        className={`font-mono text-xl tnum ${accent ? "text-accent" : "text-ink"}`}
-      >
+      <dd className={`font-mono text-xl tnum ${tone}`}>
         {value}
+        {note && (
+          <span className="ml-1.5 font-mono text-[11px] tracking-[0.1em] uppercase">
+            {note}
+          </span>
+        )}
       </dd>
     </div>
   );

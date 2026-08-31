@@ -2,7 +2,11 @@ import type { NextRequest } from "next/server";
 import { getSubunit, type Question, type Subunit } from "@/lib/curriculum";
 import { buildPool } from "@/lib/pool.server";
 import { MAX_SUBUNITS } from "@/lib/selection";
-import { createSession, mintAllowed } from "@/lib/session-store";
+import {
+  createSession,
+  mintAllowed,
+  sessionsAreShared,
+} from "@/lib/session-store";
 import { hasSpatial } from "@/lib/templates";
 import { hasGenerators } from "@/lib/templates.server";
 
@@ -23,6 +27,26 @@ const GENERATED_LENGTH = 10;
  * advertised.
  */
 const EXTRA_PER_SUBUNIT = 3;
+
+/**
+ * Which backing the sessions are on, for the tile on the admin screen.
+ *
+ * Without a service account the store falls back to this process's memory,
+ * which is right for `next dev` and wrong for anything running more than one
+ * instance: a game opened on one and graded on another is graded by a server
+ * that has never heard of the session, and the player gets a 404 halfway
+ * through. That is a deployment that looks fine until it is under load, and
+ * until now the only thing that said so was a line in the log.
+ *
+ * Not gated on admin, and it cannot be: verifying that somebody is one means
+ * reading the database with a service account, which is the very thing that
+ * may be missing. What it discloses is one bit about how this deployment is
+ * configured, to somebody who could infer the same bit by playing a game on a
+ * bad one — worth less than the deploy it catches.
+ */
+export function GET() {
+  return Response.json({ shared: sessionsAreShared() });
+}
 
 /**
  * Opens a grading session and hands back the question order.

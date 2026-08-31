@@ -575,8 +575,10 @@ function Track({
         </span>
       </div>
 
-      {/* The finish sits two lengths ahead per question still to come, so it
-          closes in over the race rather than the road rescaling under it. */}
+      {/* There is no finish line for most of a race. It comes out of the fog
+          with a handful of questions to go and closes in from there, so the
+          end of the race is something you arrive at rather than something
+          held in front of you the whole way. */}
       <div className="h-44 overflow-hidden rounded-[10px] border border-line sm:h-60">
         <Track3D
           speed={pace}

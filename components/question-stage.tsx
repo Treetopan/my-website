@@ -17,6 +17,7 @@ import {
   SliderAnswer,
 } from "@/components/answer-inputs";
 import { FigureView } from "@/components/graph";
+import { MathText } from "@/components/math-text";
 import { Feedback } from "@/components/feedback";
 
 /**
@@ -94,7 +95,7 @@ export function QuestionStage({
       <p className="eyebrow mb-5">{eyebrow}</p>
 
       <h1 className="mb-9 text-2xl leading-[1.18] font-medium tracking-[-0.03em] text-balance sm:text-[38px]">
-        {question.prompt}
+        <MathText text={question.prompt} />
       </h1>
 
       {/* The two spatial kinds draw their own figure, on the grid the answer
@@ -238,7 +239,9 @@ function Options({
               onClick={() => onPick(i)}
               className={`flex min-h-20 w-full items-center px-5 py-4 text-left text-[16px] leading-snug disabled:cursor-default ${tone}`}
             >
-              <span className="flex-1">{option}</span>
+              <span className="flex-1">
+                <MathText text={option} />
+              </span>
 
               {revealed && isAnswer && (
                 <span className="eyebrow ml-3 shrink-0 text-correct">Correct</span>

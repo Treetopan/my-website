@@ -11,6 +11,7 @@ import type {
   SliderQuestion,
 } from "@/lib/questions";
 import { Axes, Drawn, VIEW, useGrid } from "@/components/graph";
+import { MathText } from "@/components/math-text";
 
 /**
  * The answer inputs for the kinds that are not multiple choice.
@@ -92,7 +93,10 @@ export function FillAnswer({
 
       {right !== null && missed && (
         <p className="text-[14px] text-muted">
-          The answer was <span className="font-mono text-correct">{right}</span>
+          The answer was{" "}
+          <span className="font-mono text-correct">
+            <MathText text={right} />
+          </span>
         </p>
       )}
     </div>
@@ -564,7 +568,7 @@ export function OrderAnswer({
               </span>
 
               <span className="flex-1 self-center text-[15px] leading-snug">
-                {question.items[item]}
+                <MathText text={question.items[item]} />
               </span>
 
               {/* After the reveal the arrows give way to where the step

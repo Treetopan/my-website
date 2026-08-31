@@ -1,6 +1,7 @@
 "use client";
 
 import { Feedback } from "@/components/feedback";
+import { MathText } from "@/components/math-text";
 import { answerOf, givenOf, ranOut, type AnswerDetail } from "@/lib/review";
 
 /**
@@ -29,11 +30,15 @@ export function ReviewList({
       <ul className="mt-5 flex flex-col gap-5">
         {details.map((d) => (
           <li key={d.questionId} className="flex flex-col gap-2">
-            <p className="text-[14.5px] leading-snug">{d.question.prompt}</p>
+            <p className="text-[14.5px] leading-snug">
+              <MathText text={d.question.prompt} />
+            </p>
 
             <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
               <span className="eyebrow text-correct">Answer</span>
-              <span className="text-ink">{answerOf(d)}</span>
+              <span className="text-ink">
+                <MathText text={answerOf(d)} />
+              </span>
             </p>
 
             <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
@@ -41,7 +46,7 @@ export function ReviewList({
                 {ranOut(d) ? "Ran out" : "You said"}
               </span>
               <span className="text-muted">
-                {ranOut(d) ? "no answer given" : givenOf(d)}
+                {ranOut(d) ? "no answer given" : <MathText text={givenOf(d)} />}
               </span>
 
               {/* A part-marked answer was not simply wrong, and a review that

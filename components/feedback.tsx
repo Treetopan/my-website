@@ -2,6 +2,7 @@
 
 import type { Question } from "@/lib/curriculum";
 import { diagnose } from "@/lib/coaching";
+import { MathText } from "@/components/math-text";
 import type { Response, Reveal } from "@/lib/questions";
 
 /**
@@ -42,7 +43,7 @@ export function Feedback({
       <ul className="flex flex-col gap-1 border-l-2 border-line pl-3">
         {lines.map((line) => (
           <li key={line} className="text-[13px] leading-snug text-muted">
-            {line}
+            <MathText text={line} />
           </li>
         ))}
       </ul>
@@ -55,7 +56,7 @@ export function Feedback({
       <ul className="flex flex-col gap-1.5">
         {lines.map((line) => (
           <li key={line} className="text-[14px] leading-snug text-muted">
-            {line}
+            <MathText text={line} />
           </li>
         ))}
       </ul>

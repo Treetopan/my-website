@@ -64,6 +64,39 @@ const LEAD_PER = 0.8;
 const LEAD_MAX = 1.4;
 
 /**
+ * The finish, and when it is allowed to exist.
+ *
+ * It used to sit two lengths ahead per question still to come, which put it on
+ * screen from the first question of the race and — because it is measured from
+ * the cars rather than from the tarmac — kept it exactly as far ahead however
+ * fast you drove. A line you can see the whole way and never gain on says the
+ * end is within reach and then withholds it, which is the opposite of what it
+ * is for.
+ *
+ * So there is no finish at all for most of a race: just road, and a rival. It
+ * appears with `FINISH_AT` questions to go, at the far end of the fog where it
+ * is barely a smudge, and every answer from there brings it `FINISH_SPAN`
+ * lengths in — a quarter of the way, then a third, then a half, then it is on
+ * top of you. Being measured from the cars is what makes the last of those
+ * arrive exactly as the flag falls, and it is why it can never be crossed
+ * early however quick the race has been.
+ */
+const FINISH_AT = 4;
+const FINISH_SPAN = 8;
+
+/**
+ * Where it goes once the questions run out: behind you. The line has to end up
+ * on the wrong side of the cars to have been *crossed*, and stopping it on
+ * their noses is a race that ends a metre short.
+ */
+const FINISH_PAST = 6;
+
+/** How far ahead of the leading car the finish belongs, in lengths. */
+function finishGap(remaining: number): number {
+  return remaining > 0 ? FINISH_SPAN * remaining : -FINISH_PAST;
+}
+
+/**
  * Scenery colours, deliberately outside the design tokens. The tokens carry
  * meaning in the UI — the accent is a live answer, `--color-out` is a wrong
  * one — and a grandstand roof means none of those things. The one exception
@@ -168,7 +201,7 @@ export function Track3D({
   /** Both in metres per second. The race itself. */
   speed: number;
   botSpeed: number;
-  /** Questions still to come. The finish sits two lengths ahead per question. */
+  /** Questions still to come. The finish shows once there are few enough. */
   remaining: number;
   over: boolean;
 }) {
@@ -178,7 +211,8 @@ export function Track3D({
     /** Each car's pace, eased, so a step is swept to rather than jumped to. */
     pace: 0,
     botPace: 0,
-    finish: 0,
+    /** Lengths of track between the car in front and the finish, eased. */
+    gap: 0,
     /** Below any real count, so the first frame always takes the branch. */
     remaining: -1,
     primed: false,
@@ -198,7 +232,7 @@ export function Track3D({
         // arrive, and again on the next race.
         s.pace = 0;
         s.botPace = 0;
-        s.finish = (s.cruise + 2 * remaining) * UNIT;
+        s.gap = finishGap(remaining);
         s.primed = true;
       }
 
@@ -394,15 +428,20 @@ export function Track3D({
         }
       }
 
-      /* ── The finish. Two lengths per remaining question, so it closes in
-           over the race and is crossed as the flag falls. ── */
-      if (!over) {
-        const line = (Math.max(youAt, botAt) + 2 * remaining) * UNIT;
-        s.finish += (line - s.finish) * (1 - Math.exp(-dt * 1.2));
+      /* ── The finish. Nowhere to be seen until the end of the race is
+           genuinely near, and closing from the horizon once it is. ── */
+      const want = finishGap(remaining);
+      if (remaining > FINISH_AT) {
+        // Parked far up the road, out past anything the fog lets through. It
+        // is snapped rather than eased so that the frame it becomes due it is
+        // at the horizon, rather than sweeping in from wherever it had got to.
+        s.gap = want;
+      } else {
+        s.gap += (want - s.gap) * (1 - Math.exp(-dt * 1.2));
       }
-      const finishZ = s.finish;
+      const finishZ = (Math.max(youAt, botAt) + s.gap) * UNIT;
 
-      if (finishZ > camZ - 4 && finishZ < camZ + 240) {
+      if (remaining <= FINISH_AT && finishZ > camZ - 4 && finishZ < camZ + 240) {
         for (let i = 0; i < 12; i++) {
           const u0 = -HALF + (i * HALF * 2) / 12;
           const u1 = u0 + (HALF * 2) / 12;

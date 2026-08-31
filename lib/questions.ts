@@ -439,6 +439,10 @@ export function normalise(text: string): string {
     .replace(/[−–—]/g, "-")
     .replace(/[,$]/g, "")
     .replace(/°/g, "")
+    // The caret, because the prompt no longer shows one: a power is printed
+    // as a raised number, so `x12` is what a student who is reading the
+    // screen rather than the source types for x to the twelfth.
+    .replace(/\^/g, "")
     // A trailing ".0" or ".50" is the same number written differently.
     .replace(/^(-?\d+)\.0+$/, "$1")
     .replace(/^(-?\d*\.\d*?[1-9])0+$/, "$1")

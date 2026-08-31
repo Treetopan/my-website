@@ -59,9 +59,66 @@ import {
 const SEATS = 3;
 const REVEAL_MS = 1900;
 const BOT_NAMES = ["Mara", "Dev", "Priya"];
-const BOT_ACCURACY = [0.72, 0.6];
 const BOT_THINK = [1200, 2600];
 const BOT_CHOOSE_MS = 1600;
+
+/**
+ * The clock on a turn.
+ *
+ * Half a minute to start with, and two seconds less every time the table has
+ * been all the way round — so the game tightens as it goes rather than being
+ * fast from the first question, and the pressure arrives once everybody knows
+ * what they are doing. The floor is there because a question still has to be
+ * read: past a certain point a shorter clock stops testing the maths and
+ * starts testing how quickly somebody can find the answer box.
+ *
+ * It is the table's clock rather than the question's. A room mixes subunits,
+ * so timing each turn by the difficulty of the question it happened to deal
+ * would hand one player forty seconds and the next fifteen, at the same table,
+ * for the same round.
+ */
+const TURN_MS = 30_000;
+const TURN_STEP_MS = 2_000;
+const TURN_FLOOR_MS = 10_000;
+
+/**
+ * How many turns a person gets before a round turns on somebody, and how far
+ * that wanders either side.
+ */
+const ROUND_TURNS = 5;
+const ROUND_SPREAD = 2;
+
+/**
+ * Which turn each bot goes out on, for one round.
+ *
+ * A bot used to roll its accuracy on every question, which meant a round could
+ * turn on the first one: two unlucky rolls and the table had emptied before
+ * anybody had answered twice. So the round is planned instead. One bot misses
+ * on the turn that ends it — five of its own turns, give or take two, so no
+ * two games run to the same length — and any bot going out before it does so
+ * on a turn of its own rather than alongside it. Up to that turn a bot is not
+ * rolling anything: it answers correctly, and being the one still standing is
+ * something you have to earn rather than wait for.
+ */
+function missTurns(bots: number): number[] {
+  const last =
+    ROUND_TURNS - ROUND_SPREAD + Math.floor(Math.random() * (2 * ROUND_SPREAD + 1));
+
+  // Every turn before the last one, in a random order, so the bots that go out
+  // early are spread through the round rather than stacked at the front of it.
+  const before = Array.from({ length: Math.max(1, last - 1) }, (_, i) => i + 1)
+    .map((turn) => ({ turn, at: Math.random() }))
+    .sort((a, b) => a.at - b.at)
+    .map(({ turn }) => turn);
+
+  const turns = [last, ...before.slice(0, Math.max(0, bots - 1))];
+
+  // Shuffled again on the way out: which bot draws the long straw is not the
+  // seat it happens to sit in.
+  return turns.map((turn) => ({ turn, at: Math.random() }))
+    .sort((a, b) => a.at - b.at)
+    .map(({ turn }) => turn);
+}
 
 /** Firebase's clock, not the laptop's — every client must agree on the timer. */
 function useServerOffset() {
@@ -165,12 +222,10 @@ export function Room({
   const index = room?.currentIndex ?? 0;
   const question = questions[index];
 
-  // The clock belongs to the question showing rather than to the selection: a
-  // room can mix subunits, and a hard turn should still be given its thirty
-  // seconds. Every client reads it off the same question, so the clocks agree.
-  const totalMs =
-    DIFFICULTY[question ? difficultyOfQuestion(question.id) : "medium"].seconds *
-    1000;
+  // The clock the whole table is playing to, written by the host and read by
+  // everyone, so no two people are counting down to a different moment. An
+  // older room that never had one still gets a full turn.
+  const totalMs = room?.turnMs ?? TURN_MS;
 
   const startedAt =
     typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
@@ -342,10 +397,13 @@ export function Room({
     // The room carries a server grading session; the host grades every turn
     // through it, so no client ever holds the answer key.
     // A turn-based game burns a question per turn, so ask for more than the
-    // bank holds — the server reshuffles to fill the order.
+    // bank holds — the server reshuffles to fill the order. Enough for the
+    // longest game the table can produce: three seats going round for as many
+    // turns as the bots can hold out, twice over, and a question in hand for
+    // every one of them.
     let opened;
     try {
-      opened = await openSession(subunitIds, 40);
+      opened = await openSession(subunitIds, 60);
     } catch (e) {
       setError(
         e instanceof GradeError ? e.message : "Could not start the game.",
@@ -361,8 +419,22 @@ export function Room({
       opened.sessionId,
       opened.order,
       opened.questions,
+      TURN_MS,
     );
   }
+
+  /**
+   * The host's copy of when each bot is going out, rebuilt for every round.
+   *
+   * A ref rather than room state: the host is the only thing that grades a
+   * turn, so this never has to travel, and putting it in the room would put
+   * the whole plan in front of every player that can read it.
+   */
+  const botPlan = useRef<{
+    round: number;
+    missAt: Record<string, number>;
+    taken: Record<string, number>;
+  }>({ round: 0, missAt: {}, taken: {} });
 
   // ── Host: resolve a turn, then move around the table ───
   async function resolveTurn(response: Answered) {
@@ -373,9 +445,25 @@ export function Room({
     if (!player) return;
 
     // A bot turn is rolled by the server, because picking a plausible wrong
-    // option means knowing the right one — which this client does not.
-    const botIndex = Number(turnUid.replace("bot-", "")) - 1;
-    const accuracy = BOT_ACCURACY[botIndex % BOT_ACCURACY.length];
+    // option means knowing the right one — which this client does not. What
+    // the server is told is the plan for the round rather than a probability:
+    // right until the turn this bot is down to miss on, and wrong on it.
+    const plan = botPlan.current;
+    if (player.isBot && plan.round !== room.round) {
+      const bots = Object.entries(room.players)
+        .filter(([, p]) => p.isBot && p.alive)
+        .map(([uid]) => uid);
+      const turns = missTurns(bots.length);
+      plan.round = room.round;
+      plan.missAt = Object.fromEntries(bots.map((uid, i) => [uid, turns[i]]));
+      plan.taken = {};
+    }
+
+    // Which of its own turns in this round the bot is on, and so whether this
+    // is the one it goes out on. Worked out for a person too and never read —
+    // a person's turn is graded on what they actually answered.
+    const botTurn = (plan.taken[turnUid] ?? 0) + 1;
+    const accuracy = botTurn >= (plan.missAt[turnUid] ?? ROUND_TURNS) ? 0 : 1;
 
     let verdict;
     try {
@@ -388,6 +476,10 @@ export function Room({
       return;
     }
 
+    // Counted only once the turn actually resolved, so a grading that failed
+    // and came round again does not use up the bot's luck on the way past.
+    if (player.isBot) plan.taken[turnUid] = botTurn;
+
     const { correct, score } = verdict;
 
     // Show everyone what happened before the table moves on.
@@ -398,8 +490,9 @@ export function Room({
         correct,
         score,
         answer: verdict.reveal,
-        // Written only on a miss, and the whole table reads it: watching
-        // somebody else be told why is how the rest of the room learns.
+        // Written only on a miss, and read by the player it belongs to: the
+        // rest of the table never saw the question, and being told why an
+        // answer they never worked on was wrong teaches nobody anything.
         steps: verdict.steps ?? null,
       },
       players: {
@@ -500,8 +593,20 @@ export function Room({
       }
 
       const next = nextTurn(room.players, room.reveal!.uid);
+
+      // Everybody has gone once the turn wraps back to a seat at or below
+      // the one that just answered, and a full lap of the table costs two
+      // seconds off every turn from there on. Read off the seats rather than
+      // counted, because the table shrinks as people sit down: a lap is
+      // however many of them are still answering.
+      const seatOf = (uid: string | null) =>
+        uid ? (room.players[uid]?.seat ?? 0) : 0;
+      const lapped = next !== null && seatOf(next) <= seatOf(room.reveal!.uid);
+      const clock = room.turnMs ?? TURN_MS;
+
       await updateRoom(roomId, {
         turnUid: next,
+        turnMs: lapped ? Math.max(TURN_FLOOR_MS, clock - TURN_STEP_MS) : clock,
         currentIndex: room.currentIndex + 1,
         reveal: null,
         questionStartedAt: { ".sv": "timestamp" } as unknown as number,
@@ -887,6 +992,13 @@ export function Room({
   // ── Playing ────────────────────────────────────────────
   const turnPlayer = room.turnUid ? players[room.turnUid] : null;
 
+  // Whether the question on the table is mine to answer. It stays mine
+  // through the reveal, which is when the answer to it finally arrives — and
+  // it is never anybody else's, because a turn is one person's to think
+  // through and nobody else needs the question in front of them to wait.
+  const myQuestion =
+    !!user && (room.turnUid === user.uid || reveal?.uid === user.uid);
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-5 px-6 text-[13px]">
@@ -924,19 +1036,16 @@ export function Room({
                 You&apos;re out of the game — watching the rest.
               </h2>
             </div>
+          ) : !myQuestion ? (
+            <Waiting
+              name={turnPlayer?.displayName ?? "Someone"}
+              outcome={reveal ? (reveal.correct ? "right" : "wrong") : null}
+            />
           ) : (
             question && (
               <div className="w-full max-w-3xl">
                 {/* Whose turn it is, stated once, above the question. */}
-                <p
-                  className={`mb-4 text-[14px] ${
-                    myTurn ? "text-accent" : "text-muted"
-                  }`}
-                >
-                  {myTurn
-                    ? "Your turn"
-                    : `${turnPlayer?.displayName ?? "Someone"} is answering…`}
-                </p>
+                <p className="mb-4 text-[14px] text-accent">Your turn</p>
 
                 <QuestionStage
                   question={question}
@@ -986,6 +1095,48 @@ export function Room({
           </p>
         </aside>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What you see while somebody else is up.
+ *
+ * Not their question. Every turn deals a question of its own, so the one on
+ * the table is no use to the people waiting — reading three of other people's
+ * while your own is still to come is how a table full of maths turns into
+ * noise, and it puts an answer you never worked for in front of you. What is
+ * worth knowing from here is who is on and how they got on, which is what the
+ * table beside it says too, in postures rather than words.
+ */
+function Waiting({
+  name,
+  outcome,
+}: {
+  name: string;
+  /** How the turn ended, once it has. Null while they are still thinking. */
+  outcome: "right" | "wrong" | null;
+}) {
+  return (
+    <div
+      key={outcome ?? "thinking"}
+      className="animate-question-in max-w-md text-center"
+    >
+      <p className="eyebrow mb-4">{outcome ? "Their turn" : "Waiting"}</p>
+
+      <h2 className="text-2xl font-medium tracking-[-0.025em]">
+        {outcome === null
+          ? `${name} is answering…`
+          : outcome === "right"
+            ? `${name} got it.`
+            : `${name} missed.`}
+      </h2>
+
+      <p className="mt-3 text-[14px] text-muted">
+        {outcome === "wrong"
+          ? "They sit down for the rest of the round."
+          : "Your own question comes with your turn."}
+      </p>
     </div>
   );
 }

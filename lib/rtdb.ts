@@ -150,6 +150,14 @@ export type Room = {
   currentIndex: number;
   /** Server time the current question was shown, so all clocks agree. */
   questionStartedAt: number | object | null;
+  /**
+   * How long a turn lasts, in ms. Kept on the room rather than read off the
+   * question, because in a game played around a table the clock is a rule of
+   * the table: everybody gets the same one, and it tightens as the game goes
+   * on. The host is the only thing that writes it, and every client reads the
+   * same number so no two people see a different countdown.
+   */
+  turnMs?: number | null;
   reveal: Reveal | null;
   players: Record<string, RoomPlayer>;
   winnerUid?: string | null;
@@ -449,12 +457,15 @@ export async function startRoom(
   sessionId: string,
   order: string[],
   questions: Question[],
+  /** What the first turn of the game is given. It shortens from there. */
+  turnMs: number,
 ) {
   await update(ref(realtimeDb, `rooms/${roomId}`), {
     players,
     status: "playing",
     round: 1,
     turnUid,
+    turnMs,
     chooserUid: null,
     sessionId,
     order,

@@ -110,7 +110,8 @@ export function dateKey(at: Date): string {
   return at.toISOString().slice(0, 10);
 }
 
-function daysBetween(a: string, b: string): number {
+/** Whole days from one date key to another. Negative if `b` is the earlier. */
+export function daysBetween(a: string, b: string): number {
   const ms = Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`);
   return Math.round(ms / 86_400_000);
 }

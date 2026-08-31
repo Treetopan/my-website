@@ -37,12 +37,12 @@ import { USERNAME_MAX } from "@/lib/username";
  *
  * What is *not* here is as deliberate: no list of accounts, no addresses, no
  * per-player session history, no way to act on somebody's account. Accounts are
- * a number — counted on the server, so the identities behind it never reach
- * this page — and an answer is what somebody said rather than who said it. The
- * question this screen exists to answer is how the beta is going, and none of
- * that is needed to answer it. The rest is private to the player under the
- * database rules, and this screen asks for nothing the rules would refuse: a
- * dashboard whose rows half-load is worse than one that never promised them.
+ * counts — how many exist, how many came back, how many played this week — and
+ * an answer is what somebody said rather than who said it. The question this
+ * screen exists to answer is how the beta is going, and none of that is needed
+ * to answer it. The rest is private to the player under the database rules,
+ * and this screen asks for nothing the rules would refuse: a dashboard whose
+ * rows half-load is worse than one that never promised them.
  */
 export function Admin() {
   const { user, username } = useAuth();
@@ -152,23 +152,35 @@ export function Admin() {
 
       {/* ── Counts ──────────────────────────────────────── */}
       <section className="mt-9 border-t border-line-soft pt-8">
+        {/* Accounts first, then what they did with them. All seven are counts
+            over the same two nodes, read and dropped — see `readAdminData`. */}
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Accounts" value={num(data?.accounts)} accent />
+          <Stat label="Never played" value={num(data?.neverPlayed)} />
+          <Stat label="Came back" value={num(data?.cameBack)} />
+          <Stat label="Active this week" value={num(data?.activeThisWeek)} />
           <Stat label="Named" value={num(data?.named)} />
           <Stat label="Answered" value={num(data?.answered.length)} />
           <Stat label="Skipped" value={num(data?.skipped)} />
         </dl>
+
         {data && data.accounts > 0 && (
-          <p className="mt-3.5 text-[13.5px] text-faint">
-            {pct(data.answered.length, data.accounts)} of accounts answered the
-            survey;{" "}
-            {pct(
-              data.accounts - data.answered.length - data.skipped,
-              data.accounts,
-            )}{" "}
-            have not been asked yet or have not finished signing in. Accounts are
-            counted on the server; nothing that says who they are is read.
-          </p>
+          <div className="mt-3.5 flex flex-col gap-1.5 text-[13.5px] text-faint">
+            <p>
+              {pct(data.cameBack, data.accounts)} of accounts played a second
+              session; {pct(data.neverPlayed, data.accounts)} have not finished
+              one. A second session is the only one anybody chose twice, which
+              makes it the number worth watching.
+            </p>
+            <p>
+              {pct(data.answered.length, data.accounts)} answered the survey;{" "}
+              {pct(
+                data.accounts - data.answered.length - data.skipped,
+                data.accounts,
+              )}{" "}
+              have not been asked yet or have not finished signing in.
+            </p>
+          </div>
         )}
       </section>
 

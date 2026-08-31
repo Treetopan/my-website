@@ -2,10 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { get, onValue, ref, remove, serverTimestamp, set } from "firebase/database";
-import { auth, realtimeDb } from "@/lib/firebase";
+import { realtimeDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { findByUsername } from "@/lib/social";
 import { isOwnerEmail } from "@/lib/owner";
+import {
+  EMPTY_PROGRESS,
+  dateKey,
+  daysBetween,
+  type Progress,
+} from "@/lib/progression";
 import type { SurveyRecord } from "@/lib/survey";
 
 /**
@@ -149,73 +155,93 @@ export async function removeAdmin(uid: string) {
 
 /**
  * What the admin screen knows about the people using this: how many there are,
- * and what they said when they were asked.
+ * how many came back, and what they said when they were asked.
  *
- * There is no list of accounts here and no account attached to an answer. The
- * screen used to carry a row per player with the address beside it, and the
- * question it was answering — how is the beta going — never needed to know who
- * anybody was. So the accounts are counted on the server and arrive as two
- * numbers, and the survey records arrive with their uids dropped: what is
- * kept is what was said, not who said it.
+ * Every one of these is a count. There is no list of accounts here and nothing
+ * attached to an answer — the screen used to carry a row per player with the
+ * address beside it, and the question it exists to answer, how is the beta
+ * going, never needed to know who anybody is. So the rows are counted on the
+ * way past and dropped, and the survey records arrive with the uid they were
+ * filed under dropped too: what is kept is what was said, not who said it.
+ *
+ * None of the three below is new tracking. `played` and `lastPlayedDate` are
+ * the two fields the streak in the top bar has always run on, and the tiles
+ * are three readings of them.
  */
 export type AdminData = {
   /** Accounts that exist, whether or not they ever answered anything. */
   accounts: number;
   named: number;
+  /** Signed up and never finished a session. */
+  neverPlayed: number;
+  /** Came back for a second one, which is the number that means the most. */
+  cameBack: number;
+  /** Finished one in the last seven days. */
+  activeThisWeek: number;
   /** The records that carry answers. Everything on the screen counts these. */
   answered: SurveyRecord[];
   skipped: number;
 };
 
-/**
- * The two counts, from the server.
- *
- * Counted there rather than here: the rules would let an admin read the whole
- * of `users` and count it in the browser, but that is collecting every account
- * in order to arrive at how many there are. The route re-checks admin the same
- * way the rules do; this call is the interface asking, not the thing granting.
- */
-async function readCounts(
-  idToken: string,
-): Promise<{ accounts: number; named: number }> {
-  const res = await fetch("/api/admin/accounts", {
-    headers: { authorization: `Bearer ${idToken}` },
-    cache: "no-store",
-  });
+/** How recently a session has to have been played to count as this week. */
+const RECENT_DAYS = 7;
 
-  const body = (await res.json().catch(() => null)) as {
-    accounts?: number;
-    named?: number;
-    error?: string;
-  } | null;
+/** One row of `users`, as much of it as any of this reads. */
+type Row = { username?: unknown; progress?: Partial<Progress> } | null;
 
-  if (!res.ok) {
-    throw new Error(body?.error ?? "Couldn't count the accounts.");
-  }
-  return { accounts: body?.accounts ?? 0, named: body?.named ?? 0 };
+function countAccounts(rows: Row[]): Omit<AdminData, "answered" | "skipped"> {
+  const today = dateKey(new Date());
+
+  // Read defensively: the database drops a key whose value is null, and an
+  // account made before a field existed simply lacks it.
+  const progress = rows.map((row) => ({
+    ...EMPTY_PROGRESS,
+    ...(row?.progress ?? {}),
+  }));
+
+  return {
+    accounts: rows.length,
+    // An account with no name has not finished signing in, which is worth
+    // telling apart from one that never came back.
+    named: rows.filter((row) => typeof row?.username === "string").length,
+    neverPlayed: progress.filter((p) => p.played === 0).length,
+    cameBack: progress.filter((p) => p.played > 1).length,
+    activeThisWeek: progress.filter(
+      (p) =>
+        p.lastPlayedDate && daysBetween(p.lastPlayedDate, today) < RECENT_DAYS,
+    ).length,
+  };
 }
 
 /**
- * Everything the admin screen reads, in one pass.
+ * Everything the admin screen reads, in two reads and no join.
  *
- * Two reads and no join. The survey is kept out of the profile because a
- * profile is readable by every signed-in player, and it is read back the same
- * way here — as answers, with `Object.values` dropping the uid each one was
- * filed under, so nothing on this screen can be traced to an account even by
- * whoever is looking at it.
+ * Both come from the database rather than from a server route. There was one,
+ * for as long as this screen showed addresses: an address lives in Firebase
+ * Auth and nowhere else, and only a service account may ask about somebody
+ * else's. Nothing here asks any more — and the rules already let an admin read
+ * both of these nodes — so all the route was left holding was a service-account
+ * dependency standing between an admin and a handful of numbers, which on a
+ * deployment without one answered "I cannot count the accounts" rather than
+ * counting them.
  *
- * The two failures read differently and are worth telling apart — the counts
- * come from a route that can say why it refused, the surveys from the database,
- * where a refusal usually means the rules are not deployed.
+ * What arrives is counted and dropped in the same breath: `countAccounts`
+ * returns integers and nothing else, and `Object.values` throws away the uid
+ * each survey record was filed under. Neither the rows nor a uid is kept
+ * anywhere the screen can reach, so the page shows exactly what it showed
+ * before and nothing on it can be traced to an account.
+ *
+ * The two failures read the same way for a reason. Both mean the rules: a
+ * refusal here is an account that has dropped off the admin roster, or rules
+ * that were never deployed.
  */
 export async function readAdminData(): Promise<AdminData> {
-  const me = auth.currentUser;
-  if (!me) throw new Error("You are not signed in.");
-
-  const idToken = await me.getIdToken();
-
-  const [counts, surveySnap] = await Promise.all([
-    readCounts(idToken),
+  const [usersSnap, surveySnap] = await Promise.all([
+    get(ref(realtimeDb, "users")).catch(() => {
+      throw new Error(
+        "Couldn't read the accounts. Either this account is no longer an admin, or the rules in database.rules.json are not deployed.",
+      );
+    }),
     get(ref(realtimeDb, "surveys")).catch(() => {
       throw new Error(
         "Couldn't read the survey answers. The rules in database.rules.json may not be deployed.",
@@ -223,12 +249,13 @@ export async function readAdminData(): Promise<AdminData> {
     }),
   ]);
 
+  const rows = Object.values((usersSnap.val() ?? {}) as Record<string, Row>);
   const surveys = Object.values(
     (surveySnap.val() ?? {}) as Record<string, SurveyRecord>,
   );
 
   return {
-    ...counts,
+    ...countAccounts(rows),
     answered: surveys.filter((record) => record.answers),
     skipped: surveys.filter((record) => record.skipped).length,
   };

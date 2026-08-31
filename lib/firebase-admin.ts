@@ -2,13 +2,12 @@ import "server-only";
 
 import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 import type { App } from "firebase-admin/app";
-import type { Auth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
 import type { Database } from "firebase-admin/database";
 
 /**
- * The Admin SDK, for the two things the client SDK cannot do: hold data the
- * browser must never read, and read a user record that is not your own.
+ * The Admin SDK, for the one thing the client SDK cannot do: hold data the
+ * browser must never read.
  *
  * The web config in `firebase.ts` is public and authorises nothing — what
  * protects data there is `database.rules.json`. Grading sessions cannot be
@@ -19,9 +18,12 @@ import type { Database } from "firebase-admin/database";
  * outside the rules entirely, so `sessions/` can be denied to everyone in the
  * rules and still be readable here.
  *
- * The auth half is what the admin screen runs on. Emails are not kept in the
- * database — see `account.ts` — so listing them means asking Firebase Auth,
- * and only a service account may ask about somebody else's.
+ * There was an auth half too, for as long as the admin screen showed email
+ * addresses: an address is in Firebase Auth and nowhere else, and only a
+ * service account may ask about somebody else's. That screen counts accounts
+ * now rather than listing them, so nothing asks, and the Auth half went with
+ * the question — along with the import of it, which reaches jwks-rsa and
+ * through it a package that only ships ES modules.
  *
  * Credentials come from a service-account key in the environment. Without one
  * these return null and the caller falls back to in-process memory, which is
@@ -42,31 +44,6 @@ function adminApp(): App | null {
 export function adminDb(): Database | null {
   const app = adminApp();
   return app ? getDatabase(app) : null;
-}
-
-/**
- * Firebase Auth as the server sees it, or null for the same reason.
- *
- * The import is deferred rather than written at the top of this file, and that
- * is load-bearing rather than tidiness. `firebase-admin/auth` reaches
- * jwks-rsa, which reaches jose; jose ships ES modules only, and jwks-rsa still
- * `require`s it, so loading that chain is only safe on a runtime that can
- * require an ES module — Node has done so since 22.12, and it throws
- * ERR_REQUIRE_ESM before that.
- *
- * `firebase-admin` is on Next's default list of packages left unbundled, so
- * none of that is settled during the build; it is a real import on the server
- * at request time. A top-level import here would therefore put the chain in
- * the graph of every route that touches a session, and only the admin screen
- * ever reads a user record. Deferring it keeps the game endpoints off the
- * chain, so they cannot fail over a dependency they never call.
- */
-export async function adminAuth(): Promise<Auth | null> {
-  const app = adminApp();
-  if (!app) return null;
-
-  const { getAuth } = await import("firebase-admin/auth");
-  return getAuth(app);
 }
 
 function connect(): App | null {

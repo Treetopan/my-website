@@ -449,30 +449,78 @@ function subunits(course: Course) {
 /**
  * How a course's stock reads in the library.
  *
- * Generated subunits have no bank to count — a generator can produce questions
- * all day — so they are counted as generators and described as unlimited
- * rather than given a fake total.
+ * A generated subunit can produce questions all day, so a course holding one
+ * is simply unlimited and says so. How many generators stand behind that is
+ * not the student's business, and printing the number did active harm: it read
+ * as a stock level, so Algebra 2's 103 against Geometry's 317 said "Algebra 2
+ * is the thinner course" about two courses that both never run out.
+ *
+ * A banked count is still printed where that is all there is, because there it
+ * really is a total — the questions run out at that number.
  */
 export function stockLabel(course: Course): string {
   const banked = questionCount(course);
-  const generators = subunits(course).reduce(
-    (n, s) => n + generatorCount(s.id),
-    0,
-  );
+  const unlimited = subunits(course).some((s) => generatorCount(s.id) > 0);
 
   const parts = [`${course.units.length} units`];
-  if (banked) parts.push(`${banked} questions`);
-  if (generators) parts.push(`${generators} generators · unlimited`);
-  if (!banked && !generators) parts.push("no questions yet");
+  if (unlimited) parts.push("unlimited questions");
+  else if (banked) parts.push(`${banked} questions`);
+  else parts.push("no questions yet");
 
   return parts.join(" · ");
 }
 
 /** The same, for one subunit. */
 export function subunitStockLabel(subunit: Subunit): string {
-  const generators = generatorCount(subunit.id);
-  if (generators) return `${generators} generators · unlimited`;
+  if (generatorCount(subunit.id) > 0) return "unlimited questions";
   return `${subunit.questions.length} questions`;
+}
+
+/**
+ * The course a quick play starts in when there is nothing else to go on.
+ *
+ * Algebra 1 rather than the first course in the sequence: the sequence starts
+ * at Grade 5, and opening a stranger's first race on Grade 5 decimals guesses
+ * downward at somebody who never said how old they are. Algebra 1 sits in the
+ * middle, is the course most students arriving at a maths site are in or have
+ * just finished, and is stocked end to end.
+ *
+ * The guess is never hidden: the button that uses this says which unit it is
+ * about to play, so a student who is somewhere else can see that before they
+ * press it and walk down to their own unit instead.
+ */
+const QUICK_PLAY_COURSE = "math/algebra-1";
+
+/**
+ * A selection to start a race on with no questions asked — the whole point
+ * being that a first-time visitor should not have to make five choices before
+ * seeing a single question.
+ *
+ * The first playable unit of the default course, and the first three subunits
+ * of it that have anything to ask. Three rather than one because a race across
+ * a couple of related subunits is the session the library steers everybody to
+ * anyway, and rather than four because this is meant to be the short way in.
+ *
+ * Falls back to the first playable unit anywhere in the syllabus, so this
+ * cannot return an empty selection while the library has anything at all to
+ * offer. Null only if nothing is stocked, which is the same state that already
+ * disables every course card.
+ */
+export function quickPlaySelection(): Selection | null {
+  const courses = SUBJECTS.flatMap((subject) =>
+    subject.courses.map((course) => ({ subject, course })),
+  );
+
+  const preferred = courses.filter(({ course }) => course.id === QUICK_PLAY_COURSE);
+
+  for (const { subject, course } of [...preferred, ...courses]) {
+    for (const unit of course.units) {
+      const ready = unit.subunits.filter(hasContent).slice(0, 3);
+      if (ready.length > 0) return { subject, course, unit, subunits: ready };
+    }
+  }
+
+  return null;
 }
 
 /**

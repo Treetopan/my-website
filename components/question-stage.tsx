@@ -227,8 +227,14 @@ function Options({
         let tone = "box";
         if (!locked) tone = "box box-tap";
         if (isPicked && !revealed) tone = "box box-on";
-        if (revealed && isAnswer) tone = "box border-correct bg-correct/12";
-        else if (revealed && isPicked) tone = "box border-out bg-out/12";
+        if (revealed && isAnswer) {
+          // Only the option actually picked pulses. The right one lights up
+          // either way, and pulsing it on a miss congratulates somebody for
+          // the answer they did not give.
+          tone = isPicked
+            ? "box animate-correct border-correct bg-correct/12"
+            : "box border-correct bg-correct/12";
+        } else if (revealed && isPicked) tone = "box border-out bg-out/12";
         else if (revealed) tone = "box opacity-55";
 
         return (

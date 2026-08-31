@@ -8,11 +8,16 @@ import type { Response, Reveal } from "@/lib/questions";
 /**
  * Why the answer was wrong, shown under a missed question.
  *
- * Two lines at most, and they come from two different places on purpose. The
- * first is worked out here, in the browser, from the reveal and the response
- * the client already holds — it costs nothing to send and describes *this*
- * attempt. The second arrives from the server with the verdict and names the
- * rule the question was testing.
+ * Two lines at most, and they come from two different places on purpose. One
+ * arrives from the server with the verdict and names the rule the question was
+ * testing. The other is worked out here, in the browser, from the reveal and
+ * the response the client already holds — it costs nothing to send and
+ * describes *this* attempt.
+ *
+ * The rule goes first. It is the part that transfers to the next question of
+ * the same shape, where the diagnosis is only ever about the answer just
+ * given; leading with "you were 0.4 too big" buries the one line that would
+ * stop it happening again under the one that cannot.
  *
  * Nothing renders when there is nothing worth saying. On a multiple-choice
  * question the right option is already lit up on the screen, so the diagnosis
@@ -35,7 +40,7 @@ export function Feedback({
   tight?: boolean;
 }) {
   const said = diagnose(question, reveal, response);
-  const lines = said ? [said, ...(steps ?? [])] : (steps ?? []);
+  const lines = said ? [...(steps ?? []), said] : (steps ?? []);
   if (lines.length === 0) return null;
 
   if (tight) {

@@ -16,6 +16,15 @@ import { Fragment, type ReactNode } from "react";
  *
  * Anything that is not a power passes through untouched — which is every
  * string outside maths, and most of the ones inside it.
+ *
+ * A raised number is only raised visually, though, and the accessible name of
+ * an element is its text content with the layout thrown away: `2.7 × 10^6`
+ * flattens to "2.7 × 106", which is a different number, and four options that
+ * differ only in their exponent flatten to four names that differ only in a
+ * digit nobody announced as an exponent. So every string carrying a power ships
+ * twice — the raised form for the eye, hidden from the accessibility tree, and
+ * a spoken form for it, hidden from the eye. Nothing is said twice, and neither
+ * reader gets the other's copy.
  */
 
 /**
@@ -34,6 +43,30 @@ const POWER = /\^(\([^()]*\)|[+-]?[0-9A-Za-z]+|\?)|_(\([^()]*\)|[0-9A-Za-z])/g;
 /** Brackets are how the notation groups. They are not part of the power. */
 function bare(token: string): string {
   return token.startsWith("(") ? token.slice(1, -1) : token;
+}
+
+/**
+ * The same string, said rather than drawn.
+ *
+ * "Squared" and "cubed" rather than "to the power 2", because that is what the
+ * exponent is called out loud; and a minus becomes "negative", because "to the
+ * power minus three" is heard as a subtraction hanging off the end of the
+ * number.
+ */
+export function spoken(text: string): string {
+  return text
+    .replace(POWER, (_match, power?: string, index?: string) => {
+      if (index !== undefined) return ` sub ${bare(index)}`;
+
+      const raw = bare(power!);
+      if (raw === "2") return " squared";
+      if (raw === "3") return " cubed";
+
+      const signed = raw.startsWith("-") ? `negative ${raw.slice(1)}` : raw;
+      return ` to the power ${signed}`;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function MathText({ text }: { text: string }) {
@@ -55,9 +88,12 @@ export function MathText({ text }: { text: string }) {
 
   return (
     <>
-      {parts.map((part, i) => (
-        <Fragment key={i}>{part}</Fragment>
-      ))}
+      <span aria-hidden="true">
+        {parts.map((part, i) => (
+          <Fragment key={i}>{part}</Fragment>
+        ))}
+      </span>
+      <span className="sr-only">{spoken(text)}</span>
     </>
   );
 }

@@ -178,12 +178,26 @@ function ordering(given: number[], correct: number[]): string | null {
 }
 
 /**
+ * The largest gap worth saying out loud as a gap.
+ *
+ * Past this, the difference has stopped being a correction and become a second
+ * number to read. "You were 27000000000000 too big" is the shape of the
+ * problem: it is true, it is precise, and there is nothing a student can do
+ * with it — an answer that far out is a different answer, not a near miss, and
+ * the method line above it is the only part that helps. Scientific notation is
+ * where this bit hardest, since being one power of ten out is worth millions.
+ */
+const SAYABLE_GAP = 10_000;
+
+/**
  * How one number missed another.
  *
  * Ordered by how much the shape of the error tells the student. A sign slip, a
  * flipped fraction and a factor of ten are three different mistakes with three
  * different fixes, and each one is worth naming; "you were 0.9 under" is what
- * is left when none of them fit.
+ * is left when none of them fit — and where even that is out of scale, nothing
+ * is, because the named cases above have already caught every big miss that
+ * has a shape to it.
  */
 function numeric(given: number, target: number): string | null {
   if (given === target) return null;
@@ -208,6 +222,8 @@ function numeric(given: number, target: number): string | null {
     if (Math.abs(given - target * target) < 1e-9) return "That is the answer squared.";
     if (Math.abs(given * given - target) < 1e-9) return "That is the square root of the answer.";
   }
+
+  if (Math.abs(given - target) > SAYABLE_GAP) return null;
 
   const off = drift(given - target, "big", "small");
   return off ? `You were ${off}.` : null;

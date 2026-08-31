@@ -64,7 +64,7 @@ export function FillAnswer({
               ? "focus-within:border-accent"
               : missed
                 ? "border-out bg-out/12"
-                : "border-correct bg-correct/12"
+                : "animate-correct border-correct bg-correct/12"
           }`}
         >
           <input

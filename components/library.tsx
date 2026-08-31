@@ -1,23 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DIFFICULTY,
   SUBJECTS,
   canDuel,
   isStocked,
   hasContent,
+  quickPlaySelection,
+  selectionDifficulty,
   stockLabel,
   subunitStockLabel,
   subunitsOf,
   type Course,
+  type Selection,
   type Subject,
   type Subunit,
   type Unit,
 } from "@/lib/curriculum";
 import { MAX_SUBUNITS, encodeSelection } from "@/lib/selection";
-import { spatialGenerators } from "@/lib/templates";
 
 /**
  * Practice is in this list without being a game — it is the way to sit with
@@ -149,6 +151,20 @@ export function Library() {
     router.push(`${PATHS[game]}?s=${encodeSelection(picked.map((su) => su.id))}`);
   }
 
+  /**
+   * The short way in. Everything below this is five decisions deep before a
+   * single question appears, which is four more than somebody who has just
+   * arrived wants to make to find out whether they like the game at all.
+   */
+  const quick = useMemo(() => quickPlaySelection(), []);
+
+  function startQuick() {
+    if (!quick) return;
+    router.push(
+      `${PATHS.racer}?s=${encodeSelection(quick.subunits.map((su) => su.id))}`,
+    );
+  }
+
   // What the launch bar says. A single subunit still states its difficulty and
   // its clock; a mix has neither to state, so it says how many were taken.
   const only = picked.length === 1 ? picked[0] : null;
@@ -164,6 +180,8 @@ export function Library() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 pt-14 pb-24">
+      {quick && <QuickPlay selection={quick} onGo={startQuick} />}
+
       <Step n="01" title="Choose a game">
         <div className="grid gap-3 sm:grid-cols-2">
           {GAMES.map((g) => (
@@ -271,7 +289,6 @@ export function Library() {
               // Held back by the cap rather than by having nothing to ask, and
               // the meta says which — a row that is simply dimmed reads as broken.
               const blocked = full && !on;
-              const placed = spatialGenerators(su.id).length;
               return (
                 <Row
                   key={su.id}
@@ -289,7 +306,7 @@ export function Library() {
                       : blocked
                         ? `${MAX_SUBUNITS} already picked`
                         : duelling
-                          ? `${count(placed, "generator")} · answered on a grid`
+                          ? "unlimited questions · answered on a grid"
                           : subunitStockLabel(su)
                   }
                   tag={d.name}
@@ -318,6 +335,46 @@ export function Library() {
         </p>
       </div>
     </main>
+  );
+}
+
+/**
+ * Straight into a race, on a unit chosen for you.
+ *
+ * It sits above step one rather than inside it because it is not a step: it is
+ * the way past all of them. What it will play is named in full — course, unit
+ * and difficulty — so the default is something a student can disagree with
+ * before pressing it rather than after, and the steps underneath are still the
+ * ordinary way in for anybody who knows what they want.
+ */
+function QuickPlay({
+  selection,
+  onGo,
+}: {
+  selection: Selection;
+  onGo: () => void;
+}) {
+  const difficulty = selectionDifficulty(selection);
+
+  return (
+    <section className="flex flex-wrap items-center gap-x-5 gap-y-3 pb-9">
+      <button
+        type="button"
+        onClick={onGo}
+        className="rounded-sm bg-accent px-5 py-2.5 text-[13px] font-medium text-accent-ink transition-colors hover:bg-accent-hi"
+      >
+        Quick play
+      </button>
+
+      <p className="flex-1 text-[13px] text-muted">
+        A Racer on {selection.course.name} · {selection.unit.name}
+        <span className="mt-0.5 block font-mono text-[11px] text-faint">
+          {count(selection.subunits.length, "subunit")}
+          {difficulty ? ` · ${DIFFICULTY[difficulty].name}` : ""} · or pick your
+          own below
+        </span>
+      </p>
+    </section>
   );
 }
 

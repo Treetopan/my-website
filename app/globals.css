@@ -242,6 +242,35 @@
   }
 }
 
+/* An answer that landed.
+   A miss gets a panel to read and a button to press, and a right answer used
+   to get a colour change and then the next question — the same outcome the
+   whole game is played for, reported more quietly than the bad one. This is
+   the ring that says so: it starts on the edge of the answer and spreads off
+   it, which is the shape of something being released rather than something
+   needing attention. */
+@keyframes correct-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-correct) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+
+/* The pace, when it steps. The number is what the answer was worth, so it
+   arrives rather than being found already changed. */
+@keyframes pace-step {
+  0% {
+    transform: translateY(-4px);
+    opacity: 0.3;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 /* Whose turn it is — a slow pulse on the active seat, so you can
    find it in the periphery without reading names. */
 @keyframes turn-pulse {
@@ -268,6 +297,14 @@
 
 .animate-turn {
   animation: turn-pulse 1.6s ease-in-out infinite;
+}
+
+.animate-correct {
+  animation: correct-pulse 620ms ease-out;
+}
+
+.animate-pace {
+  animation: pace-step 280ms cubic-bezier(0.22, 0.8, 0.3, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

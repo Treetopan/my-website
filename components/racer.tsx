@@ -568,8 +568,16 @@ function Track({
           </span>
         )}
 
+        {/* Keyed on the value so the number replays its arrival every time it
+            moves. It is the thing a correct answer actually buys, and it used
+            to change between two frames nobody was looking at. */}
         <span className="ml-auto font-mono text-[11px] text-muted tnum">
-          <span className="text-ink">You {pace}</span>
+          <span className="text-ink">
+            You{" "}
+            <span key={pace} className="animate-pace inline-block">
+              {pace}
+            </span>
+          </span>
           <span className="mx-2 text-faint">·</span>
           Bot {botPace}
         </span>

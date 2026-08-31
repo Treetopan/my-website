@@ -1229,7 +1229,7 @@ const METHODS: Record<string, string> = {
   "Evaluating a translated phrase": "Translate first, substitute second. 'Less than' reverses the order you read it in.",
   "Reading a phrase backwards": "Undo the operations in reverse order: the last thing done to the number is the first thing you undo.",
   "Back to a plain number": "A positive exponent moves the point right, one place per power.",
-  "Multiplying in scientific notation": "Multiply the mantissas and add the exponents.",
+  "Multiplying in scientific notation": "Multiply the numbers in front and add the exponents.",
   "Estimating a root": "Find the perfect squares either side, then judge where the number falls between them.",
   "The order of solving steps": "Brackets first, then gather the variable on one side, then the constants, then divide.",
   "Recovering a numerator": "Substitute the solution back in and solve for the coefficient that is missing.",

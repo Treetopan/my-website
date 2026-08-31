@@ -161,28 +161,32 @@
     // player, because /users is — a room shows names out of it — so it lives
     // here instead, where nothing but an admin may read.
     //
-    // Write-once, and never by anybody but the account it is stamped with:
-    // the key must be new, and the uid in it must be the one asking. That
-    // refuses a delete too — newData does not exist, so its uid is not
-    // yours — which is what makes this a record rather than a draft.
+    // Anonymous, and enforced here rather than promised by the client: a note
+    // may hold its text, the time it arrived and an admin's flag, and the
+    // last rule below refuses everything else — a uid included. The form says
+    // the note is anonymous, and this is what makes that true whatever build
+    // of the app somebody is running.
+    //
+    // A player may create a note and may then do nothing further to it: the
+    // key must be new, so nothing can be edited or taken back after it has
+    // been read, and nothing of theirs can be deleted either. An admin may
+    // flag one or remove it, which is the whole of what anybody can do to a
+    // note that has landed.
     "feedback": {
       ".read": "auth != null && (auth.token.email == 'alexleyvalp@gmail.com' || root.child('admins').child(auth.uid).exists())",
       "$note": {
-        ".write": "auth != null && !data.exists() && newData.child('uid').val() == auth.uid",
-        ".validate": "newData.hasChildren(['uid', 'text', 'at'])",
-        "uid": { ".validate": "newData.val() == auth.uid" },
+        ".write": "auth != null && ((!data.exists() && newData.exists()) || auth.token.email == 'alexleyvalp@gmail.com' || root.child('admins').child(auth.uid).exists())",
+        ".validate": "newData.hasChildren(['text', 'at'])",
 
-        // A ceiling on the note, and nothing else allowed beside it, for the
-        // same reason the survey's free-text answer has one: this is the only
-        // node in the database any player may write to, and it must not be
-        // usable as somewhere to keep something else entirely.
+        // A ceiling on the note for the same reason the survey's free-text
+        // answer has one: this is the only node in the database any player may
+        // write to, and it must not be usable as somewhere to keep something
+        // else entirely.
         "text": {
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000"
         },
         "at": { ".validate": "newData.isNumber()" },
-        "username": {
-          ".validate": "newData.isString() && newData.val().length <= 16"
-        },
+        "flagged": { ".validate": "newData.isBoolean()" },
         "$other": { ".validate": false }
       }
     },

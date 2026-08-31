@@ -18,7 +18,12 @@ import {
   type SurveyQuestion,
   type SurveyRecord,
 } from "@/lib/survey";
-import { watchFeedback, type FeedbackNote } from "@/lib/feedback";
+import {
+  flagFeedback,
+  removeFeedback,
+  watchFeedback,
+  type FeedbackNote,
+} from "@/lib/feedback";
 import { USERNAME_MAX } from "@/lib/username";
 
 /**
@@ -308,21 +313,31 @@ function FreeText({
  * them, they arrive one at a time, and one arriving while somebody has this
  * page open should appear.
  *
- * The name is the one the player plays under. It is here and not on the survey
- * answers above because this was written *to* somebody: a bug report with
- * nobody to ask about it is half a bug report.
+ * There is no name on any of them, by design and not by omission — see
+ * `feedback.ts`. What is on the screen is what somebody said and when.
+ *
+ * Three things can be done with a note, and two of them are the same write.
+ * Resolved and Delete both take it off the list, because there is nobody to
+ * tell either way and a note that stays after it has been dealt with turns
+ * this into a list that only grows; they are separate buttons because pressing
+ * one of them means you did something about it and pressing the other means
+ * you did not, and that is worth being able to say to yourself. Flag is the
+ * one that keeps it: it holds the note at the top for the ones worth coming
+ * back to before they are lost among the rest.
  */
 function Feedback() {
   const [notes, setNotes] = useState<FeedbackNote[]>([]);
 
   useEffect(() => watchFeedback(setNotes), []);
 
+  const flagged = notes.filter((note) => note.flagged).length;
+
   return (
     <section className="border-t border-line-soft pt-8 pb-10">
       <h2 className="text-[22px] font-medium tracking-[-0.02em]">Feedback</h2>
       <p className="mt-2 mb-5 text-[13.5px] text-faint">
-        Newest first. Written from the bubble in the top bar, and readable by
-        admins only.
+        Anonymous, and readable by admins only. Flagged first, then newest.
+        {flagged > 0 && ` ${flagged} flagged.`}
       </p>
 
       {notes.length === 0 ? (
@@ -330,19 +345,74 @@ function Feedback() {
       ) : (
         <ul className="flex flex-col gap-2.5">
           {notes.map((note) => (
-            <li key={note.id} className="box px-4 py-3.5">
+            <li
+              key={note.id}
+              className={`box px-4 py-3.5 ${
+                note.flagged ? "border-accent bg-accent/6" : ""
+              }`}
+            >
               <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap">
                 {note.text}
               </p>
-              <p className="mt-2.5 flex flex-wrap items-baseline gap-x-3 font-mono text-[10.5px] tracking-[0.1em] text-faint uppercase">
-                <span>{note.username ?? "unnamed"}</span>
-                <span className="tnum">{note.at ? dayOf(note.at) : "—"}</span>
-              </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <span className="font-mono text-[10.5px] tracking-[0.1em] text-faint uppercase tnum">
+                  {note.at ? dayOf(note.at) : "—"}
+                </span>
+
+                {note.flagged && (
+                  <span className="eyebrow text-accent">Flagged</span>
+                )}
+
+                <span className="ml-auto flex items-center gap-4">
+                  <Choice onClick={() => removeFeedback(note.id)}>
+                    Resolved
+                  </Choice>
+                  <Choice
+                    onClick={() => flagFeedback(note.id, !note.flagged)}
+                    accent={!note.flagged}
+                  >
+                    {note.flagged ? "Unflag" : "Flag"}
+                  </Choice>
+                  <Choice onClick={() => removeFeedback(note.id)} out>
+                    Delete
+                  </Choice>
+                </span>
+              </div>
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/** One of the three things an admin can do to a note. */
+function Choice({
+  children,
+  onClick,
+  accent,
+  out,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  accent?: boolean;
+  out?: boolean;
+}) {
+  const tone = out
+    ? "hover:text-out"
+    : accent
+      ? "hover:text-accent"
+      : "hover:text-ink";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`font-mono text-[10.5px] tracking-[0.1em] text-faint uppercase transition-colors ${tone}`}
+    >
+      {children}
+    </button>
   );
 }
 

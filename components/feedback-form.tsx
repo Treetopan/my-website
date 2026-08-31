@@ -14,13 +14,15 @@ import { FEEDBACK_MAX, sendFeedback } from "@/lib/feedback";
  * the top bar is on every screen that has one, so getting here is one press
  * from anywhere and getting back is the same.
  *
- * Nothing is asked for beyond the note itself. Who wrote it comes from the
- * account already signed in, as the name they play under — an admin who wants
- * to follow something up has a handle to do it with, and nobody has to type
- * an address into a form to be heard.
+ * Nothing is asked for beyond the note itself, and nothing else is sent: no
+ * name, no account, nothing that says where it came from. That is said on the
+ * screen rather than left to be assumed, because a promise of anonymity is
+ * only worth anything to somebody who knows it has been made — and the person
+ * with the most useful thing to say about a game is usually the one who would
+ * not say it with their name on it.
  */
 export function FeedbackForm() {
-  const { user, username } = useAuth();
+  const { user } = useAuth();
 
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
@@ -36,7 +38,7 @@ export function FeedbackForm() {
     setBusy(true);
     setProblem(null);
     try {
-      await sendFeedback({ uid: user.uid, username: username ?? null }, said);
+      await sendFeedback(said);
       setText("");
       setSent(true);
     } catch {
@@ -54,14 +56,20 @@ export function FeedbackForm() {
       </h1>
       <p className="mt-3 text-[15px] text-muted">
         A question that was wrong, a game that got stuck, something you wish
-        this did. It goes straight to the people who run hunat and nobody else
+        this did. It goes straight to the people who run hunat, and nobody else
         can read it.
+      </p>
+      <p className="mt-3 text-[15px] text-muted">
+        It is sent{" "}
+        <span className="text-ink">anonymously</span> — your name is not on it,
+        and nothing stored with it says which account it came from. Say what you
+        actually think.
       </p>
 
       {sent ? (
         <div className="animate-question-in mt-9">
           <p className="box px-5 py-4 text-[15px]">
-            Sent. Thank you — somebody reads every one of these.
+            Sent, anonymously. Thank you — somebody reads every one of these.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-5">
@@ -101,12 +109,13 @@ export function FeedbackForm() {
               {busy ? "Sending…" : "Send"}
             </button>
 
-            {/* Only near the ceiling, because a counter on an empty box is a
-                length requirement nobody set. */}
+            {/* The counter only near the ceiling, because one on an empty box
+                is a length requirement nobody set. It gives way to the thing
+                worth repeating at the moment of pressing Send. */}
             <span className="font-mono text-[11px] text-faint tnum">
               {text.length > FEEDBACK_MAX - 200
                 ? `${FEEDBACK_MAX - text.length} left`
-                : `Sent as ${username ?? "your account"}`}
+                : "Sent anonymously"}
             </span>
           </div>
 

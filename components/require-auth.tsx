@@ -15,7 +15,11 @@ import { watchSurvey, type SurveyState } from "@/lib/survey";
  *
  * It gates on three things in order, each one a prerequisite of the next:
  *
- *  1. **Signed in.** Everything below needs a uid.
+ *  1. **Signed in.** Everything below needs a uid. Somebody without one is
+ *     sent to `/signup` rather than `/login`, because almost anybody who
+ *     reaches a gated screen without an account has just followed a link
+ *     from somebody who has one. The few who are returning are one small
+ *     link away, and `/` shows them the landing page rather than either.
  *  2. **Named.** A player with no username cannot be added as a friend, cannot
  *     be invited, and sits at the table as a blank — so the name is asked for
  *     here, once, rather than checked for again on every screen that needs it.
@@ -42,7 +46,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   } | null>(null);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
+    if (!loading && !user) router.replace("/signup");
   }, [loading, user, router]);
 
   useEffect(() => {

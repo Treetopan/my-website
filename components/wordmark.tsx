@@ -3,9 +3,10 @@ import Link from "next/link";
 /**
  * The name, top left, on every screen.
  *
- * It is one component rather than a copy per header because it appears in five
- * places — the library bar, both game headers, the lobby, and the sign-in page
- * — and a wordmark that differs between screens reads as two different sites.
+ * It is one component rather than a copy per header because it appears in six
+ * places — the library bar, both game headers, the lobby, the auth pages and the
+ * landing page — and a wordmark that differs between screens reads as two
+ * different sites.
  * Always the first thing in its header, so it lands in the top-left corner
  * wherever it is used, and always a link home.
  */

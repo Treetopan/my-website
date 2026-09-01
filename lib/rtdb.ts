@@ -192,25 +192,38 @@ export function watchProgress(uid: string, cb: (p: Progress) => void) {
 }
 
 /**
- * Records a finished session. The progress update runs as a transaction
- * because two tabs finishing at once would otherwise both read the same XP
- * and one write would silently overwrite the other.
+ * Records a finished session, and hands back the progress that was written.
+ *
+ * The update runs as a transaction because two tabs finishing at once would
+ * otherwise both read the same XP and one write would silently overwrite the
+ * other — which also means the caller cannot know what landed without being
+ * told. So the committed node is returned rather than left to be guessed at:
+ * a summary that projects the new streak locally is projecting against a
+ * different starting point than the transaction used, and that is how the
+ * screen ends up disagreeing with the header about what day of a streak it is.
  */
 export async function recordSession(
   uid: string,
   result: Omit<SessionResult, "at">,
-) {
+): Promise<Progress> {
   const now = new Date();
 
-  await runTransaction(ref(realtimeDb, `users/${uid}/progress`), (current) => {
-    const prev: Progress = { ...EMPTY_PROGRESS, ...(current ?? {}) };
-    return applySession(prev, { xp: result.xp, won: result.won, at: now });
-  });
+  const { snapshot } = await runTransaction(
+    ref(realtimeDb, `users/${uid}/progress`),
+    (current) => {
+      const prev: Progress = { ...EMPTY_PROGRESS, ...(current ?? {}) };
+      return applySession(prev, { xp: result.xp, won: result.won, at: now });
+    },
+  );
+
+  const saved: Progress = { ...EMPTY_PROGRESS, ...(snapshot.val() ?? {}) };
 
   await push(ref(realtimeDb, `results/${uid}`), {
     ...result,
     at: serverTimestamp(),
   });
+
+  return saved;
 }
 
 export async function readResults(uid: string) {

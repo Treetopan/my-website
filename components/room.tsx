@@ -48,9 +48,10 @@ import { ClockRail, QuestionStage } from "@/components/question-stage";
 import { Wordmark } from "@/components/wordmark";
 import { InviteFriends } from "@/components/friends";
 import { RoomTable3D } from "@/components/room-table-3d";
+import { RoomCode } from "@/components/room-code";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, gradeBot, openSession } from "@/lib/grade";
-import type { AnswerDetail } from "@/lib/review";
+import { ranOut, type AnswerDetail } from "@/lib/review";
 import {
   emptyResponse,
   type Response as Answered,
@@ -81,6 +82,17 @@ const BOT_CHOOSE_MS = 1600;
 const TURN_MS = 30_000;
 const TURN_STEP_MS = 2_000;
 const TURN_FLOOR_MS = 10_000;
+
+/**
+ * How long past the deadline the host waits before grading a turn itself.
+ *
+ * An answer pressed on the last second still has to reach the database and
+ * come back out to the host, and a host that grades the instant the clock hits
+ * zero records that turn as unanswered — which is how somebody who answered
+ * correctly is told they ran out of time. Long enough for the round trip,
+ * short enough that a table which really has stalled is not left waiting on it.
+ */
+const TURN_GRACE_MS = 900;
 
 /**
  * How many turns a person gets before a round turns on somebody, and how far
@@ -119,6 +131,25 @@ function missTurns(bots: number): number[] {
   return turns.map((turn) => ({ turn, at: Math.random() }))
     .sort((a, b) => a.at - b.at)
     .map(({ turn }) => turn);
+}
+
+/**
+ * How the game ended for you, in a line.
+ *
+ * "You were removed." is what happens to everybody who does not win it, so on
+ * its own it names the last move of the game rather than the reason it went
+ * that way. What put you in front of a round winner is your own last turn, so
+ * that is what this reads — and a turn nobody answered is a different thing
+ * from a turn answered wrongly. Being told you ran out of time is the one that
+ * matters most, because a player who pressed an answer and lost the round
+ * anyway has every reason to think the game lost it for them.
+ */
+function endingFor(won: boolean, last: AnswerDetail | undefined): string {
+  if (won) return "Last one standing.";
+  if (!last) return "You were removed.";
+  if (ranOut(last)) return "You ran out of time.";
+  if (!last.correct) return "You missed your last question.";
+  return "You were removed.";
 }
 
 /** Firebase's clock, not the laptop's — every client must agree on the timer. */
@@ -215,9 +246,13 @@ export function Room({
   // questions travel rather than being looked up locally, because a generated
   // subunit mints fresh ones per session and no client has them otherwise.
   // Only the answers were ever withheld, and they still are.
+  // The snapshot is the fallback because the host deletes the room the moment
+  // the game is over, and everything the summary says about the session is
+  // read back through this list. Without it the room disappearing turned a
+  // finished game into "No questions answered" a second or two after it ended.
   const questions: Question[] = useMemo(
-    () => room?.questions ?? [],
-    [room?.questions],
+    () => room?.questions ?? finalRoom?.questions ?? [],
+    [room?.questions, finalRoom?.questions],
   );
 
   const index = room?.currentIndex ?? 0;
@@ -550,6 +585,16 @@ export function Room({
     draftRef.current = draft;
   }, [draft]);
 
+  /**
+   * The answer this player has actually pressed on the question showing.
+   *
+   * Written straight into the ref rather than read back off `draftRef`, which
+   * an effect fills in a render later: a turn whose clock ran out in the gap
+   * between the press and the next paint was graded on the draft as it stood
+   * *before* the press — no answer at all, on a question just answered.
+   */
+  const committedRef = useRef<{ id: string; response: Answered } | null>(null);
+
   // Watch for the current player's answer; resolve the moment it lands.
   useEffect(() => {
     if (!isHost || !roomId || !room || room.status !== "playing") return;
@@ -583,11 +628,15 @@ export function Room({
     const deadline = startedAt ? startedAt + totalMs : null;
     const remaining = deadline ? Math.max(0, deadline - (Date.now() + offset)) : totalMs;
     // Out of time grades whatever is on screen, which for a dragged point or
-    // a moved slider is a real answer the player simply never confirmed.
-    const timeout = setTimeout(
-      () => resolveRef.current(draftRef.current),
-      remaining + 250,
-    );
+    // a moved slider is a real answer the player simply never confirmed. An
+    // answer this client did press takes precedence over that: the press is
+    // what happened, whether or not the write had come back by the deadline.
+    const timeout = setTimeout(() => {
+      const own = committedRef.current;
+      resolveRef.current(
+        own && own.id === question.id ? own.response : draftRef.current,
+      );
+    }, remaining + TURN_GRACE_MS);
 
     return () => {
       stop();
@@ -706,6 +755,7 @@ export function Room({
   // ── Answering ──────────────────────────────────────────
   async function commit(response: Answered) {
     if (!roomId || !user || !myTurn || answered || !question) return;
+    committedRef.current = { id: question.id, response };
     setSubmittedFor(question.id);
     setDraft(response);
     await submitAnswer(roomId, index, user.uid, response);
@@ -730,18 +780,21 @@ export function Room({
       xp,
       won,
     })
-      .then(() => {
+      .then((saved) => {
         setBefore(snapshot);
-        // The same function the server ran inside its transaction, on the same
-        // inputs — so the summary shows the progress that was actually
-        // written, streak and all. Rebuilding it by hand here is what showed
-        // somebody a fresh "0d" on the day they started their streak: the xp
-        // was added and every other field was copied from before the session.
-        setAfterP(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
+        // The progress the transaction actually wrote, read back rather than
+        // recomputed. Projecting it here instead is what showed somebody a
+        // fresh "0d" on the day they started their streak — the projection
+        // starts from whatever this tab last heard, and the transaction starts
+        // from what is in the database, which is not always the same thing.
+        setAfterP(saved);
       })
       .catch(() => {
         setBefore(snapshot);
-        setAfterP(null);
+        // Nothing came back, so the best available reading of the session is
+        // the same one the transaction would have made. Still better than the
+        // progress from before the game, which is the one thing it is not.
+        setAfterP(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
       });
   }, [room?.status, user, found, myAnswers, won, progress, subunitIds]);
 
@@ -766,7 +819,7 @@ export function Room({
     return (
       <Shell subtitle={subtitle}>
         <SessionSummary
-          headline={won ? "Last one standing." : "You were removed."}
+          headline={endingFor(won, myAnswers[myAnswers.length - 1])}
           detail={`${selectionNames(found)} · won by ${
             finalRoom.players[finalRoom.winnerUid ?? ""]?.displayName ?? "nobody"
           }`}
@@ -859,9 +912,7 @@ export function Room({
       <Shell subtitle={subtitle}>
         <div className="w-full max-w-md">
           <p className="eyebrow mb-4">Room open</p>
-          <p className="font-mono text-[44px] leading-none tracking-[0.14em] text-accent tnum">
-            {room.code}
-          </p>
+          <RoomCode code={room.code} />
           <p className="mt-4 mb-8 text-[15px] text-muted">
             Share this code, or start now and bots take the empty seats.
           </p>
@@ -1023,6 +1074,7 @@ export function Room({
 
   // ── Playing ────────────────────────────────────────────
   const turnPlayer = room.turnUid ? players[room.turnUid] : null;
+  const mySeatUp = !!user && room.turnUid === user.uid;
 
   // Whether the question on the table is mine to answer. It stays mine
   // through the reveal, which is when the answer to it finally arrives — and
@@ -1041,12 +1093,27 @@ export function Room({
         </span>
 
         <span className="ml-auto flex items-center gap-5">
-          <span
-            className={`font-mono text-[13px] tnum ${
-              msLeft <= 5000 && myTurn ? "animate-clock-urgent text-out" : "text-muted"
-            }`}
-          >
-            {reveal ? "—" : `0:${String(Math.ceil(msLeft / 1000)).padStart(2, "0")}`}
+          {/* Whose clock this is, said next to it. Every turn is given its own
+              — the number goes back to the round's full clock when the turn
+              moves round the table — but a countdown with nobody's name on it
+              reads as one clock the whole table is sharing, and as time being
+              taken off you while somebody else thinks. */}
+          <span className="flex items-baseline gap-2 font-mono text-[13px] tnum">
+            {/* Read off the seat rather than off `myTurn`, which goes false
+                the moment the reveal lands — a turn is still yours while you
+                are being told how it went. */}
+            <span className={mySeatUp ? "text-accent" : "text-faint"}>
+              {mySeatUp ? "You" : (turnPlayer?.displayName ?? "—")}
+            </span>
+            <span
+              className={
+                msLeft <= 5000 && myTurn
+                  ? "animate-clock-urgent text-out"
+                  : "text-muted"
+              }
+            >
+              {reveal ? "—" : `0:${String(Math.ceil(msLeft / 1000)).padStart(2, "0")}`}
+            </span>
           </span>
           <Link href="/" className="text-faint transition-colors hover:text-ink">
             Leave

@@ -283,18 +283,21 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
       // is what `recordSession` is really for — showing up is the mechanic.
       won: false,
     })
-      .then(() => {
+      .then((saved) => {
         setBefore(snapshot);
-        // The same function the server ran inside its transaction, on the same
-        // inputs — so the summary shows the progress that was actually
-        // written, streak and all. Rebuilding it by hand here is what showed
-        // somebody a fresh "0d" on the day they started their streak: the xp
-        // was added and every other field was copied from before the session.
-        setAfter(applySession(snapshot, { xp: xpEarned, won: false, at: new Date() }));
+        // The progress the transaction actually wrote, read back rather than
+        // recomputed. Projecting it here instead is what showed somebody a
+        // fresh "0d" on the day they started their streak — the projection
+        // starts from whatever this tab last heard, and the transaction starts
+        // from what is in the database, which is not always the same thing.
+        setAfter(saved);
       })
       .catch(() => {
         setBefore(snapshot);
-        setAfter(null);
+        // Nothing came back, so the best available reading of the session is
+        // the same one the transaction would have made. Still better than the
+        // progress from before the set, which is the one thing it is not.
+        setAfter(applySession(snapshot, { xp: xpEarned, won: false, at: new Date() }));
       });
   }, [phase, user, found, answers, correct, xpEarned, progress, subunitIds]);
 

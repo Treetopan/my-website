@@ -46,6 +46,7 @@ import { ClockRail, QuestionStage } from "@/components/question-stage";
 import { Wordmark } from "@/components/wordmark";
 import { InviteFriends } from "@/components/friends";
 import { RoomTable3D } from "@/components/room-table-3d";
+import { RoomCode } from "@/components/room-code";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, gradeTable, openSession, type Seat } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
@@ -648,18 +649,21 @@ export function Duel({
       xp,
       won,
     })
-      .then(() => {
+      .then((saved) => {
         setBefore(snapshot);
-        // The same function the server ran inside its transaction, on the same
-        // inputs — so the summary shows the progress that was actually
-        // written, streak and all. Rebuilding it by hand here is what showed
-        // somebody a fresh "0d" on the day they started their streak: the xp
-        // was added and every other field was copied from before the session.
-        setAfter(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
+        // The progress the transaction actually wrote, read back rather than
+        // recomputed. Projecting it here instead is what showed somebody a
+        // fresh "0d" on the day they started their streak — the projection
+        // starts from whatever this tab last heard, and the transaction starts
+        // from what is in the database, which is not always the same thing.
+        setAfter(saved);
       })
       .catch(() => {
         setBefore(snapshot);
-        setAfter(null);
+        // Nothing came back, so the best available reading of the session is
+        // the same one the transaction would have made. Still better than the
+        // progress from before the duel, which is the one thing it is not.
+        setAfter(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
       });
   }, [room?.status, user, found, myAnswers, won, progress, subunitIds]);
 
@@ -791,9 +795,7 @@ export function Duel({
       <Shell subtitle={subtitle}>
         <div className="w-full max-w-md">
           <p className="eyebrow mb-4">Duel open</p>
-          <p className="font-mono text-[44px] leading-none tracking-[0.14em] text-accent tnum">
-            {room.code}
-          </p>
+          <RoomCode code={room.code} />
           <p className="mt-4 mb-8 text-[15px] text-muted">
             Share this code, or start now and a bot takes the other seat.
           </p>

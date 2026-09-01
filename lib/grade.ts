@@ -6,6 +6,7 @@
  * answer for that position only.
  */
 
+import { auth } from "@/lib/firebase";
 import type { Question } from "@/lib/curriculum";
 import type { Response, Reveal } from "@/lib/questions";
 
@@ -57,6 +58,12 @@ export type OpenedSession = {
  *     the position is claimed, so nothing has been spent. The same answer can
  *     simply be sent again once the window rolls.
  *
+ *   · **401 Not signed in.** The endpoints verify a Firebase ID token now, so
+ *     a stale one is refused. Like a 429 this lands before the position is
+ *     claimed and nothing is spent, which is what makes `send` below free to
+ *     mint a fresh token and go again. A 401 that reaches a caller here has
+ *     already survived that retry and means the player really is signed out.
+ *
  * Everything else — a session that expired, a question with no answer on file,
  * a malformed request — is a session that genuinely cannot continue.
  */
@@ -78,6 +85,65 @@ export class GradeError extends Error {
   get retryable(): boolean {
     return this.status === 429;
   }
+
+  /** No usable sign-in, after `send` already tried a fresh token. */
+  get unauthenticated(): boolean {
+    return this.status === 401;
+  }
+}
+
+/**
+ * The headers a game request carries: the body's type, and who is sending it.
+ *
+ * `getIdToken` returns the token already in hand and refreshes it by itself
+ * when it is near expiry, so this is a field read almost every time and a
+ * round trip to Firebase rarely. `force` demands a new one regardless.
+ */
+async function authorized(force = false): Promise<HeadersInit> {
+  const user = auth.currentUser;
+
+  // Every screen that plays sits behind `<RequireAuth>`, so this is not a
+  // player mid-game; it is a caller reaching this module without an account.
+  // Said here rather than after a round trip that would say the same thing.
+  if (!user) throw new GradeError("Sign in to play.", 401);
+
+  return {
+    "content-type": "application/json",
+    authorization: `Bearer ${await user.getIdToken(force)}`,
+  };
+}
+
+/**
+ * Posts to a game endpoint as the signed-in player, once — and again with a
+ * freshly minted token if the first attempt was refused for want of one.
+ *
+ * The retry earns its place because a token lasts about an hour and so does a
+ * session, so a long game can straddle the moment one goes stale; and because
+ * a client whose clock runs slow will happily send a token the server has
+ * already expired, the SDK seeing no reason to refresh it. Both end a game
+ * that had nothing wrong with it. One forced refresh costs a round trip and
+ * turns that into a game that carries on.
+ *
+ * Sending twice is safe because the token check sits ahead of the claim: a 401
+ * spends no position and no budget, exactly as a 429 spends none. Every other
+ * status is handed back as it came and retried by nobody — a 409 in particular,
+ * which means an earlier attempt of ours already won that position.
+ */
+async function send(path: string, body: Record<string, unknown>) {
+  const payload = JSON.stringify(body);
+
+  const res = await fetch(path, {
+    method: "POST",
+    headers: await authorized(),
+    body: payload,
+  });
+  if (res.status !== 401) return res;
+
+  return fetch(path, {
+    method: "POST",
+    headers: await authorized(true),
+    body: payload,
+  });
 }
 
 export async function openSession(
@@ -92,10 +158,10 @@ export async function openSession(
     spatial?: boolean;
   } = {},
 ): Promise<OpenedSession> {
-  const res = await fetch("/api/session", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ subunitIds, length, spatial: options.spatial }),
+  const res = await send("/api/session", {
+    subunitIds,
+    length,
+    spatial: options.spatial,
   });
 
   if (!res.ok) {
@@ -160,11 +226,7 @@ export async function gradeTable(
 }
 
 async function post<T>(body: Record<string, unknown>): Promise<T> {
-  const res = await fetch("/api/answer", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const res = await send("/api/answer", body);
 
   if (!res.ok) {
     throw new GradeError(await reason(res, "Could not grade that."), res.status);

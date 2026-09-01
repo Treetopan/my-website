@@ -4,9 +4,11 @@ import { buildPool } from "@/lib/pool.server";
 import { MAX_SUBUNITS } from "@/lib/selection";
 import {
   createSession,
-  mintAllowed,
+  mintAllowedForIp,
+  mintAllowedForUser,
   sessionsAreShared,
 } from "@/lib/session-store";
+import { callerIp, verifyCaller } from "@/lib/caller";
 import { hasSpatial } from "@/lib/templates";
 import { hasGenerators } from "@/lib/templates.server";
 
@@ -55,8 +57,43 @@ export function GET() {
  * than a question id — a turn-based game that runs past the end of the bank
  * comes round to the same question at a new position, which is a new grading
  * rather than a replay of an old one.
+ *
+ * Signed-in players only. This used to take anybody's word for it and had no
+ * way not to: it never asked who was calling, so a browser console on a
+ * signed-out page could mint sessions all day. It asks now — see `caller.ts`.
  */
 export async function POST(req: NextRequest) {
+  const now = Date.now();
+
+  // Three gates, and all of them before a single question is dealt. Filling
+  // the pools runs generators, and that is not work worth doing for a caller
+  // who is about to be turned away — the same reasoning `/api/answer` gives
+  // for counting before it reads a session.
+  //
+  // Cheapest first, which is also safest first: the IP ceiling is a counter
+  // and the token check is a signature verification, so the counter guards the
+  // verification rather than the other way round. Nobody spends our CPU
+  // without first getting past something that costs them nothing to fail.
+  if (!(await mintAllowedForIp(callerIp(req), now))) {
+    return Response.json(
+      { error: "Too many sessions. Wait a minute." },
+      { status: 429 },
+    );
+  }
+
+  const caller = await verifyCaller(req);
+  if (!caller.ok) return caller.response;
+
+  // A uid of null is a dev server with no service account, where there is
+  // nothing to verify a token against and the ceiling above is the only limit
+  // there is. In production that case is a refusal, not a null.
+  if (caller.uid && !(await mintAllowedForUser(caller.uid, now))) {
+    return Response.json(
+      { error: "Too many sessions. Wait a minute." },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -141,17 +178,6 @@ export async function POST(req: NextRequest) {
   }
 
   const order = questions.map((q) => q.id);
-
-  const now = Date.now();
-  const caller =
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
-
-  if (!(await mintAllowed(caller, now))) {
-    return Response.json(
-      { error: "Too many sessions. Wait a minute." },
-      { status: 429 },
-    );
-  }
 
   const session = await createSession(subunitIds, order, now);
 

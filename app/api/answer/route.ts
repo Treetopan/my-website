@@ -9,10 +9,12 @@ import {
   awaitVerdict,
   claimPosition,
   getSession,
-  gradeAllowed,
+  gradeAllowedForIp,
+  gradeAllowedForUser,
   releasePosition,
   rememberVerdict,
 } from "@/lib/session-store";
+import { callerIp, verifyCaller } from "@/lib/caller";
 import { resolveInstance } from "@/lib/templates.server";
 import { botResponse, grade, type Answer } from "@/lib/grading.server";
 import { coachingFor } from "@/lib/coaching.server";
@@ -47,8 +49,46 @@ const MAX_SEATS = 8;
  * into a request per player would mean the second player's grading is a second
  * look at a position that has already been revealed, which is exactly what the
  * claim exists to refuse.
+ *
+ * Signed-in players only, as of the token check below. Holding a live session
+ * and winning a position's one claim were never statements about who you are —
+ * they say a position is graded once, not that a player is the one grading it.
+ * See `caller.ts`.
  */
 export async function POST(req: NextRequest) {
+  const now = Date.now();
+
+  // All three gates before the body is even parsed, and long before the
+  // session is fetched: a caller in a loop costs a counter rather than a read
+  // and a transaction. Minting is limited the same way, on budgets of its own,
+  // so a burst of answering cannot lock anybody out of starting a game.
+  //
+  // Cheapest first. The IP ceiling is a counter and the token check is a
+  // signature verification, so the counter guards the verification — a caller
+  // who has proved nothing yet cannot make us do that work over and over.
+  if (!(await gradeAllowedForIp(callerIp(req), now))) {
+    return Response.json(
+      { error: "Too many answers at once. Wait a minute." },
+      { status: 429 },
+    );
+  }
+
+  const caller = await verifyCaller(req);
+  if (!caller.ok) return caller.response;
+
+  // Refused here, before the claim, so nothing has been spent — which is what
+  // lets a client resend the same answer after a 429, and what makes a client
+  // safe to retry after a 401 it has fixed by refreshing its token.
+  //
+  // A uid of null is a dev server with no service account; see the session
+  // route for why that is a null here and a refusal in production.
+  if (caller.uid && !(await gradeAllowedForUser(caller.uid, now))) {
+    return Response.json(
+      { error: "Too many answers at once. Wait a minute." },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -71,20 +111,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Before the session is fetched, so a caller in a loop costs a counter
-  // rather than a read and a transaction. Session minting is limited the same
-  // way and on a separate budget — see `session-store.ts` for why a
-  // school sharing one address needs the two kept apart.
-  const caller =
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
-
-  if (!(await gradeAllowed(caller, Date.now()))) {
-    return Response.json(
-      { error: "Too many answers at once. Wait a minute." },
-      { status: 429 },
-    );
-  }
-
   const at = position as number;
 
   const seats = table === undefined ? null : parseTable(table);
@@ -100,7 +126,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid response." }, { status: 400 });
   }
 
-  const session = await getSession(sessionId, Date.now());
+  const session = await getSession(sessionId, now);
   if (!session) {
     return Response.json(
       { error: "Session expired. Start the game again." },

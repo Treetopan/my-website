@@ -77,39 +77,57 @@ const MAX_SESSIONS = 5_000;
 const WINDOW_MS = 60_000;
 
 /**
- * Two budgets on the same limiter, because the two endpoints are asked for at
- * very different rates and must not share a counter — a burst of answering
- * cannot be allowed to lock a class out of starting a game.
+ * Four budgets on the same limiter: two things to limit, each counted two ways.
  *
- * Both are sized for a room rather than for a person, and that is the whole
- * story. The key is the caller's IP; a school is one IP; so thirty students
- * on the same wifi are one caller here. The numbers that read as generous for
- * an individual are the numbers that lock out the back half of a class the
- * first time they all press play together — which is exactly what 30 sessions
- * a minute did.
+ * The two things are minting and grading. They do not share a counter, because
+ * they are asked for at very different rates and a burst of answering must not
+ * lock a class out of starting a game.
  *
- * These are ceilings on abuse, not on use. Set them where a plausible room
- * never reaches them and a script still does:
+ * The two ways are the caller's uid and the caller's IP, and that is what
+ * changed. This was keyed on the IP alone, with a note here explaining why
+ * that was wrong and what it would take to fix: a school is one IP, so thirty
+ * students on the same wifi were one caller, and every limit had to be raised
+ * until it fit a whole room — which meant it also fit a script. The fix that
+ * note named was to key on the authenticated uid, and the thing standing in
+ * the way was that `/api/answer` did not verify an ID token. It verifies one
+ * now, and so does `/api/session`. See `caller.ts`.
  *
- *   · 300 sessions/min — a class of thirty starting, restarting and picking
- *     new subunits for a whole period, without any of them waiting.
- *   · 2000 answers/min — the same class answering flat out, plus duels, where
- *     one request grades a whole table.
+ * So the uid budget is the real limit, and it is sized for one person because
+ * it is finally counting one person:
  *
- * The real fix is not a bigger number. It is keying on the authenticated uid
- * instead of the IP, so the limit applies per student and a school stops being
- * one caller. That needs `/api/answer` to verify an ID token, which it does
- * not do today — grading is gated by holding a live session and by the
- * one-claim-per-position rule, neither of which says who you are. Deliberately
- * not done now, and written down here so it is not argued out again: the IP
- * key is a stopgap with a known failure mode, and the failure mode is a
- * classroom.
+ *   · 60 sessions/min — somebody restarting and re-picking subunits once a
+ *     second without ever pausing to play one.
+ *   · 400 answers/min — approaching seven a second, sustained for a full
+ *     minute, by somebody who in practice answers every few seconds. A duel
+ *     costs its host one of these for the whole table, not one per player.
  *
- * Every refusal is logged — see `refused` — because both numbers are guesses
- * about a room and the only way to learn one is wrong is to watch it fire.
+ * The IP budget stays, in front of the token check, and its job is now a
+ * different one that must not be read as a per-person limit. It is there so
+ * that traffic which has proved nothing yet cannot make this server verify
+ * tokens all day — which means it has to count every request, including the
+ * ones about to be identified, because a guard is no use behind the work it
+ * guards. Being shared, it is set well above any plausible room rather than at
+ * one:
+ *
+ *   · 1200 sessions/min and 8000 answers/min — four times the numbers that
+ *     were sized for a class of thirty going flat out. That headroom is what a
+ *     large school behind one address gets in exchange for the ceiling no
+ *     longer being the only thing between it and a refusal.
+ *
+ * A room that was under the old limits is comfortably under these, and one
+ * student hammering the endpoint now exhausts their own budget long before
+ * they touch the one their school shares. What this deliberately does not do
+ * is make the IP ceiling per-person: an address flooded by many
+ * unauthenticated callers can still use it up, and that is the price of
+ * keeping the cheap guard in front of the expensive check.
+ *
+ * Every refusal is logged — see `refused` — because all four are guesses, and
+ * watching one fire is the only way to learn it was the wrong guess.
  */
-const MINT_LIMIT = 300;
-const GRADE_LIMIT = 2000;
+const MINT_LIMIT_USER = 60;
+const GRADE_LIMIT_USER = 400;
+const MINT_LIMIT_IP = 1200;
+const GRADE_LIMIT_IP = 8000;
 
 // ─── The two backings ────────────────────────────────────
 
@@ -335,8 +353,8 @@ function verdictOf(value: unknown): StoredVerdict | null {
   return value as StoredVerdict;
 }
 
-/** RTDB keys cannot contain . $ # [ ] / — an IP or header value might. The
- *  `grade:` prefix a grading counter carries survives this untouched. */
+/** RTDB keys cannot contain . $ # [ ] / — an IP or a uid might. The
+ *  `mint:uid:` style prefix a counter carries survives this untouched. */
 function encodeKey(key: string): string {
   return key.replace(/[.$#[\]/]/g, "-");
 }
@@ -472,37 +490,64 @@ export async function awaitVerdict(
   return null;
 }
 
+/** What a counter is keyed on. Part of the key, so the four never collide:
+ *  a uid and an IP are both opaque strings and could in principle be equal. */
+type Keyed = "uid" | "ip";
+
 /**
  * Says so out loud when a limiter turns a request away.
  *
  * A student who hits one of these sees "wait a minute" and, in all likelihood,
- * stops playing rather than reporting it. The ceilings are guesses about how
- * busy a room gets, so a refusal is either a script — worth knowing about — or
- * a guess that was wrong, which is worth knowing about sooner. Names the limit
- * it broke and the key it was counted under, because with an IP key that key
- * is often a whole school and that is the tell.
+ * stops playing rather than reporting it. The ceilings are guesses, so a
+ * refusal is either a script — worth knowing about — or a guess that was
+ * wrong, which is worth knowing about sooner.
+ *
+ * Which kind of counter fired is the whole diagnostic, so it is named. A uid
+ * over budget is one person, and is either automation or a number set too low
+ * for how people actually play. An IP over its ceiling is a building, and now
+ * that the uid budget is what shapes ordinary use, it means either a real
+ * flood or a room much larger than these numbers were guessed for.
  */
-function refused(what: string, key: string, limit: number): void {
+function refused(what: string, by: Keyed, key: string, limit: number): void {
   console.warn(
-    `[rate] refused ${what} for ${key}: over ${limit} per ${WINDOW_MS / 1000}s. ` +
-      "Counted per IP, so this may be a whole school rather than one person — " +
-      "if it is, raise the limit in session-store.ts rather than leaving them stuck.",
+    `[rate] refused ${what} for ${by} ${key}: over ${limit} per ${WINDOW_MS / 1000}s. ` +
+      (by === "uid"
+        ? "That is one account, so this is either automation or a per-person budget " +
+          "set below how people really play."
+        : "That is one address and may be a whole school. The per-account budget is " +
+          "what limits a person now, so this ceiling firing means a flood or a very " +
+          "large room — raise it in session-store.ts rather than leaving them stuck."),
   );
 }
 
-/**
- * Minting sessions is the one thing left that a determined cheat can loop on,
- * so it is rate limited per caller. Sized so that a class all starting at once
- * never reaches it — see the constants above for why that is the bar.
- */
-export async function mintAllowed(key: string, now: number): Promise<boolean> {
-  const ok = await backing().allow(key, now, MINT_LIMIT);
-  if (!ok) refused("a session", key, MINT_LIMIT);
+/** Counts one call against one budget, and says so if it is over. */
+async function allow(
+  what: string,
+  budget: "mint" | "grade",
+  by: Keyed,
+  key: string,
+  now: number,
+  limit: number,
+): Promise<boolean> {
+  const ok = await backing().allow(`${budget}:${by}:${key}`, now, limit);
+  if (!ok) refused(what, by, key, limit);
   return ok;
 }
 
 /**
- * The same limiter over grading, on a counter of its own.
+ * Minting sessions is the one thing left that a determined cheat can loop on,
+ * so it is rate limited per player. This is the budget that shapes what one
+ * person can do; the IP ceiling below is a guard, not a limit on use.
+ */
+export async function mintAllowedForUser(
+  uid: string,
+  now: number,
+): Promise<boolean> {
+  return allow("a session", "mint", "uid", uid, now, MINT_LIMIT_USER);
+}
+
+/**
+ * The same over grading, on a counter of its own.
  *
  * Grading is already the narrow door — it needs a live session and each
  * position in one can be claimed exactly once, so there is no oracle to loop
@@ -510,8 +555,32 @@ export async function mintAllowed(key: string, now: number): Promise<boolean> {
  * an endpoint that resolves a generator and writes a transaction per call
  * should not be free to hammer, and a caller who is hammering it is not playing.
  */
-export async function gradeAllowed(key: string, now: number): Promise<boolean> {
-  const ok = await backing().allow(`grade:${key}`, now, GRADE_LIMIT);
-  if (!ok) refused("a grading", key, GRADE_LIMIT);
-  return ok;
+export async function gradeAllowedForUser(
+  uid: string,
+  now: number,
+): Promise<boolean> {
+  return allow("a grading", "grade", "uid", uid, now, GRADE_LIMIT_USER);
+}
+
+/**
+ * The pre-auth ceiling on minting, counted per address.
+ *
+ * Runs before the token is verified, because verifying one is the expensive
+ * thing being protected and a guard behind it protects nothing. Shared by
+ * everybody at that address, so it is set high enough that only a flood
+ * reaches it — see the constants above.
+ */
+export async function mintAllowedForIp(
+  ip: string,
+  now: number,
+): Promise<boolean> {
+  return allow("a session", "mint", "ip", ip, now, MINT_LIMIT_IP);
+}
+
+/** The same ceiling over grading, and for the same reason. */
+export async function gradeAllowedForIp(
+  ip: string,
+  now: number,
+): Promise<boolean> {
+  return allow("a grading", "grade", "ip", ip, now, GRADE_LIMIT_IP);
 }

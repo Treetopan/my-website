@@ -84,15 +84,24 @@ const BOT_ACCURACY = 0.7;
 /** When a bot locks in, as a fraction of the clock. Never at the very end. */
 const BOT_COMMIT = [0.25, 0.8];
 
-/** Firebase's clock, not the laptop's — every client must agree on the timer. */
+/**
+ * Firebase's clock, not the laptop's — every client must agree on the timer.
+ *
+ * `ready` is as much of the answer as the number is. The offset starts at zero
+ * and is filled in a round trip later, so anything drawn or scheduled before it
+ * lands is running on the laptop's clock: a machine a few seconds fast opened a
+ * thirty-second turn at 0:26 and then corrected itself once this arrived.
+ * Callers hold the full clock until it is true rather than showing a countdown
+ * they are about to take back.
+ */
 function useServerOffset() {
-  const [offset, setOffset] = useState(0);
+  const [clock, setClock] = useState({ offset: 0, ready: false });
   useEffect(() => {
     return onValue(ref(realtimeDb, ".info/serverTimeOffset"), (snap) => {
-      setOffset(snap.val() ?? 0);
+      setClock({ offset: snap.val() ?? 0, ready: true });
     });
   }, []);
-  return offset;
+  return clock;
 }
 
 export function Duel({
@@ -104,7 +113,7 @@ export function Duel({
 }) {
   const found = useMemo(() => describeAll(subunitIds), [subunitIds]);
   const { user, username } = useAuth();
-  const offset = useServerOffset();
+  const { offset, ready: clockReady } = useServerOffset();
 
   const [roomId, setRoomId] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomData | null>(null);
@@ -172,7 +181,11 @@ export function Duel({
   const startedAt =
     typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
   const elapsed = startedAt ? now + offset - startedAt : 0;
-  const msLeft = Math.max(0, totalMs - elapsed);
+  // Held at the full clock until the server offset has landed. Counting down
+  // against an unresolved offset is counting down against this laptop's clock,
+  // and a clock running fast takes the difference off the first turn of the
+  // game — the one turn where the player has no earlier number to compare to.
+  const msLeft = clockReady ? Math.max(0, totalMs - elapsed) : totalMs;
 
   const isHost = !!user && room?.hostUid === user.uid;
   const players = useMemo(() => room?.players ?? {}, [room?.players]);
@@ -563,19 +576,25 @@ export function Duel({
     // nothing left to retrigger it. Settling twice is harmless: the position
     // can only be claimed once, so the second attempt is refused by the server
     // rather than paying anybody twice.
+    //
+    // Waits for the server offset for the same reason the countdown does: an
+    // unresolved offset measures `remaining` from this laptop's clock, and a
+    // host running fast settles the question early on the other player.
     let again: ReturnType<typeof setInterval> | null = null;
-    const timeout = setTimeout(() => {
-      resolveRef.current();
-      again = setInterval(() => resolveRef.current(), 2000);
-    }, remaining + 600);
+    const timeout = clockReady
+      ? setTimeout(() => {
+          resolveRef.current();
+          again = setInterval(() => resolveRef.current(), 2000);
+        }, remaining + 600)
+      : null;
 
     return () => {
       timers.forEach(clearTimeout);
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       if (again) clearInterval(again);
       stop();
     };
-  }, [isHost, roomId, index, phase, room?.status, startedAt, totalMs, offset]);
+  }, [isHost, roomId, index, phase, room?.status, startedAt, totalMs, offset, clockReady]);
 
   // ── Host: on to the next question, or the end ──────────
   useEffect(() => {

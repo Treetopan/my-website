@@ -208,15 +208,40 @@ export async function recordSession(
 ): Promise<Progress> {
   const now = new Date();
 
-  const { snapshot } = await runTransaction(
+  /**
+   * What the transaction last worked out, kept so a run that does not commit
+   * still has something true to hand back. Seeded with the reading for a
+   * first-ever session, which is the case that goes wrong most visibly.
+   */
+  let projected = applySession(EMPTY_PROGRESS, {
+    xp: result.xp,
+    won: result.won,
+    at: now,
+  });
+
+  const { committed, snapshot } = await runTransaction(
     ref(realtimeDb, `users/${uid}/progress`),
     (current) => {
       const prev: Progress = { ...EMPTY_PROGRESS, ...(current ?? {}) };
-      return applySession(prev, { xp: result.xp, won: result.won, at: now });
+      projected = applySession(prev, { xp: result.xp, won: result.won, at: now });
+      return projected;
     },
   );
 
-  const saved: Progress = { ...EMPTY_PROGRESS, ...(snapshot.val() ?? {}) };
+  /**
+   * Which of the two readings is worth having is what `committed` decides.
+   *
+   * A transaction that did not commit leaves `snapshot` holding whatever is at
+   * the node, which for a player's first ever session is nothing at all — and
+   * spreading that over `EMPTY_PROGRESS` gives a streak of zero. That is not a
+   * streak anybody can be on: `applySession` never returns below one, so a zero
+   * here is always this fallback and never a real result. It is what printed a
+   * fresh "0d" on a summary while the header, listening to the same node,
+   * showed the day the streak had in fact reached.
+   */
+  const saved: Progress = committed
+    ? { ...EMPTY_PROGRESS, ...(snapshot.val() ?? {}) }
+    : projected;
 
   await push(ref(realtimeDb, `results/${uid}`), {
     ...result,

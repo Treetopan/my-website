@@ -1,7 +1,8 @@
 import "server-only";
 
 import type { NextRequest } from "next/server";
-import { adminAuth } from "./firebase-admin";
+import { adminProjectId } from "./firebase-admin";
+import { KeySourceError, verifyIdToken } from "./id-token";
 
 /**
  * Who is asking.
@@ -14,11 +15,10 @@ import { adminAuth } from "./firebase-admin";
  * they say a position is graded once, not that the person grading it is a
  * player. So identity has to come from somewhere else, and this is it.
  *
- * A Firebase ID token is a short-lived JWT the client SDK already holds, and
- * it is signed by Google. Verifying the signature is what turns "the body says
- * this is uid X" into "this really is uid X", and only a service account can
- * do it — which is why this needs the Admin SDK and why the answer below is
- * different when there is not one.
+ * A Firebase ID token is a short-lived JWT the client SDK already holds,
+ * signed by Google. Checking that signature is what turns "the body says this
+ * is uid X" into "this really is uid X". `id-token.ts` does the checking, and
+ * has the long story about why it does not use the Admin SDK to do it.
  *
  * The uid is worth having for its own sake and also as a rate-limiting key
  * that means something: an IP is a building, and a uid is a person. See
@@ -30,58 +30,49 @@ import { adminAuth } from "./firebase-admin";
  * response to send back instead — never both, and never a uid that was not
  * checked.
  *
- * `uid` is null in exactly one case: a development server with no service
- * account, where nothing can be verified and refusing everything would mean
- * `next dev` could not open a game. Callers must treat null as "unidentified
- * but let through", not as a uid.
+ * `uid` is null in exactly one case: a development server that cannot name the
+ * Firebase project, where nothing can be checked and refusing everything would
+ * mean `next dev` could not open a game. Callers must treat null as
+ * "unidentified but let through", not as a uid.
  */
 export type Caller =
   | { ok: true; uid: string | null }
   | { ok: false; response: Response };
 
-/** How long a verified token is good for is Firebase's business — an hour, in
- *  practice, and the client SDK refreshes it before then without being asked. */
-
 /**
  * Verifies the bearer token on a request and returns the uid inside it.
  *
- * Revocation is deliberately not checked. `verifyIdToken` will ask Firebase
- * whether the token has been revoked if told to, and that is a network round
- * trip on every graded answer to close a window that is at most one token
- * lifetime wide, on an endpoint whose worst case is somebody playing a game as
- * themselves for another hour. The signature and the expiry are the checks
- * worth paying for here.
+ * Three outcomes, and they are deliberately not collapsed. A caller with no
+ * usable token is refused with 401, which tells a client to sign in again and
+ * is something it can act on. A failure on our side — keys we could not fetch,
+ * a project we cannot name — is refused with 503, because telling somebody
+ * their sign-in expired when the truth is that we could not reach Google is a
+ * lie they would act on by signing in again, pointlessly. And a verified token
+ * yields a uid.
+ *
+ * Every path that is not a verified uid is a refusal. That is the fail-closed
+ * property this whole file exists for: there is no branch here that lets an
+ * unchecked caller through in production.
  */
 export async function verifyCaller(req: NextRequest): Promise<Caller> {
-  const auth = await adminAuth();
+  const projectId = adminProjectId();
 
-  // No service account. Nothing can be verified, so the only honest answers
-  // are "refuse everything" and "check nobody", and which is right depends
-  // entirely on where this is running.
-  if (!auth) {
+  // No project id, so there is nothing to check a token against. The only
+  // honest answers are "refuse everything" and "check nobody", and which is
+  // right depends entirely on where this is running.
+  if (!projectId) {
     if (process.env.NODE_ENV === "production") {
-      // Fail closed. A deployment that has lost its key is a deployment where
-      // this check is not happening, and quietly serving everybody would be
-      // exactly the hole this file was written to close. 503 rather than 401
-      // because the caller's credentials are not the problem and telling them
-      // to sign in again would be a lie they cannot act on.
       console.error(
-        "[caller] No FIREBASE_SERVICE_ACCOUNT in production — ID tokens cannot " +
-          "be verified, so /api/session and /api/answer are refusing every " +
-          "request. Set the service-account key.",
+        "[caller] No Firebase project id in production — ID tokens cannot be " +
+          "checked, so /api/session and /api/answer are refusing every " +
+          "request. Set FIREBASE_SERVICE_ACCOUNT or FIREBASE_PROJECT_ID.",
       );
-      return {
-        ok: false,
-        response: Response.json(
-          { error: "The server can't verify sign-ins right now." },
-          { status: 503 },
-        ),
-      };
+      return { ok: false, response: unavailable() };
     }
 
     console.warn(
-      "[caller] No FIREBASE_SERVICE_ACCOUNT — ID tokens are not being verified " +
-        "and every caller is treated as anonymous. Fine for `next dev`; this " +
+      "[caller] No Firebase project id — ID tokens are not being checked and " +
+        "every caller is treated as anonymous. Fine for `next dev`; this " +
         "would be a refusal in production.",
     );
     return { ok: true, uid: null };
@@ -91,9 +82,15 @@ export async function verifyCaller(req: NextRequest): Promise<Caller> {
   if (!token) return { ok: false, response: unauthorized("Sign in to play.") };
 
   try {
-    const decoded = await auth.verifyIdToken(token);
-    return { ok: true, uid: decoded.uid };
-  } catch {
+    return { ok: true, uid: await verifyIdToken(token, projectId) };
+  } catch (error) {
+    if (error instanceof KeySourceError) {
+      // Ours, not theirs. Refusing is still the right answer — this is the one
+      // place where being unable to check must never mean letting through.
+      console.error(`[caller] Cannot verify ID tokens: ${error.message}`);
+      return { ok: false, response: unavailable() };
+    }
+
     // Expired, malformed, signed by somebody else, or issued for another
     // project. The client cannot act differently on any of those, and saying
     // which would tell somebody probing exactly how their forgery fell short.
@@ -139,4 +136,12 @@ export function callerIp(req: NextRequest): string {
 
 function unauthorized(error: string): Response {
   return Response.json({ error }, { status: 401 });
+}
+
+/** Our fault, not the caller's, and still a refusal. */
+function unavailable(): Response {
+  return Response.json(
+    { error: "The server can't verify sign-ins right now." },
+    { status: 503 },
+  );
 }

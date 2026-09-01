@@ -65,7 +65,13 @@ export function adminDb(): Database | null {
  * Null means a project we cannot name, and a token cannot be checked against a
  * project we cannot name; the caller refuses. Naming the wrong one fails the
  * same way rather than the dangerous way — a mismatched issuer or audience
- * turns every token away instead of letting a foreign one through.
+ * turns every token away instead of letting a foreign one through. That is why
+ * the literal below is safe to keep, and it is the same literal and the same
+ * reasoning as `firebase.ts`: a project id identifies, it does not authorise.
+ *
+ * The fallback earns its place on preview deployments, where environment
+ * variables scoped to production are not present and every request would
+ * otherwise be refused for want of a name we already know.
  */
 export function adminProjectId(): string | null {
   // Runs connect() if it has not run yet, which is what fills projectId in.
@@ -75,7 +81,7 @@ export function adminProjectId(): string | null {
     projectId ??
     process.env.FIREBASE_PROJECT_ID ??
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??
-    null
+    "game-learning-platform"
   );
 }
 

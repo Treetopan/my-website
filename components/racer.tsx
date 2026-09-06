@@ -620,7 +620,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
               setTimes([]);
               setNotice(null);
               grading.current = null;
-              setBotPace(0);
+              setBotPace(START_PACE);
               setIdleLoss(0);
               setAsked(null);
               botHeld.current = 0;

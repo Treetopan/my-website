@@ -49,6 +49,47 @@ const REVEAL_MS = 1700;
 const PER_ANSWER = 2;
 const PER_MISS = 1;
 
+/**
+ * The opening of a session pays double.
+ *
+ * Two a question is the right number for a race and the wrong one for the
+ * first thirty seconds of one: the grid is where a game gets decided to be
+ * slow, and by the time the rate stops mattering the player has already left.
+ * So the first three questions are worth four, and the track says so while
+ * they are — which makes the drop back to two the end of something that was
+ * announced, rather than the game quietly getting stingier.
+ *
+ * A miss costs the same throughout. This is a bonus on the way up, not a
+ * different set of rules for the opening.
+ */
+const HEAD_START = 4;
+const HEAD_QUESTIONS = 3;
+
+/**
+ * Standing still, in metres per second given back.
+ *
+ * Par is the subunit's own difficulty time — the fifteen, twenty-two or thirty
+ * seconds the library advertises — and not a rolling average of your own
+ * answers, which would tighten every time you got quicker and so charge you
+ * for improving, and which is not a number at all on the first question.
+ *
+ * Past par you give back two, and two more seven seconds later — and then no
+ * more until the next question. Two steps is the whole of what one question
+ * can cost, because without a stop a single hard one taken slowly enough is
+ * worth five right answers, and the rule stops being about idling and starts
+ * being about thinking. Keeping the stop per question rather than per session
+ * means sitting out the *next* one still costs, which is the part that is
+ * actually about idling.
+ *
+ * Par is the thinking allowance, so nothing is taken until the whole of it has
+ * been spent, the track says it is coming five seconds out, and none of it can
+ * put you below the standstill you started on.
+ */
+const IDLE_STEP = 2;
+const IDLE_EVERY = 7000;
+const IDLE_MAX = 2;
+const IDLE_WARN = 5000;
+
 /** A ceiling on either, because a stocked subunit can ask sixty questions. */
 const TOP_PACE = 40;
 
@@ -103,6 +144,8 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
   const [times, setTimes] = useState<number[]>([]);
   /** The rival's pace. It only ever climbs, and only while a question is up. */
   const [botPace, setBotPace] = useState(0);
+  /** What standing still has given back this session, in metres per second. */
+  const [idleLoss, setIdleLoss] = useState(0);
 
   // The correct answer is not in this bundle — it arrives with the verdict.
   const [reveal, setReveal] = useState<Reveal | null>(null);
@@ -129,6 +172,15 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
 
   const total = questions.length;
   const question = questions[index];
+
+  /**
+   * Par for the question that is up, from the subunit it came from rather than
+   * from the race, since a race can mix several. It prices the speed bonus
+   * when the answer lands and it is where standing still starts to cost.
+   */
+  const parMs = question
+    ? DIFFICULTY[difficultyOfQuestion(question.id)].seconds * 1000
+    : 0;
 
   const draft: Answered = useMemo(
     () =>
@@ -162,13 +214,12 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
       // still a hard question.
       const difficulty = difficultyOfQuestion(question.id);
 
-      // Par, not a deadline, and not shown. The race has no clock at all now —
-      // no countdown, no stopwatch, no rail draining. All par sets is how long
-      // an answer can take before it stops earning the speed half of the
-      // distance, which prices efficiency without ever putting a number in
-      // front of you to race. Nothing is displayed and nothing is ever
-      // submitted on your behalf.
-      const parMs = DIFFICULTY[difficulty].seconds * 1000;
+      // Par now sets two things and is still not a deadline: how long an
+      // answer can take before it stops earning the speed half of the
+      // distance, and where standing still starts giving speed back. There is
+      // still no clock — no countdown, no stopwatch, no rail draining — and
+      // nothing is ever submitted on your behalf. The only thing shown is the
+      // last five seconds before the second of those, and only then.
 
       // Answer instantly and speed is worth its full share; take par or
       // longer and it is worth nothing. It never goes negative — a slow
@@ -231,9 +282,9 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
       // A step of pace either way. How quickly it came still counts, but
       // through the rival rather than through you: the clock it is chasing you
       // on is wound to your own best answer.
-      setLastGain(verdict.correct ? PER_ANSWER : -PER_MISS);
+      setLastGain(verdict.correct ? gainAt(index) : -PER_MISS);
     },
-    [question, index, sessionId, setDraft],
+    [question, index, sessionId, parMs, setDraft],
   );
 
   // One grading session per race. The stamp below waits on it, so that time
@@ -261,15 +312,17 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
     };
   }, [found, subunitIds, sessionId]);
 
-  // When the question went up. A single wall-clock stamp rather than a ticking
-  // counter: nothing on the screen reads it, so nothing needs it to tick. It is
-  // read once, at the moment you answer, to price the speed bonus.
-  const askedAt = useRef(0);
-
-  useEffect(() => {
-    if (phase !== "asking" || !question || !sessionId) return;
-    askedAt.current = Date.now();
-  }, [phase, index, question, sessionId]);
+  // When the question went up. Still one wall-clock reading per question
+  // rather than a ticking counter — but the render reads it now, so it is
+  // state: the strip on the track counts down to par off it. Nothing here
+  // ticks; the strip keeps its own clock, and only while it is on screen.
+  //
+  // The stamp carries the position it was taken for, because state arrives a
+  // render after the question does. Without that, the first frame of question
+  // four is painted holding question three's stamp — and on a question that
+  // ran past par, that frame paints the strip saying speed is coming off.
+  const [asked, setAsked] = useState<{ index: number; at: number } | null>(null);
+  const askedAt = asked?.index === index ? asked.at : 0;
 
   /** The answer was wrong, so there is an explanation on screen to read. */
   const missed = score !== null && score < PASS;
@@ -312,19 +365,66 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
     };
   }, [phase, missed, advance]);
 
-  // Your pace: two for every question taken, one back for every one missed.
+  // What the answers have earned: four a question for the first three, two a
+  // question after that, one back for every one missed.
   //
   // Floored at every step rather than only at the end, so a standstill is a
   // standstill: missing one while already stopped costs nothing, where a
   // running total left free to go negative would have quietly banked the debt
   // and eaten the next answer.
-  const pace = Math.min(
+  const earned = Math.min(
     TOP_PACE,
     answers.reduce(
-      (v, a) => Math.max(0, v + (a.correct ? PER_ANSWER : -PER_MISS)),
+      (v, a, i) => Math.max(0, v + (a.correct ? gainAt(i) : -PER_MISS)),
       0,
     ),
   );
+
+  // And your pace is what is left of it after standing still. Floored at the
+  // speed the session started on, which is a standstill: the race can take
+  // back everything you have, and nothing beyond it.
+  const pace = Math.max(0, earned - idleLoss);
+
+  // Each idle step fires from a timeout, long after the render that set it, so
+  // it reads the speed there is to take through a ref rather than closing over
+  // whatever it was when the question went up.
+  const earnedNow = useRef(0);
+
+  useEffect(() => {
+    earnedNow.current = earned;
+  }, [earned]);
+
+  /**
+   * The question goes up, and standing still starts costing at par: two once,
+   * then two more seven seconds after that, and there it stops for this
+   * question.
+   *
+   * Stamping and winding the clock are the same effect because they are the
+   * same moment. Read the stamp back out of state to wind from instead, and
+   * the wind happens a render early, off the *previous* question's stamp — a
+   * question that ran past par would have taken two more off the moment the
+   * next one appeared.
+   *
+   * Like the rival's clock it runs only while a question is actually up: a
+   * reveal is not stalling, and reading why you were wrong is the one part of
+   * a race worth being slow in. And every step is clamped to the speed there
+   * is to take, so a race cannot run up a debt while stopped and have it eat
+   * the answers that follow.
+   */
+  useEffect(() => {
+    if (phase !== "asking" || !question || !sessionId) return;
+
+    setAsked({ index, at: Date.now() });
+
+    let taken = 0;
+    let id = window.setTimeout(function bite() {
+      setIdleLoss((lost) => Math.min(lost + IDLE_STEP, earnedNow.current));
+      taken += 1;
+      if (taken < IDLE_MAX) id = window.setTimeout(bite, IDLE_EVERY);
+    }, parMs);
+
+    return () => window.clearTimeout(id);
+  }, [phase, index, question, sessionId, parMs]);
 
   // How often the rival finds another step: your typical answer plus the
   // grace, so answering in ten seconds is chased by a rival stepping up every
@@ -464,6 +564,8 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
         gain={lastGain}
         count={answers.length}
         over={phase === "over"}
+        headLeft={phase === "over" ? 0 : Math.max(0, HEAD_QUESTIONS - index)}
+        stall={phase === "asking" && askedAt ? { askedAt, parMs } : null}
       />
 
       <main className="flex flex-1 items-center justify-center px-6 py-10">
@@ -497,6 +599,8 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
               setNotice(null);
               grading.current = null;
               setBotPace(0);
+              setIdleLoss(0);
+              setAsked(null);
               botHeld.current = 0;
               botSince.current = null;
               setReveal(null);
@@ -524,8 +628,10 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
                 onSubmit={(response) => {
                   // Timed from the answer, not from the last tick, so the
                   // hundredths between ticks are not rounded in your favour.
+                  // No stamp yet means the question has only just been painted,
+                  // and an answer inside that frame took no time to speak of.
                   if (phase === "asking") {
-                    resolve(response, Date.now() - askedAt.current);
+                    resolve(response, askedAt ? Date.now() - askedAt : 0);
                   }
                 }}
               />
@@ -545,6 +651,11 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
       </main>
     </div>
   );
+}
+
+/** What the answer in position `i` is worth. The opening ones pay more. */
+function gainAt(i: number): number {
+  return i < HEAD_QUESTIONS ? HEAD_START : PER_ANSWER;
 }
 
 /** The middle answer, or null for none yet. An even count takes both middles. */
@@ -586,6 +697,8 @@ function Track({
   gain,
   count,
   over,
+  headLeft,
+  stall,
 }: {
   /** Both in metres per second. Whoever is quicker at the flag has won. */
   pace: number;
@@ -597,6 +710,10 @@ function Track({
   /** Answers given. It restarts the flash animation, nothing more. */
   count: number;
   over: boolean;
+  /** Questions still paying the head start, this one counted. Zero after. */
+  headLeft: number;
+  /** The question that is up, while one is. Null through a reveal. */
+  stall: { askedAt: number; parMs: number } | null;
 }) {
   return (
     <section className="flex shrink-0 flex-col gap-3 border-b border-line-soft px-6 py-4">
@@ -626,6 +743,16 @@ function Track({
           </span>
         )}
 
+        {/* Said out loud for as long as it is true, and counted down, so that
+            the question the head start runs out on is one you saw coming. */}
+        {headLeft > 0 && (
+          <span className="font-mono text-[11px] text-correct tnum">
+            head start: +{HEAD_START} · {headLeft} left
+          </span>
+        )}
+
+        {stall && <Stall askedAt={stall.askedAt} parMs={stall.parMs} />}
+
         {/* Keyed on the value so the number replays its arrival every time it
             moves. It is the thing a correct answer actually buys, and it used
             to change between two frames nobody was looking at. */}
@@ -654,6 +781,53 @@ function Track({
         />
       </div>
     </section>
+  );
+}
+
+/**
+ * The warning that standing still is about to cost speed, and then that it is
+ * costing it.
+ *
+ * Silent until five seconds from par, because a strip that is on the screen
+ * the whole time is a clock, and a clock is the thing this race deliberately
+ * does not have. It keeps its own quarter-second tick so that counting down
+ * does not re-render the race around it.
+ */
+function Stall({ askedAt, parMs }: { askedAt: number; parMs: number }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const past = now - askedAt - parMs;
+  if (past < -IDLE_WARN) return null;
+
+  // Both steps this question had to give are gone, and nothing further is
+  // coming until the next one. Saying so is the difference between a question
+  // that has finished costing and one that is still counting.
+  const spent = past >= IDLE_EVERY * (IDLE_MAX - 1);
+
+  // Before par, how long is left of it. After par, how long until the step
+  // still to come — measured from par, the same as the steps themselves.
+  const seconds =
+    past < 0
+      ? Math.ceil(-past / 1000)
+      : Math.ceil((IDLE_EVERY - (past % IDLE_EVERY)) / 1000);
+
+  return (
+    <span
+      className={`font-mono text-[11px] tnum ${
+        past < 0 ? "text-muted" : "text-out"
+      }`}
+    >
+      {past < 0
+        ? `−${IDLE_STEP} m/s in ${seconds}s`
+        : spent
+          ? `−${IDLE_STEP * IDLE_MAX} m/s · no more on this one`
+          : `−${IDLE_STEP} m/s · again in ${seconds}s`}
+    </span>
   );
 }
 

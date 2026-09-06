@@ -296,18 +296,45 @@ export function MathText({ text }: { text: string }) {
 
   return (
     <>
-      <span aria-hidden="true">
-        {segments.map((s, i) => (
-          <Fragment key={i}>
-            {s.kind === "text" ? (
-              raise(s.text)
-            ) : (
-              <GridView rows={s.rows} angle={s.angle} />
-            )}
-          </Fragment>
-        ))}
-      </span>
+      <span aria-hidden="true">{drawn(segments)}</span>
       <span className="sr-only">{spoken(text)}</span>
     </>
   );
+}
+
+/**
+ * The segments as nodes, with the punctuation after a grid held against it.
+ *
+ * A matrix is two lines tall inside a line of prose, so the browser is far
+ * more willing to break after one than it would be after a word — and the
+ * break it picks lands between the matrix and whatever follows. When what
+ * follows is a full stop, the next line opens with an orphaned ". What is the
+ * top entry?", which reads as a typo. Binding the punctuation to the grid
+ * moves the break one word earlier, in front of the matrix, where it belongs.
+ */
+function drawn(segments: Segment[]): ReactNode[] {
+  const nodes: ReactNode[] = [];
+
+  segments.forEach((s, i) => {
+    if (s.kind === "text") {
+      nodes.push(<Fragment key={i}>{raise(s.text)}</Fragment>);
+      return;
+    }
+
+    const next = segments[i + 1];
+    let tail = "";
+    if (next?.kind === "text") {
+      tail = next.text.match(/^[.,;:?!]+/)?.[0] ?? "";
+      next.text = next.text.slice(tail.length);
+    }
+
+    nodes.push(
+      <span key={i} className="whitespace-nowrap">
+        <GridView rows={s.rows} angle={s.angle} />
+        {tail}
+      </span>,
+    );
+  });
+
+  return nodes;
 }

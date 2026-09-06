@@ -82,11 +82,19 @@ const ROUNDS = 8;
  * It used to be a flat 2.8 seconds, which is not long enough to read a line
  * like "Mara took the gap — 0.47", let alone the coaching under it — the best
  * thing on the screen went past before anybody had found it. So the reveal is
- * now the player's to dismiss: it holds until everybody has pressed on, with a
- * floor so a reflex tap cannot skip it and a ceiling so a player who has
- * wandered off cannot stall the other one.
+ * now the player's to dismiss: it holds until everybody has pressed on, and a
+ * ceiling stops a player who has wandered off from stalling the other one.
+ *
+ * The floor is small on purpose. It was four seconds, on the reasoning that a
+ * reflex tap should not be able to skip the reveal — but readiness is only
+ * ever written by a button that exists nowhere except inside the reveal, and
+ * nowhere near where the Answer button was, so there is nothing to skip past.
+ * A player who has pressed on has read it, and holding them another three
+ * seconds for their own good is thirty seconds of dead air across a duel whose
+ * whole appeal is speed. What is left is enough to keep the handover from
+ * being a jump cut.
  */
-const REVEAL_MIN = 4000;
+const REVEAL_MIN = 1000;
 const REVEAL_MAX = 25000;
 
 const BOT_NAMES = ["Mara", "Dev", "Priya"];

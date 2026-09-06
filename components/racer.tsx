@@ -90,6 +90,26 @@ const IDLE_EVERY = 7000;
 const IDLE_MAX = 2;
 const IDLE_WARN = 5000;
 
+/**
+ * The speed you roll off the line at, in metres per second.
+ *
+ * A race that opens at a standstill spends its first question looking like a
+ * race that has not started, and the dial reading nothing is the least
+ * inviting thing on the screen. Rolling means the first answer speeds you up
+ * rather than starting you.
+ *
+ * It is a floor as well as a start: standing still can take back everything
+ * you have earned and nothing beyond it, which is what it always did — the
+ * standstill it stops at has simply moved up.
+ *
+ * Both cars roll off it, and the rival's ceiling is lifted by the same amount.
+ * The race is decided on `pace > botPace`, so starting one of them ten ahead
+ * would not have changed how the opening looks — it would have handed the
+ * player a lead the rival cannot reach until the fifth question. What this
+ * changes is the lights, not the finish.
+ */
+const START_PACE = 10;
+
 /** A ceiling on either, because a stocked subunit can ask sixty questions. */
 const TOP_PACE = 40;
 
@@ -143,7 +163,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
   /** How long each answer took, in ms. Their middle sets the rival's pace. */
   const [times, setTimes] = useState<number[]>([]);
   /** The rival's pace. It only ever climbs, and only while a question is up. */
-  const [botPace, setBotPace] = useState(0);
+  const [botPace, setBotPace] = useState(START_PACE);
   /** What standing still has given back this session, in metres per second. */
   const [idleLoss, setIdleLoss] = useState(0);
 
@@ -375,15 +395,15 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
   const earned = Math.min(
     TOP_PACE,
     answers.reduce(
-      (v, a, i) => Math.max(0, v + (a.correct ? gainAt(i) : -PER_MISS)),
-      0,
+      (v, a, i) => Math.max(START_PACE, v + (a.correct ? gainAt(i) : -PER_MISS)),
+      START_PACE,
     ),
   );
 
   // And your pace is what is left of it after standing still. Floored at the
-  // speed the session started on, which is a standstill: the race can take
-  // back everything you have, and nothing beyond it.
-  const pace = Math.max(0, earned - idleLoss);
+  // speed the session started on, which is the roll off the line: the race can
+  // take back everything you have earned, and nothing beyond it.
+  const pace = Math.max(START_PACE, earned - idleLoss);
 
   // Each idle step fires from a timeout, long after the render that set it, so
   // it reads the speed there is to take through a ref rather than closing over
@@ -418,7 +438,9 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
 
     let taken = 0;
     let id = window.setTimeout(function bite() {
-      setIdleLoss((lost) => Math.min(lost + IDLE_STEP, earnedNow.current));
+      setIdleLoss((lost) =>
+        Math.min(lost + IDLE_STEP, earnedNow.current - START_PACE),
+      );
       taken += 1;
       if (taken < IDLE_MAX) id = window.setTimeout(bite, IDLE_EVERY);
     }, parMs);
@@ -445,7 +467,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
   // dragging is the whole cost — hands it four steps against the single step
   // it cost you, and a race is lost on the question types it happened to deal
   // you rather than on the answers.
-  const botCap = Math.min(TOP_PACE, index * PER_ANSWER);
+  const botCap = Math.min(TOP_PACE, START_PACE + index * PER_ANSWER);
 
   /**
    * The rival's clock, one step at a time.

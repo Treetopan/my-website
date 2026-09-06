@@ -38,6 +38,33 @@ export function plural(n: number, one: string, many = one + "s"): string {
 }
 
 /**
+ * A number as it appears inside a substitution: bracketed, always.
+ *
+ * `(3)(1) + (4)(2)` rather than `3*1 + 4*2`, because half the numbers a matrix
+ * question rolls are negative and `3*-1 + 4*-2` is the line where a student
+ * stops reading. The brackets cost nothing and they are what the textbook
+ * does.
+ */
+export function put(n: number | string): string {
+  return `(${n})`;
+}
+
+/**
+ * The determinant of a 2×2, worked out with this roll's own numbers.
+ *
+ * Five generators across two courses ask for it, or ask something that turns
+ * on it, and a student who gets `ad - bc` wrong gets it wrong the same way in
+ * all five — so the line that shows the substitution is written once here
+ * rather than five times with the letters shuffled.
+ */
+export function detStep(a: number, b: number, c: number, d: number): string {
+  return (
+    `det = a_(11)·a_(22) - a_(12)·a_(21) = ` +
+    `${put(a)}${put(d)} - ${put(b)}${put(c)} = ${a * d - b * c}`
+  );
+}
+
+/**
  * The shared kit every question generator is built from.
  *
  * Split out of `templates.server.ts` so the per-course generator files can
@@ -192,7 +219,7 @@ export function ask(
   distractors: (number | string)[],
   r: Rng,
   figure?: Figure,
-  /** Worked steps for this exact roll. Overrides the topic method. */
+  /** Worked steps for this exact roll, printed under the topic method. */
   steps?: string[],
 ): Built {
   const right = String(correct);
@@ -246,7 +273,7 @@ export function fill(
     /** Numeric answers within this count. Default: exact. */
     tolerance?: number;
     figure?: Figure;
-    /** Worked steps for this exact roll. Overrides the topic method. */
+    /** Worked steps for this exact roll, printed under the topic method. */
     steps?: string[];
   } = {},
 ): Built {
@@ -284,7 +311,7 @@ export function slider(
     full?: number;
     zero?: number;
     figure?: Figure;
-    /** Worked steps for this exact roll. Overrides the topic method. */
+    /** Worked steps for this exact roll, printed under the topic method. */
     steps?: string[];
   },
 ): Built {
@@ -324,7 +351,7 @@ export function point(
     full?: number;
     zero?: number;
     figure?: Figure;
-    /** Worked steps for this exact roll. Overrides the topic method. */
+    /** Worked steps for this exact roll, printed under the topic method. */
     steps?: string[];
   },
 ): Built {
@@ -358,7 +385,7 @@ export function line(
     full?: number;
     zero?: number;
     figure?: Figure;
-    /** Worked steps for this exact roll. Overrides the topic method. */
+    /** Worked steps for this exact roll, printed under the topic method. */
     steps?: string[];
   },
 ): Built {

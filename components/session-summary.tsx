@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { levelProgress, type Progress } from "@/lib/progression";
-import { ReviewList } from "@/components/review-list";
+import { CloseList, ReviewList } from "@/components/review-list";
 import { summarize, verdict, type AnswerDetail } from "@/lib/review";
 
 /**
@@ -140,6 +140,13 @@ export function SessionSummary({
       {s.review.length > 0 && (
         <div className="mb-8">
           <ReviewList details={s.review} open />
+        </div>
+      )}
+
+      {/* Under the misses, because a miss is the thing to go back to first. */}
+      {s.close.length > 0 && (
+        <div className="mb-8">
+          <CloseList details={s.close} />
         </div>
       )}
 

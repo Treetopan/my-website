@@ -10,6 +10,7 @@ import {
   gcd,
   head,
   other,
+  plural,
   point,
   properFraction,
   shuffled,
@@ -392,7 +393,7 @@ export const GRADE_7: Record<string, ((r: Rng) => Built)[]> = {
       const white = r.int(1, 5);
       const part = r.int(2, 8);
       return slider(
-        `Paint is mixed ${blue} parts blue to ${white} parts white. Place the litres of blue in ${(blue + white) * part} litres of mix.`,
+        `Paint is mixed ${plural(blue, "part")} blue to ${plural(white, "part")} white. Place the litres of blue in ${(blue + white) * part} litres of mix.`,
         {
           min: 0,
           max: 60,
@@ -707,7 +708,7 @@ export const GRADE_7: Record<string, ((r: Rng) => Built)[]> = {
       const down = r.int(1, 9);
       const up = r.int(1, 9);
       return slider(
-        `A lift starts at floor ${start}, goes down ${down} floors and then up ${up}. Place the floor it ends on.`,
+        `A lift starts at floor ${start}, goes down ${plural(down, "floor")} and then up ${up}. Place the floor it ends on.`,
         {
           min: -10,
           max: 20,
@@ -1842,7 +1843,7 @@ export const GRADE_7: Record<string, ((r: Rng) => Built)[]> = {
       const trials = r.pick([20, 25, 50, 100]);
       const successes = r.int(1, trials - 1);
       return fill(
-        `${trials} simulated trials gave ${successes} successes. What is the experimental probability, as a percentage?`,
+        `${trials} simulated trials gave ${plural(successes, "success", "successes")}. What is the experimental probability, as a percentage?`,
         (successes * 100) / trials,
         { unit: "percent", hint: "a number" },
       );
@@ -2243,7 +2244,7 @@ export const GRADE_7: Record<string, ((r: Rng) => Built)[]> = {
       const sample = r.pick([20, 25, 50]);
       const successes = r.int(1, sample - 1);
       return slider(
-        `A sample of ${sample} had ${successes} successes. Place the percentage.`,
+        `A sample of ${sample} had ${plural(successes, "success", "successes")}. Place the percentage.`,
         {
           min: 0,
           max: 100,

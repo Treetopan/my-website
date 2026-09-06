@@ -6,11 +6,13 @@ import {
   asMixed,
   dp,
   fill,
+  firstQuadrant,
   frac,
   gcd,
   head,
   order,
   other,
+  plural,
   point,
   properFraction,
   shuffled,
@@ -310,8 +312,11 @@ export const GRADE_6: Record<string, ((r: Rng) => Built)[]> = {
       const cups = r.int(2, 3);
       const rice = r.int(1, Math.floor(9 / cups));
       return point(
-        `A recipe uses ${cups} cups of water for every cup of rice. Plot the point for ${rice} cups of rice.`,
-        { span: 10, x: rice, y: cups * rice },
+        `A recipe uses ${plural(cups, "cup")} of water for every cup of rice. Plot the point for ${plural(
+          rice,
+          "cup",
+        )} of rice.`,
+        { span: 10, frame: firstQuadrant(), x: rice, y: cups * rice },
       );
     },
     (r) => {
@@ -535,7 +540,7 @@ export const GRADE_6: Record<string, ((r: Rng) => Built)[]> = {
       const added = dp(r.int(100, 2999) / 100);
       const drained = dp(r.int(50, 499) / 100);
       return fill(
-        `A tank held ${start} litres, then ${added} litres went in and ${drained} litres drained out. How much is in it now?`,
+        `A tank held ${plural(start, "litre")}, then ${plural(added, "litre")} went in and ${plural(drained, "litre")} drained out. How much is in it now?`,
         dp(start + added - drained),
         { unit: "litres", hint: "a decimal" },
       );
@@ -695,7 +700,7 @@ export const GRADE_6: Record<string, ((r: Rng) => Built)[]> = {
       const start = r.int(0, 10);
       const fall = start + r.int(1, 12);
       return fill(
-        `A temperature falls ${fall} degrees from ${start}°C. What is the new temperature?`,
+        `A temperature falls ${plural(fall, "degree")} from ${start}°C. What is the new temperature?`,
         start - fall,
         { unit: "°C", hint: "a number" },
       );
@@ -872,7 +877,7 @@ export const GRADE_6: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const owed = r.int(1, 50);
       return slider(
-        `A bank balance reads -${owed} dollars. Place how much is owed.`,
+        `A bank balance reads -${owed}. Place how many dollars are owed.`,
         { min: 0, max: 50, step: 1, value: owed, unit: "dollars", full: 1, zero: 8 },
       );
     },
@@ -901,7 +906,7 @@ export const GRADE_6: Record<string, ((r: Rng) => Built)[]> = {
       const left = r.int(1, 9);
       const down = r.int(1, 9);
       return point(
-        `Plot the point ${left} units left and ${down} units down from (${x}, ${y}).`,
+        `Plot the point ${plural(left, "unit")} left and ${plural(down, "unit")} down from (${x}, ${y}).`,
         { span: 10, x: x - left, y: y - down },
       );
     },

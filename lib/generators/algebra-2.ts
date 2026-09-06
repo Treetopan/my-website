@@ -9,6 +9,7 @@ import {
   fill,
   piFrac,
   plot,
+  plural,
   point,
   slider,
   poly,
@@ -1785,7 +1786,7 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       let choose = 1;
       for (let i = 0; i < k; i++) choose = (choose * (n - i)) / (i + 1);
       return fill(
-        `A fair coin is thrown ${n} times. What is the chance of exactly ${k} heads?`,
+        `A fair coin is thrown ${n} times. What is the chance of exactly ${plural(k, "head")}?`,
         frac(choose, 2 ** n),
         { hint: "a fraction" },
       );

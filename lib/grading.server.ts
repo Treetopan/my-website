@@ -3,6 +3,7 @@ import "server-only";
 import {
   PASS,
   distance,
+  frameOf,
   inversions,
   isBlank,
   lineThrough,
@@ -221,19 +222,26 @@ export function botResponse(
     }
 
     case "point": {
-      const span = question.kind === "point" ? question.span : 8;
+      // The bot answers on the grid the player can see, so its miss is clamped
+      // to the question's own window rather than to a symmetric span — on a
+      // first-quadrant question the old clamp could land it off the picture.
+      const frame =
+        question.kind === "point"
+          ? frameOf(question.span, question.frame)
+          : frameOf(8);
+
       // Offset along a random direction rather than per-axis, so a miss is the
       // stated distance away whichever way it goes.
       const angle = Math.random() * Math.PI * 2;
       const reach = right ? Math.abs(near(answer.full)) : Math.abs(past(answer.zero));
-      const clamp = (n: number) =>
-        Math.max(-span, Math.min(span, Math.round(n)));
+      const clamp = (n: number, low: number, high: number) =>
+        Math.max(low, Math.min(high, Math.round(n)));
 
       return {
         kind: "point",
         at: {
-          x: clamp(answer.at.x + Math.cos(angle) * reach),
-          y: clamp(answer.at.y + Math.sin(angle) * reach),
+          x: clamp(answer.at.x + Math.cos(angle) * reach, frame.minX, frame.maxX),
+          y: clamp(answer.at.y + Math.sin(angle) * reach, frame.minY, frame.maxY),
         },
       };
     }

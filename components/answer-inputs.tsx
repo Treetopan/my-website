@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type {
-  FillQuestion,
-  LineQuestion,
-  OrderQuestion,
-  Point,
-  PointQuestion,
-  Reveal,
-  SliderQuestion,
+import {
+  PASS,
+  frameOf,
+  type FillQuestion,
+  type Frame,
+  type LineQuestion,
+  type OrderQuestion,
+  type Point,
+  type PointQuestion,
+  type Reveal,
+  type SliderQuestion,
 } from "@/lib/questions";
-import { Axes, Drawn, VIEW, useGrid } from "@/components/graph";
+import { Axes, Drawn, VIEW, describeGrid, useGrid } from "@/components/graph";
 import { MathText } from "@/components/math-text";
 
 /**
@@ -210,8 +213,14 @@ export function PointAnswer({
   onDraft: (at: Point) => void;
   onSubmit: () => void;
 }) {
-  const { svg, toView, toGrid } = useGrid(question.span);
+  const frame = frameOf(question.span, question.frame);
+  const { svg, toView, toGrid } = useGrid(frame);
   const right = reveal?.kind === "point" ? reveal.at : null;
+
+  // What the marker should feel like once the answer is out. A placement that
+  // counts as right is drawn as right — it used to go red like every other
+  // revealed answer, which tells somebody who nailed it that they missed.
+  const landed = score !== null && score >= PASS;
 
   const place = (e: React.PointerEvent) => {
     if (locked) return;
@@ -228,13 +237,18 @@ export function PointAnswer({
         <svg
           ref={svg}
           viewBox={`0 0 ${VIEW} ${VIEW}`}
+          role="img"
+          aria-label={
+            describeGrid(frame, question.figure) +
+            (locked ? "" : " Click or tap to place a point.")
+          }
           className={`w-full max-w-[340px] touch-none rounded-sm border border-line-soft bg-surface-2/40 ${
             locked ? "" : "cursor-crosshair"
           }`}
           onPointerDown={place}
           onPointerMove={(e) => e.buttons === 1 && place(e)}
         >
-          <Axes span={question.span} figure={question.figure} />
+          <Axes frame={frame} figure={question.figure} />
 
           {/* The figure goes down before the answer markers: what you were
               given sits under what you did, never over it. */}
@@ -260,13 +274,21 @@ export function PointAnswer({
             <circle
               cx={mine.x}
               cy={mine.y}
-              r={2.2}
-              className={right === null ? "fill-accent" : "fill-out"}
+              r={landed ? 2.6 : 2.2}
+              className={
+                right === null
+                  ? "fill-accent"
+                  : landed
+                    ? "animate-correct fill-correct"
+                    : "fill-out"
+              }
             />
           )}
 
-          {/* The gap between the two, said as a line rather than a number. */}
-          {mine && theirs && (
+          {/* The gap between the two, said as a line rather than a number.
+              Nothing to draw when the answer landed: there is no gap worth
+              pointing at, and a line to it would read as a correction. */}
+          {mine && theirs && !landed && (
             <line
               x1={mine.x}
               y1={mine.y}
@@ -285,9 +307,29 @@ export function PointAnswer({
               {question.figure.caption}
             </p>
           )}
-          <p className="font-mono text-[15px] text-ink tnum">
-            {draft ? `(${draft.x}, ${draft.y})` : "Tap the grid"}
+          {/* "Tap the grid" is an instruction, and once the round is over
+              there is nothing left to tap — a timed-out round has to say that
+              it timed out, the way the end-of-session review already does. */}
+          <p
+            className={`font-mono text-[15px] tnum ${
+              !draft && right !== null ? "text-out" : "text-ink"
+            }`}
+          >
+            {draft
+              ? `(${draft.x}, ${draft.y})`
+              : right !== null
+                ? "Ran out — no answer"
+                : "Tap the grid"}
           </p>
+
+          {/* The placement, announced. A grid says nothing to a screen reader
+              on its own, and where the point went is the part that moves. */}
+          <p className="sr-only" aria-live="polite">
+            {draft
+              ? `Point placed at x ${draft.x}, y ${draft.y}.`
+              : "No point placed."}
+          </p>
+
           {right && (
             <p className="font-mono text-[13px] text-muted tnum">
               answer <span className="text-correct">{`(${right.x}, ${right.y})`}</span>
@@ -322,8 +364,10 @@ export function LineAnswer({
   onSubmit: () => void;
 }) {
   const span = question.span;
-  const { svg, toView, toGrid } = useGrid(span);
+  const frame = frameOf(span, question.frame);
+  const { svg, toView, toGrid } = useGrid(frame);
   const [dragging, setDragging] = useState<0 | 1 | null>(null);
+  const landed = score !== null && score >= PASS;
 
   // Starts as a flat line through the origin, so there is always something on
   // the grid to move. An empty grid makes the first interaction a guess about
@@ -351,14 +395,14 @@ export function LineAnswer({
 
   const a = toView(through[0]);
   const b = toView(through[1]);
-  const edge = extend(through, span, toView);
+  const edge = extend(through, frame, toView);
   const answerEdge = right
     ? extend(
         [
-          { x: -span, y: right.slope * -span + right.intercept },
-          { x: span, y: right.slope * span + right.intercept },
+          { x: frame.minX, y: right.slope * frame.minX + right.intercept },
+          { x: frame.maxX, y: right.slope * frame.maxX + right.intercept },
         ],
-        span,
+        frame,
         toView,
       )
     : null;
@@ -369,12 +413,17 @@ export function LineAnswer({
         <svg
           ref={svg}
           viewBox={`0 0 ${VIEW} ${VIEW}`}
+          role="img"
+          aria-label={
+            describeGrid(frame, question.figure) +
+            (locked ? "" : " Drag the two handles to draw a line.")
+          }
           className="w-full max-w-[340px] touch-none rounded-sm border border-line-soft bg-surface-2/40"
           onPointerMove={move}
           onPointerUp={() => setDragging(null)}
           onPointerLeave={() => setDragging(null)}
         >
-          <Axes span={span} figure={question.figure} />
+          <Axes frame={frame} figure={question.figure} />
 
           {question.figure && <Drawn figure={question.figure} toView={toView} />}
 
@@ -394,9 +443,15 @@ export function LineAnswer({
             y1={edge.from.y}
             x2={edge.to.x}
             y2={edge.to.y}
-            className={right === null ? "stroke-accent" : "stroke-out"}
+            className={
+              right === null
+                ? "stroke-accent"
+                : landed
+                  ? "stroke-correct"
+                  : "stroke-out"
+            }
             strokeWidth={0.9}
-            strokeDasharray={right === null ? undefined : "2 1.5"}
+            strokeDasharray={right === null || landed ? undefined : "2 1.5"}
           />
 
           {!locked &&
@@ -421,7 +476,17 @@ export function LineAnswer({
               {question.figure.caption}
             </p>
           )}
-          <p className="font-mono text-[15px] text-ink tnum">{describe(through)}</p>
+          <p
+            className={`font-mono text-[15px] tnum ${
+              !draft && right !== null ? "text-out" : "text-ink"
+            }`}
+          >
+            {!draft && right !== null ? "Ran out — no answer" : describe(through)}
+          </p>
+
+          <p className="sr-only" aria-live="polite">
+            {draft ? `Line drawn: ${describe(through)}.` : "No line drawn yet."}
+          </p>
           {right && (
             <p className="font-mono text-[13px] text-muted tnum">
               answer{" "}
@@ -444,14 +509,14 @@ export function LineAnswer({
 /** Runs the line out to both edges of the grid, so it reads as a line. */
 function extend(
   through: [Point, Point],
-  span: number,
+  frame: Frame,
   toView: (p: Point) => { x: number; y: number },
 ) {
   const slope = (through[1].y - through[0].y) / (through[1].x - through[0].x);
   const intercept = through[0].y - slope * through[0].x;
   return {
-    from: toView({ x: -span, y: slope * -span + intercept }),
-    to: toView({ x: span, y: slope * span + intercept }),
+    from: toView({ x: frame.minX, y: slope * frame.minX + intercept }),
+    to: toView({ x: frame.maxX, y: slope * frame.maxX + intercept }),
   };
 }
 

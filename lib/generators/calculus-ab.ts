@@ -10,6 +10,7 @@ import {
   fill,
   line,
   plot,
+  plural,
   point,
   poly,
   signed,
@@ -1257,7 +1258,7 @@ export const CALCULUS_AB: Record<string, ((r: Rng) => Built)[]> = {
       const hours = r.int(2, 9);
       const start = r.int(0, 50);
       return fill(
-        `A tank holds ${start} litres and fills at a steady ${rate} litres an hour. How much is in it after ${hours} hours?`,
+        `A tank holds ${plural(start, "litre")} and fills at a steady ${plural(rate, "litre")} an hour. How much is in it after ${hours} hours?`,
         start + rate * hours,
         { unit: "litres", hint: "Start plus what accumulated" },
       );

@@ -4,9 +4,38 @@ import {
   pairCount,
   type Curve,
   type Figure,
+  type Frame,
   type Mark,
   type Point,
 } from "../questions";
+
+/**
+ * The window a first-quadrant question is drawn on.
+ *
+ * "Plot (4, 7)" on a grid that runs -10..10 spends three quarters of the
+ * picture on places the answer can never be, and draws the quarter that
+ * matters at half the resolution it could have. A generator that only ever
+ * produces non-negative coordinates says so with this, and gets a grid that
+ * starts at the origin.
+ *
+ * Declared here rather than inferred, because what a generator *can* produce
+ * is a fact about its number ranges that only its author knows —
+ * `check:frames` is what holds the two together.
+ */
+export function firstQuadrant(max = 10): Frame {
+  return { minX: 0, maxX: max, minY: 0, maxY: max };
+}
+
+/**
+ * A count with its noun, singular where the count is one.
+ *
+ * "1 units up" is the sort of thing a student reads as a typo in the question
+ * rather than as a question, and every generator that builds a prompt out of a
+ * rolled number invites it. `check:plural` finds the ones that still do.
+ */
+export function plural(n: number, one: string, many = one + "s"): string {
+  return `${n} ${Math.abs(n) === 1 ? one : many}`;
+}
 
 /**
  * The shared kit every question generator is built from.
@@ -118,6 +147,7 @@ export type Built =
       kind: "point";
       prompt: string;
       span: number;
+      frame?: Frame;
       at: { x: number; y: number };
       full: number;
       zero: number;
@@ -128,6 +158,7 @@ export type Built =
       kind: "line";
       prompt: string;
       span: number;
+      frame?: Frame;
       slope: number;
       intercept: number;
       full: number;
@@ -285,6 +316,11 @@ export function point(
     span: number;
     x: number;
     y: number;
+    /**
+     * The window to draw, where -span..span is more of the plane than the
+     * question can ever use. `firstQuadrant()` is the common one.
+     */
+    frame?: Frame;
     full?: number;
     zero?: number;
     figure?: Figure;
@@ -296,6 +332,7 @@ export function point(
     kind: "point",
     prompt,
     span: spec.span,
+    frame: spec.frame,
     at: { x: spec.x, y: spec.y },
     // Exact by default: the grid snaps to whole units, so anything off is off
     // by at least one, and a near miss is a real miss.
@@ -316,6 +353,8 @@ export function line(
     span: number;
     slope: number;
     intercept: number;
+    /** The window to draw. See `point`. */
+    frame?: Frame;
     full?: number;
     zero?: number;
     figure?: Figure;
@@ -327,6 +366,7 @@ export function line(
     kind: "line",
     prompt,
     span: spec.span,
+    frame: spec.frame,
     slope: spec.slope,
     intercept: spec.intercept,
     full: spec.full ?? 0.25,
@@ -672,6 +712,8 @@ export function dot(
  */
 export function graph(spec: {
   span: number;
+  /** The window to draw. Defaults to -span..span on both axes. */
+  frame?: Frame;
   curves: (Curve | Curve[])[];
   marks?: Mark[];
   xLabel?: string;
@@ -680,6 +722,7 @@ export function graph(spec: {
 }): Figure {
   return {
     span: spec.span,
+    frame: spec.frame,
     curves: spec.curves.flat(),
     marks: spec.marks,
     xLabel: spec.xLabel,

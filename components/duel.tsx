@@ -26,6 +26,7 @@ import {
   recordSession,
   startDuel,
   submitAnswer,
+  updatePlayer,
   updateRoom,
   watchAnswers,
   watchProgress,
@@ -75,8 +76,18 @@ const SEATS = 2;
 /** Questions in a duel. Short on purpose — it is a sprint, not a session. */
 const ROUNDS = 8;
 
-/** Long enough to read two scores and the gap between them. */
-const REVEAL_MS = 2800;
+/**
+ * How long the reveal stays up.
+ *
+ * It used to be a flat 2.8 seconds, which is not long enough to read a line
+ * like "Mara took the gap — 0.47", let alone the coaching under it — the best
+ * thing on the screen went past before anybody had found it. So the reveal is
+ * now the player's to dismiss: it holds until everybody has pressed on, with a
+ * floor so a reflex tap cannot skip it and a ceiling so a player who has
+ * wandered off cannot stall the other one.
+ */
+const REVEAL_MIN = 4000;
+const REVEAL_MAX = 25000;
 
 const BOT_NAMES = ["Mara", "Dev", "Priya"];
 const BOT_ACCURACY = 0.7;
@@ -203,29 +214,44 @@ export function Duel({
     [room?.committed],
   );
 
-  const [entered, setEntered] = useState<{ id: string; response: Answered } | null>(
-    null,
-  );
-  const [submittedFor, setSubmittedFor] = useState<string | null>(null);
+  /**
+   * What I have entered for the round showing now, and whether I have sent it.
+   *
+   * Both carry the position and the question they belong to, and both are
+   * cleared outright when the round turns over. This is the one place a round
+   * is reset, which is the point of it: a point placed on the grid, a slider
+   * dragged, a line drawn and a typed answer all live in here, so none of them
+   * can survive into the next question on their own. What made that worth
+   * doing properly is that the answer surface is armed by the draft — a stale
+   * draft is not a cosmetic leftover, it is a loaded Answer button pointing at
+   * a question the player has not read yet.
+   */
+  const [round, setRound] = useState({ at: index, id: question?.id });
+  const [entered, setEntered] = useState<Answered | null>(null);
+  const [sent, setSent] = useState(false);
+
+  // A new round is a clean slate, cleared here rather than in an effect so
+  // that no render ever sees the last round's answer: React re-runs this
+  // component before committing anything to the screen.
+  if (round.at !== index || round.id !== question?.id) {
+    setRound({ at: index, id: question?.id });
+    setEntered(null);
+    setSent(false);
+  }
 
   const draft: Answered = useMemo(
     () =>
       !question
         ? { kind: "choice", choice: null }
-        : entered?.id === question.id
-          ? entered.response
-          : emptyResponse(question.kind),
+        : (entered ?? emptyResponse(question.kind)),
     [question, entered],
   );
 
-  const setDraft = useCallback(
-    (response: Answered) => {
-      if (question) setEntered({ id: question.id, response });
-    },
-    [question],
-  );
+  const setDraft = useCallback((response: Answered) => {
+    setEntered(response);
+  }, []);
 
-  const locked = !!question && submittedFor === question.id;
+  const locked = sent;
 
   /** How much clock was left when I committed, for the XP a duel still pays. */
   const speeds = useRef<Record<number, number>>({});
@@ -367,15 +393,15 @@ export function Duel({
   // ── Answering ──────────────────────────────────────────
   const commit = useCallback(
     async (response: Answered) => {
-      if (!roomId || !user || !question || submittedFor === question.id) return;
-      setSubmittedFor(question.id);
+      if (!roomId || !user || !question || sent) return;
+      setSent(true);
       setDraft(response);
       speeds.current[index] = Math.max(0, Math.min(1, msLeft / totalMs));
       // Write-once at the rules level. A rejected write means this client
       // already answered, which is not an error worth showing anybody.
       await submitAnswer(roomId, index, user.uid, response).catch(() => {});
     },
-    [roomId, user, question, submittedFor, setDraft, index, msLeft, totalMs],
+    [roomId, user, question, sent, setDraft, index, msLeft, totalMs],
   );
 
   // Read through refs so that typing or dragging does not tear down the
@@ -397,7 +423,19 @@ export function Duel({
    * draft: the host has no way to answer on your behalf, and should not.
    */
   useEffect(() => {
-    if (!question || locked || settled || !startedAt || room?.status !== "playing") {
+    if (
+      !question ||
+      locked ||
+      settled ||
+      !startedAt ||
+      // Held for the server offset, exactly as the countdown and the host's
+      // settling already are. Before it lands the offset is zero, so a laptop
+      // whose clock runs ahead of the server measures the deadline as already
+      // past and submits the draft the instant the round opens — against a
+      // question nobody has had time to read.
+      !clockReady ||
+      room?.status !== "playing"
+    ) {
       return;
     }
     const remaining = startedAt + totalMs - (Date.now() + offset);
@@ -406,7 +444,7 @@ export function Duel({
       Math.max(0, remaining),
     );
     return () => clearTimeout(id);
-  }, [question, locked, settled, startedAt, totalMs, offset, room?.status]);
+  }, [question, locked, settled, startedAt, totalMs, offset, clockReady, room?.status]);
 
   // ── Host: settle the round ─────────────────────────────
   const playersRef = useRef(players);
@@ -596,11 +634,48 @@ export function Duel({
     };
   }, [isHost, roomId, index, phase, room?.status, startedAt, totalMs, offset, clockReady]);
 
+  // ── The reveal: read it, then press on ─────────────────
+
+  const revealing = settled ? settled.index : null;
+
+  /** When the reveal showing now went up, so a hold can be measured from it. */
+  const shownAt = useRef<{ at: number; when: number } | null>(null);
+  useEffect(() => {
+    if (revealing !== null) shownAt.current = { at: revealing, when: Date.now() };
+  }, [revealing]);
+
+  /** Bring the reveal onto the screen. It is no use where it cannot be seen. */
+  const revealRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (revealing === null) return;
+    // "nearest" so a reveal already in view is left where it is: scrolling a
+    // screen that did not need scrolling is its own kind of flinch.
+    revealRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [revealing]);
+
+  const readyFor =
+    user && settled ? players[user.uid]?.readyFor === settled.index : false;
+
+  const readOn = useCallback(() => {
+    if (!roomId || !user || !settled) return;
+    updatePlayer(roomId, user.uid, { readyFor: settled.index }).catch(() => {});
+  }, [roomId, user, settled]);
+
   // ── Host: on to the next question, or the end ──────────
   useEffect(() => {
     if (!isHost || !roomId || !room || room.status !== "playing" || !settled) {
       return;
     }
+
+    // Bots have nothing to read, so a duel against one waits only on the
+    // person playing it.
+    const waiting = Object.values(room.players).some(
+      (p) => !p.isBot && p.readyFor !== settled.index,
+    );
+    const since = Date.now() - (shownAt.current?.when ?? Date.now());
+    const hold = waiting
+      ? Math.max(0, REVEAL_MAX - since)
+      : Math.max(0, REVEAL_MIN - since);
 
     const id = setTimeout(async () => {
       const at = settled.index + 1;
@@ -622,7 +697,7 @@ export function Duel({
         committed: null,
         questionStartedAt: { ".sv": "timestamp" } as unknown as number,
       });
-    }, REVEAL_MS);
+    }, hold);
 
     return () => clearTimeout(id);
   }, [isHost, roomId, room, settled]);
@@ -686,6 +761,40 @@ export function Duel({
       });
   }, [room?.status, user, found, myAnswers, won, progress, subunitIds]);
 
+  /**
+   * "Play again" used to hand the player back to "Open a duel", three taps
+   * short of another round on the subunit they were already playing. It opens
+   * one instead, and this is the little state machine that does it: clear the
+   * old duel, create a room, and start it the moment the lobby exists.
+   */
+  const restart = useRef(false);
+  /** Set for as long as a `create` is in flight, so it is only ever sent once. */
+  const opening = useRef(false);
+
+  const createRef = useRef(create);
+  const startRef = useRef(start);
+  useEffect(() => {
+    createRef.current = create;
+    startRef.current = start;
+  });
+
+  useEffect(() => {
+    if (!restart.current) return;
+
+    if (!roomId) {
+      if (opening.current || busy || !user || !found) return;
+      opening.current = true;
+      createRef.current();
+      return;
+    }
+
+    opening.current = false;
+    if (isHost && room?.status === "lobby") {
+      restart.current = false;
+      startRef.current();
+    }
+  }, [roomId, room?.status, isHost, user, found, busy]);
+
   // Host: bin the room once it is over, leaving the other client a moment to
   // take its snapshot first.
   useEffect(() => {
@@ -715,18 +824,14 @@ export function Duel({
     const winner = finalRoom.winnerUid
       ? finalRoom.players[finalRoom.winnerUid]?.displayName
       : null;
-    const mine = user ? finalRoom.players[user.uid]?.score ?? 0 : 0;
-    const theirs = Object.entries(finalRoom.players)
-      .filter(([uid]) => uid !== user?.uid)
-      .map(([, p]) => p.score);
-
     return (
       <Shell subtitle={subtitle}>
         <SessionSummary
           headline={
             !winner ? "Dead level." : won ? "You were closer." : `${winner} was closer.`
           }
-          detail={`${selectionNames(found)} · ${mine} to ${theirs.join(" and ")}`}
+          detail={selectionNames(found)}
+          score={scoreline(finalRoom, user?.uid ?? null)}
           details={myAnswers}
           xpEarned={
             myAnswers.reduce((s, a) => s + xpForAnswer(a), 0) + (won ? 50 : 0)
@@ -739,9 +844,13 @@ export function Duel({
             setFinalRoom(null);
             setMyPicks({});
             speeds.current = {};
+            settledRef.current = null;
             savedRef.current = false;
             setBefore(null);
             setAfter(null);
+            setError(null);
+            restart.current = true;
+            opening.current = false;
           }}
         />
       </Shell>
@@ -880,17 +989,26 @@ export function Duel({
   // ── Playing ────────────────────────────────────────────
   const mine = user && settled ? settled.results[user.uid] : null;
   const waiting = locked && !settled;
+  const opponent =
+    order.find(([uid]) => uid !== user?.uid)?.[1].displayName ??
+    "the other player";
+
+  const standing = settled
+    ? "Both in."
+    : waiting
+      ? `Locked in — waiting for ${opponent}`
+      : "You are both answering this one.";
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-5 px-6 text-[13px]">
+      <header className="flex h-12 shrink-0 items-center gap-3 px-4 text-[13px] sm:h-14 sm:gap-5 sm:px-6">
         <Wordmark />
-        <span className="font-medium">Mirror Duel</span>
+        <span className="hidden font-medium sm:inline">Mirror Duel</span>
         <span className="font-mono text-[11px] text-faint tnum">
           {Math.min(index + 1, ROUNDS)} of {room.questions.length}
         </span>
 
-        <span className="ml-auto flex items-center gap-5">
+        <span className="ml-auto flex items-center gap-4 sm:gap-5">
           <span
             className={`font-mono text-[13px] tnum ${
               msLeft <= 5000 && !locked && !settled
@@ -911,23 +1029,45 @@ export function Duel({
         urgent={msLeft <= 5000 && !locked}
       />
 
-      <div className="flex flex-1 flex-col-reverse lg:flex-row">
-        <main className="flex flex-1 items-center justify-center px-6 py-10">
+      {/*
+        The score, on one line, where the question is.
+
+        A duel is played by looking at the grid, and on a phone the grid used to
+        be the one thing below the fold — the table and the scoreboard sat above
+        it, so reading the clock meant scrolling away from the answer surface
+        and the first question of a duel went to whoever was already scrolled to
+        the right place. The table is worth having and is not worth that, so
+        below the wide breakpoint it stands down to this: two names, two scores,
+        and who is still thinking.
+      */}
+      <div className="flex shrink-0 items-baseline gap-4 border-b border-line-soft px-4 py-1.5 text-[12px] lg:hidden">
+        {order.map(([uid, p]) => (
+          <span key={uid} className="flex items-baseline gap-1.5">
+            <span className={uid === user?.uid ? "text-ink" : "text-muted"}>
+              {uid === user?.uid ? "You" : p.displayName}
+            </span>
+            <span className="font-mono text-ink tnum">{p.score}</span>
+          </span>
+        ))}
+        <span
+          className={`ml-auto truncate font-mono text-[11px] ${
+            waiting ? "text-accent" : "text-faint"
+          }`}
+        >
+          {settled ? "both in" : waiting ? "locked in" : "answering"}
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col lg:flex-row">
+        <main className="flex flex-1 flex-col items-center px-4 py-4 sm:px-6 lg:justify-center lg:py-10">
           {question && (
             <div className="w-full max-w-3xl">
               <p
-                className={`mb-4 text-[14px] ${
+                className={`mb-4 hidden text-[14px] lg:block ${
                   waiting ? "text-accent" : "text-muted"
                 }`}
               >
-                {settled
-                  ? "Both in."
-                  : waiting
-                    ? `Locked in — waiting for ${
-                        order.find(([uid]) => uid !== user?.uid)?.[1].displayName ??
-                        "the other player"
-                      }`
-                    : "You are both answering this one."}
+                {standing}
               </p>
 
               <QuestionStage
@@ -938,23 +1078,30 @@ export function Duel({
                 score={mine ? mine.score : null}
                 steps={settled?.steps ?? undefined}
                 disabled={locked || !!settled}
+                steady
                 onDraft={setDraft}
                 onSubmit={commit}
               />
 
               {settled && (
-                <Settlement
-                  settled={settled}
-                  players={players}
-                  meUid={user?.uid ?? null}
-                />
+                <div ref={revealRef}>
+                  <Settlement
+                    settled={settled}
+                    players={players}
+                    meUid={user?.uid ?? null}
+                    ready={readyFor}
+                    waitingFor={opponent}
+                    onNext={readOn}
+                    last={settled.index + 1 >= room.questions.length}
+                  />
+                </div>
               )}
             </div>
           )}
         </main>
 
         {/* ── The two of you ─────────────────────────────── */}
-        <aside className="shrink-0 border-line-soft px-6 py-8 lg:w-80 lg:border-l">
+        <aside className="hidden shrink-0 border-line-soft px-6 py-8 lg:block lg:w-80 lg:border-l">
           <p className="eyebrow mb-3">The duel</p>
 
           <div className="h-56 overflow-hidden rounded-[10px] border border-line lg:h-72">
@@ -1020,10 +1167,19 @@ function Settlement({
   settled,
   players,
   meUid,
+  ready,
+  waitingFor,
+  onNext,
+  last,
 }: {
   settled: NonNullable<RoomData["duel"]>;
   players: Record<string, RoomPlayer>;
   meUid: string | null;
+  /** Whether this player has already said they are done reading. */
+  ready: boolean;
+  waitingFor: string;
+  onNext: () => void;
+  last: boolean;
 }) {
   const rows = seated(players).map(([uid, p]) => ({
     uid,
@@ -1080,8 +1236,37 @@ function Settlement({
           ? gapless(rows)
           : `${rows.find((r) => r.uid === closest)?.name ?? "Someone"} took the gap — ${gap.toFixed(2)}.`}
       </p>
+
+      {/* The way out. The reveal waits for this rather than for a stopwatch,
+          which is the whole difference between coaching somebody read and
+          coaching somebody watched go past. */}
+      <div className="mt-6 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={ready}
+          className="rounded-sm bg-accent px-5 py-2.5 text-[13px] font-medium text-accent-ink transition-colors hover:bg-accent-hi disabled:cursor-default disabled:bg-surface-2 disabled:text-faint"
+        >
+          {last ? "See the result" : "Next question"}
+        </button>
+        {ready && (
+          <span className="font-mono text-[11px] text-faint">
+            waiting for {waitingFor}
+          </span>
+        )}
+      </div>
     </div>
   );
+}
+
+/**
+ * The final score, said as the two players rather than as a bare "45 to 35" —
+ * which, printed after the subunit's name, read as part of the title.
+ */
+function scoreline(room: RoomData, meUid: string | null): string {
+  return seated(room.players)
+    .map(([uid, p]) => `${uid === meUid ? "You" : p.displayName} ${p.score}`)
+    .join("  ·  ");
 }
 
 /** Why nobody took a gap: a dead heat, or a round nobody answered. */

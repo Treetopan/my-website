@@ -15,6 +15,7 @@ import { summarize, verdict, type AnswerDetail } from "@/lib/review";
 export function SessionSummary({
   headline,
   detail,
+  score,
   details,
   xpEarned,
   before,
@@ -23,6 +24,13 @@ export function SessionSummary({
 }: {
   headline: string;
   detail: string;
+  /**
+   * The final score, on a line of its own.
+   *
+   * It used to be appended to `detail`, which put "45 to 35" straight after
+   * the subunit's name and made the two read as one title.
+   */
+  score?: string;
   details: AnswerDetail[];
   xpEarned: number;
   before: Progress | null;
@@ -51,7 +59,12 @@ export function SessionSummary({
       <h1 className="text-3xl font-semibold tracking-[-0.035em] text-balance sm:text-[38px]">
         {headline}
       </h1>
-      <p className="mt-3 mb-8 text-[15px] text-muted">{detail}</p>
+      <p className={`mt-3 text-[15px] text-muted ${score ? "" : "mb-8"}`}>
+        {detail}
+      </p>
+      {score && (
+        <p className="mt-2 mb-8 font-mono text-[13px] text-ink tnum">{score}</p>
+      )}
 
       {/* ── The numbers ─────────────────────────────── */}
       <dl className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">

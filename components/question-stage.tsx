@@ -37,6 +37,7 @@ export function QuestionStage({
   score,
   steps,
   disabled,
+  steady,
   onDraft,
   onSubmit,
 }: {
@@ -60,6 +61,18 @@ export function QuestionStage({
   steps?: string[];
   /** True when it isn't your turn — the question shows but doesn't respond. */
   disabled?: boolean;
+  /**
+   * Hold the prompt to a fixed height, so what sits under it does not move
+   * between questions.
+   *
+   * A grid is answered by touching a place on it, which makes its position on
+   * the screen part of the control. "Plot (7, 3)." is one line and "Plot the
+   * point 2 units right and 1 unit up from the origin." is two, and the two
+   * questions put the origin thirty-five pixels apart — so the same tap on
+   * consecutive rounds is two different answers. Reserved rather than fixed:
+   * a prompt longer than the reserve still gets the room it needs.
+   */
+  steady?: boolean;
   onDraft: (draft: Response) => void;
   onSubmit: (response: Response) => void;
 }) {
@@ -92,9 +105,15 @@ export function QuestionStage({
 
   return (
     <div key={question.id} className="animate-question-in w-full max-w-3xl">
-      <p className="eyebrow mb-5">{eyebrow}</p>
+      <p className="eyebrow mb-2.5 sm:mb-5">{eyebrow}</p>
 
-      <h1 className="mb-9 text-2xl leading-[1.18] font-medium tracking-[-0.03em] text-balance sm:text-[38px]">
+      <h1
+        className={
+          "mb-5 text-[20px] leading-[1.18] font-medium tracking-[-0.03em] " +
+          "text-balance sm:mb-9 sm:text-[38px] " +
+          (steady ? "min-h-[3.54em] sm:min-h-[2.36em]" : "")
+        }
+      >
         <MathText text={question.prompt} />
       </h1>
 

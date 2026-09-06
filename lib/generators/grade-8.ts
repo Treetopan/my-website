@@ -10,6 +10,7 @@ import {
   line,
   order,
   other,
+  plural,
   point,
   properFraction,
   shuffled,
@@ -800,7 +801,7 @@ export const GRADE_8: Record<string, ((r: Rng) => Built)[]> = {
       const hours = r.int(2, 10);
       const end = r.int(5, 40);
       return slider(
-        `A tank holds ${end + rate * hours} litres and loses ${rate} litres an hour. Place the hours until it holds ${end}.`,
+        `A tank holds ${plural(end + rate * hours, "litre")} and loses ${plural(rate, "litre")} an hour. Place the hours until it holds ${end}.`,
         { min: 0, max: 12, step: 1, value: hours, unit: "hours", full: 1, zero: 3 },
       );
     },
@@ -1576,7 +1577,7 @@ export const GRADE_8: Record<string, ((r: Rng) => Built)[]> = {
       const start = r.int(4, 9);
       const rate = r.int(1, 3);
       return line(
-        `A tank starts with ${start} litres and loses ${rate} litres a minute. Draw litres against minutes.`,
+        `A tank starts with ${plural(start, "litre")} and loses ${plural(rate, "litre")} a minute. Draw litres against minutes.`,
         { span: 10, slope: -rate, intercept: start },
       );
     },

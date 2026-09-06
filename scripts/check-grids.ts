@@ -16,10 +16,11 @@
  * Run with `npm run check:grids`.
  */
 
-import { frameOf, type Frame, type Question } from "../lib/questions";
+import { PASS, frameOf, type Frame, type Question } from "../lib/questions";
 import { GENERATED } from "../lib/templates";
 import { resolveInstance } from "../lib/templates.server";
 import { instanceId } from "../lib/templates";
+import { botResponse, grade } from "../lib/grading.server";
 
 /** Enough rolls that a range which only rarely goes negative still shows it. */
 const ROLLS = 3000;
@@ -86,6 +87,39 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
         if (!inside(frame, mark.at.x, mark.at.y)) {
           complain(`marked point (${mark.at.x}, ${mark.at.y}) is off the figure`);
           break;
+        }
+      }
+      if (reported) continue;
+
+      // The bot answers on the same grid, so its misses have to be on the grid
+      // too — a near miss drawn outside the window is a near miss nobody can
+      // see, which is most of what a duel is for. Checked here rather than
+      // assumed because a miss is aimed at a distance and then clamped, and
+      // only the window knows where that lands.
+      //
+      // The second half is the invariant the near-miss aiming could quietly
+      // break: a wrong answer has to keep scoring below the pass mark, or a
+      // bot set to 70% plays at 80% and every bot in the game gets harder
+      // than it says it is.
+      // A tenth of the seeds is plenty: the bot is rolled a dozen times on
+      // each of them, so this is still thousands of throws per generator, and
+      // the answer-in-window check above already covers every seed.
+      if ((question.kind === "point" || question.kind === "line") && seed <= ROLLS / 10) {
+        for (let roll = 0; roll < 12 && !reported; roll++) {
+          const miss = botResponse(answer, question, 0);
+          if (miss.kind === "point" && miss.at && !inside(frame, miss.at.x, miss.at.y)) {
+            complain(`a bot miss at (${miss.at.x}, ${miss.at.y}) is off the grid`);
+            break;
+          }
+          const missed = grade(answer, miss);
+          if (missed.score >= PASS) {
+            complain(`a bot miss scored ${missed.score.toFixed(2)}, at or above the pass mark`);
+            break;
+          }
+          if (grade(answer, botResponse(answer, question, 1)).score < PASS) {
+            complain("a bot hit scored below the pass mark");
+            break;
+          }
         }
       }
     }

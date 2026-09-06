@@ -997,9 +997,19 @@ export function Duel({
   // ── Playing ────────────────────────────────────────────
   const mine = user && settled ? settled.results[user.uid] : null;
   const waiting = locked && !settled;
-  const opponent =
-    order.find(([uid]) => uid !== user?.uid)?.[1].displayName ??
-    "the other player";
+  const opponentSeat = order.find(([uid]) => uid !== user?.uid);
+  const opponent = opponentSeat?.[1].displayName ?? "the other player";
+
+  /**
+   * What the other player put on the grid, once the round has settled.
+   *
+   * Never before: the answers are held back until everybody has committed,
+   * and `settled` is the only thing that says they have.
+   */
+  const rival =
+    settled && opponentSeat && settled.results[opponentSeat[0]]
+      ? { name: opponent, response: settled.results[opponentSeat[0]].response }
+      : null;
 
   const standing = settled
     ? "Both in."
@@ -1087,6 +1097,7 @@ export function Duel({
                 steps={settled?.steps ?? undefined}
                 disabled={locked || !!settled}
                 steady
+                rival={rival}
                 onDraft={setDraft}
                 onSubmit={commit}
               />

@@ -15,6 +15,7 @@ import {
   OrderAnswer,
   PointAnswer,
   SliderAnswer,
+  type Rival,
 } from "@/components/answer-inputs";
 import { FigureView } from "@/components/graph";
 import { MathText } from "@/components/math-text";
@@ -38,6 +39,7 @@ export function QuestionStage({
   steps,
   disabled,
   steady,
+  rival,
   onDraft,
   onSubmit,
 }: {
@@ -73,6 +75,15 @@ export function QuestionStage({
    * a prompt longer than the reserve still gets the room it needs.
    */
   steady?: boolean;
+  /**
+   * The other player's answer, to draw beside your own once the round is out.
+   *
+   * A duel is settled on which of two answers was closer, and until now the
+   * reveal never showed the other one — so the mechanic the whole game is
+   * built on was a pair of numbers in a panel and never a picture. Only the
+   * spatial kinds can draw it; the rest already say it in words.
+   */
+  rival?: Rival | null;
   onDraft: (draft: Response) => void;
   onSubmit: (response: Response) => void;
 }) {
@@ -165,6 +176,7 @@ export function QuestionStage({
           locked={locked}
           reveal={reveal}
           score={score}
+          rival={rival}
           onDraft={(at: Point) => onDraft({ kind: "point", at })}
           onSubmit={() => onSubmit(answer)}
         />
@@ -177,6 +189,7 @@ export function QuestionStage({
           locked={locked}
           reveal={reveal}
           score={score}
+          rival={rival}
           onDraft={(through) => onDraft({ kind: "line", through })}
           onSubmit={() =>
             onSubmit(

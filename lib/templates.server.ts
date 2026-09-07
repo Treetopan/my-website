@@ -142,6 +142,7 @@ function divide(built: Built, id: string, topic: string): Omit<Resolved, "steps"
           topic,
           prompt: built.prompt,
           span: built.span,
+          frame: built.frame,
           figure: built.figure,
         },
         answer: { kind: "point", at: built.at, full: built.full, zero: built.zero },
@@ -155,6 +156,7 @@ function divide(built: Built, id: string, topic: string): Omit<Resolved, "steps"
           topic,
           prompt: built.prompt,
           span: built.span,
+          frame: built.frame,
           figure: built.figure,
         },
         answer: {

@@ -8,6 +8,7 @@ import {
   fill,
   frac,
   head,
+  put,
   type Built,
   type Rng,
 } from "./kit";
@@ -323,6 +324,11 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
           `⟨${head(a, "t^3")}, ${head(b, "t^4")}⟩`,
         ],
         r,
+        undefined,
+        [
+          `r'_(1) = d/dt ${put(head(a, "t^2"))} = ${put(2)}${put(a)}t = ${head(2 * a, "t")}`,
+          `r'_(2) = d/dt ${put(head(b, "t^3"))} = ${put(3)}${put(b)}t^2 = ${head(3 * b, "t^2")}`,
+        ],
       );
     },
   ],
@@ -342,6 +348,11 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
           `⟨${head(a, "t^3")}, ${head(b, "t^4")}⟩ + C`,
         ],
         r,
+        undefined,
+        [
+          `r_(1) = ∫${2 * a}t dt = ${2 * a}/2 · t^2 = ${head(a, "t^2")}`,
+          `r_(2) = ∫${3 * b}t^2 dt = ${3 * b}/3 · t^3 = ${head(b, "t^3")}`,
+        ],
       );
     },
   ],
@@ -360,7 +371,13 @@ const OWN: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `A particle has velocity ⟨${vx}, ${vy}⟩. How fast is it going?`,
         speed,
-        { hint: "Speed is the length of the velocity vector" },
+        {
+          hint: "Speed is the length of the velocity vector",
+          steps: [
+            `|v| = √(v_(1)^2 + v_(2)^2) = √(${put(vx)}^2 + ${put(vy)}^2) = ` +
+              `√${vx * vx + vy * vy} = ${speed}`,
+          ],
+        },
       );
     },
   ],

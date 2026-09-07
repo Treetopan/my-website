@@ -22,8 +22,8 @@ import "server-only";
  * A method line is not the answer, and could be printed on the wall of the
  * room. It says which rule applies, not what it yields here — the numbers that
  * would turn it into a worked solution belong to the seed, and a generator
- * that wants to show them supplies `steps` instead (see `kit.ts`), which takes
- * precedence over anything here.
+ * that wants to show them supplies `steps` as well (see `kit.ts`), which are
+ * printed under the method rather than in place of it.
  */
 const METHODS: Record<string, string> = {
   // ─── Grade 5 ───────────────────────────────────────────
@@ -1600,12 +1600,23 @@ export function methodCount(): number {
 
 /**
  * The explanation that rides back with a wrong verdict, or undefined when
- * there is nothing on file for the topic.
+ * there is nothing to say.
  *
- * Steps the generator worked out for this exact roll win, because they carry
- * the student's own numbers rather than the general shape of the rule. The
- * topic method is the fallback, and is why the whole feature costs one table
- * of 447 strings rather than one worked solution per generator.
+ * The method comes first and the worked steps follow it, because the two
+ * answer different questions and only one of them transfers. The method is the
+ * rule — it is the same next time, and it is the line that stops the miss
+ * happening again. The steps are this roll's own numbers put through that
+ * rule, which is what makes the rule mean anything, but they are about a
+ * matrix the student will never see again.
+ *
+ * Steps used to replace the method rather than follow it. Nothing ever
+ * shipped under that arrangement — no generator supplied steps until the
+ * matrix subunits did — and it had the order backwards: a student shown the
+ * arithmetic still has to be told which rule the arithmetic was.
+ *
+ * Most generators supply no steps at all and get the method alone, which is
+ * why the whole feature costs one table of 447 strings rather than one worked
+ * solution per generator.
  *
  * Called only on a miss. A correct answer never reaches here, so a right
  * verdict is the same payload it has always been.
@@ -1615,7 +1626,7 @@ export function coachingFor(
   topic: string,
   subunitId: string,
 ): string[] | undefined {
-  if (steps?.length) return steps;
   const method = methodFor(topic, subunitId);
-  return method ? [method] : undefined;
+  const lines = [...(method ? [method] : []), ...(steps ?? [])];
+  return lines.length ? lines : undefined;
 }

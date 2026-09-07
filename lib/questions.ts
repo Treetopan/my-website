@@ -19,6 +19,30 @@
 
 export type Point = { x: number; y: number };
 
+/**
+ * The part of the plane a grid shows.
+ *
+ * A grid used to be described by one number — it ran from -span to +span on
+ * both axes, always — which drew four quadrants whatever the question was
+ * about. On a first-quadrant skill three quarters of that picture is
+ * unreachable, and the quarter that matters is drawn at half the resolution it
+ * could have, so the window belongs to the question rather than to the grid.
+ *
+ * Both axes are still drawn at one scale, so a distance on a placement means
+ * the same thing whichever way it points.
+ */
+export type Frame = { minX: number; maxX: number; minY: number; maxY: number };
+
+/**
+ * A question's window, or the symmetric one its span implies.
+ *
+ * The default is what every grid did before frames existed, so a generator
+ * that declares nothing gets exactly the grid it always had.
+ */
+export function frameOf(span: number, frame?: Frame | null): Frame {
+  return frame ?? { minX: -span, maxX: span, minY: -span, maxY: span };
+}
+
 export type QuestionKind =
   | "choice"
   | "fill"
@@ -74,6 +98,8 @@ export type Mark = {
  */
 export type Figure = {
   span: number;
+  /** The window to draw. Defaults to -span..span on both axes. */
+  frame?: Frame;
   curves: Curve[];
   marks?: Mark[];
   /** Axis names, where the axes are not x and y — "t" and "v", say. */
@@ -123,14 +149,18 @@ export type SliderQuestion = Identity & {
 /** Place a point on a coordinate grid. Graded by distance. */
 export type PointQuestion = Identity & {
   kind: "point";
-  /** The grid runs from -span to +span on both axes. */
+  /** The grid runs from -span to +span on both axes, unless `frame` narrows it. */
   span: number;
+  /** The window drawn, and the one a placement is clamped to. See `Frame`. */
+  frame?: Frame;
 };
 
 /** Drag two handles to draw a line. Graded by how far the line is out. */
 export type LineQuestion = Identity & {
   kind: "line";
   span: number;
+  /** The window drawn. See `Frame`. */
+  frame?: Frame;
 };
 
 /**

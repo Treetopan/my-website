@@ -3,6 +3,7 @@ import "server-only";
 import {
   PASS,
   distance,
+  frameOf,
   inversions,
   isBlank,
   lineThrough,
@@ -164,6 +165,64 @@ function revealOf(answer: Answer): Reveal {
 }
 
 /**
+ * Rolls a miss that lands near the answer and still counts as a miss.
+ *
+ * A miss used to be thrown one-and-a-bit to two-and-a-bit times past the
+ * radius where the score reaches zero, so every bot miss scored exactly
+ * nothing. That kept a 70% bot at 70% — which was the point, and is a real
+ * constraint — but it also made the bot the one thing on the screen that never
+ * *nearly* got it. In a duel that is the whole mechanic gone: "the closer
+ * answer takes the gap" needs two answers at two different distances, and a
+ * player who is either exactly right or off the map never supplies one.
+ *
+ * So a miss now aims for the band between the error that would have passed and
+ * the error that is worth nothing. It cannot pass — that is what keeps a bot's
+ * stated accuracy honest — but it scores something, which is what a person's
+ * miss does.
+ *
+ * It is a loop rather than a formula because none of these kinds land where
+ * they were aimed: a point snaps to whole units and is held inside the window,
+ * a slider snaps to its step, a line has both endpoints rounded. Any of those
+ * can pull an intended miss close enough to pass, so the throw is measured
+ * after the fact, retried from a fresh direction when it lands too close, and
+ * the furthest of the attempts is taken if none of them clear the bar — which
+ * is what a window too small to hold a near miss falls back to.
+ */
+function missing<T>(
+  full: number,
+  zero: number,
+  /** Builds a candidate from a distance. The caller picks the direction. */
+  attempt: (size: number) => T,
+  /** How far the candidate actually landed, once the kind has had its way. */
+  errorOf: (made: T) => number,
+): T {
+  /** The error at which a proximity score falls to exactly the pass mark. */
+  const edge = zero - PASS * (zero - full);
+
+  let best: T | null = null;
+  let furthest = -1;
+
+  for (let tries = 0; tries < 14; tries++) {
+    const size =
+      tries < 10
+        ? // Inside the band: short of scoring nothing, past scoring a pass.
+          edge + (zero - edge) * (0.08 + Math.random() * 0.92)
+        : // The old long throw, for a window with no room for a near miss.
+          zero * (1.2 + Math.random());
+
+    const made = attempt(size);
+    const error = errorOf(made);
+    if (proximity(error, full, zero) < PASS) return made;
+    if (error > furthest) {
+      furthest = error;
+      best = made;
+    }
+  }
+
+  return best as T;
+}
+
+/**
  * Plays a bot's turn.
  *
  * Rolled here rather than on the host's machine, because producing a plausible
@@ -182,17 +241,8 @@ export function botResponse(
   /** A signed offset for a hit: anywhere inside full credit. */
   const near = (full: number) => full * (Math.random() * 2 - 1);
 
-  /**
-   * A signed offset for a miss: past the point where the score reaches zero.
-   *
-   * Aiming a miss "somewhere around the answer" sounds more lifelike and is
-   * wrong — it lands on full marks often enough that a bot set to 70% passes
-   * closer to 80%, which quietly makes every bot harder than it says on the
-   * tin. A miss on a proximity question scores nothing, exactly as a wrong
-   * option does.
-   */
-  const past = (zero: number) =>
-    (Math.random() < 0.5 ? -1 : 1) * zero * (1.2 + Math.random());
+  /** One direction or the other, for the kinds a miss can only go two ways. */
+  const either = (size: number) => (Math.random() < 0.5 ? -size : size);
 
   switch (answer.kind) {
     case "choice": {
@@ -212,43 +262,89 @@ export function botResponse(
       return { kind: "fill", text: nudgeText(answer.show) };
 
     case "slider": {
-      const drift = right ? near(answer.full) : past(answer.zero);
-      const value =
-        question.kind === "slider"
-          ? clampToStep(answer.value + drift, question)
-          : answer.value + drift;
-      return { kind: "slider", value };
+      const scale = question.kind === "slider" ? question : null;
+      const put = (drift: number) =>
+        scale ? clampToStep(answer.value + drift, scale) : answer.value + drift;
+
+      if (right) return { kind: "slider", value: put(near(answer.full)) };
+
+      return {
+        kind: "slider",
+        value: missing(
+          answer.full,
+          answer.zero,
+          (size) => put(either(size)),
+          (value) => Math.abs(value - answer.value),
+        ),
+      };
     }
 
     case "point": {
-      const span = question.kind === "point" ? question.span : 8;
-      // Offset along a random direction rather than per-axis, so a miss is the
-      // stated distance away whichever way it goes.
-      const angle = Math.random() * Math.PI * 2;
-      const reach = right ? Math.abs(near(answer.full)) : Math.abs(past(answer.zero));
-      const clamp = (n: number) =>
-        Math.max(-span, Math.min(span, Math.round(n)));
+      // The bot answers on the grid the player can see, so its placement is
+      // held inside the question's own window rather than a symmetric span —
+      // on a first-quadrant question the old clamp could put it off the
+      // picture, where nobody could have seen how close it was.
+      const frame =
+        question.kind === "point"
+          ? frameOf(question.span, question.frame)
+          : frameOf(8);
+
+      const clamp = (n: number, low: number, high: number) =>
+        Math.max(low, Math.min(high, Math.round(n)));
+
+      // Along a random direction rather than per-axis, so a miss is the stated
+      // distance away whichever way it goes.
+      const place = (reach: number) => {
+        const angle = Math.random() * Math.PI * 2;
+        return {
+          x: clamp(answer.at.x + Math.cos(angle) * reach, frame.minX, frame.maxX),
+          y: clamp(answer.at.y + Math.sin(angle) * reach, frame.minY, frame.maxY),
+        };
+      };
+
+      if (right) return { kind: "point", at: place(Math.abs(near(answer.full))) };
 
       return {
         kind: "point",
-        at: {
-          x: clamp(answer.at.x + Math.cos(angle) * reach),
-          y: clamp(answer.at.y + Math.sin(angle) * reach),
-        },
+        at: missing(answer.full, answer.zero, place, (at) =>
+          distance(at, answer.at),
+        ),
       };
     }
 
     case "line": {
-      const shift = right ? near(answer.full) : past(answer.zero);
       const span = answer.span;
-      const at = (x: number) =>
-        Math.round(answer.slope * x + answer.intercept + shift);
-      return {
-        kind: "line",
-        through: [
+      const draw = (shift: number): [Point, Point] => {
+        const at = (x: number) =>
+          Math.round(answer.slope * x + answer.intercept + shift);
+        return [
           { x: -span, y: at(-span) },
           { x: span, y: at(span) },
-        ],
+        ];
+      };
+
+      // The same measure the grader uses: how far the drawn line sits from the
+      // intended one at the two edges of the grid.
+      const apart = (through: [Point, Point]) => {
+        const drawn = lineThrough(through[0], through[1]);
+        if (!drawn) return Infinity;
+        const at = (x: number) =>
+          Math.abs(
+            drawn.slope * x + drawn.intercept - (answer.slope * x + answer.intercept),
+          );
+        return Math.max(at(-span), at(span));
+      };
+
+      if (right) return { kind: "line", through: draw(near(answer.full)) };
+
+      return {
+        kind: "line",
+        through: missing(
+          answer.full,
+          answer.zero,
+          (size) => draw(either(size)),
+          apart,
+        ),
       };
     }
 

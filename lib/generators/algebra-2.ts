@@ -3,12 +3,15 @@ import "server-only";
 import {
   among,
   ask,
+  detStep,
   frac,
   graph,
   head,
   fill,
+  put,
   piFrac,
   plot,
+  plural,
   point,
   slider,
   poly,
@@ -33,10 +36,20 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const m = [r.int(-5, 5), r.int(-5, 5), r.int(-5, 5), r.int(-5, 5)];
       const v = [r.nonzero(-5, 5), r.nonzero(-5, 5)];
       const top = m[0] * v[0] + m[1] * v[1];
+      // Written as a one-column matrix rather than as the pair (x, y): a
+      // column vector that renders as a row is the exact confusion this
+      // question is about, since which of the two is a row decides which
+      // multiplication is even defined.
       return fill(
-        `Multiply [[${m[0]}, ${m[1]}], [${m[2]}, ${m[3]}]] by the column vector (${v[0]}, ${v[1]}). What is the top entry?`,
+        `Multiply [[${m[0]}, ${m[1]}], [${m[2]}, ${m[3]}]] by [[${v[0]}], [${v[1]}]]. What is the top entry?`,
         top,
-        { hint: "a number" },
+        {
+          hint: "a number",
+          steps: [
+            `c_(11) = a_(11)·x_(1) + a_(12)·x_(2) = ` +
+              `${put(m[0])}${put(v[0])} + ${put(m[1])}${put(v[1])} = ${top}`,
+          ],
+        },
       );
     },
   ],
@@ -53,7 +66,7 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `What is the determinant of [[${a}, ${b}], [${c}, ${d}]]?`,
         a * d - b * c,
-        { hint: "a number" },
+        { hint: "a number", steps: [detStep(a, b, c, d)] },
       );
     },
   ],
@@ -510,10 +523,17 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       const take = r.bool();
       const s = take ? -1 : 1;
       const entry = a[0] + s * b[0];
+      const sign = take ? "-" : "+";
       return fill(
-        `[[${a[0]}, ${a[1]}], [${a[2]}, ${a[3]}]] ${take ? "-" : "+"} [[${b[0]}, ${b[1]}], [${b[2]}, ${b[3]}]].   What is the top-left entry?`,
+        `[[${a[0]}, ${a[1]}], [${a[2]}, ${a[3]}]] ${sign} [[${b[0]}, ${b[1]}], [${b[2]}, ${b[3]}]].   What is the top-left entry?`,
         entry,
-        { hint: "a number" },
+        {
+          hint: "a number",
+          steps: [
+            `c_(11) = a_(11) ${sign} b_(11) = ` +
+              `${put(a[0])} ${sign} ${put(b[0])} = ${entry}`,
+          ],
+        },
       );
     },
   ],
@@ -532,7 +552,17 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `A⁻¹ = (1/det)·[[d, -b], [-c, a]].   What is the top-left entry of the inverse of [[${a}, ${b}], [${c}, ${d}]]?`,
         frac(d, det),
-        { hint: "a number or fraction" },
+        {
+          hint: "a number or fraction",
+          // The only two-line case in the set, and it earns the second line:
+          // the determinant is a separate calculation that the entry then
+          // divides by, so a miss is either the det or the division and the
+          // student cannot tell which without seeing both.
+          steps: [
+            detStep(a, b, c, d),
+            `(A⁻¹)_(11) = a_(22)/det = ${d}/${det} = ${frac(d, det)}`,
+          ],
+        },
       );
     },
   ],
@@ -555,6 +585,8 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
           "The system must have two variables",
         ],
         r,
+        undefined,
+        [detStep(a, b, c, d)],
       );
     },
   ],
@@ -1785,7 +1817,7 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       let choose = 1;
       for (let i = 0; i < k; i++) choose = (choose * (n - i)) / (i + 1);
       return fill(
-        `A fair coin is thrown ${n} times. What is the chance of exactly ${k} heads?`,
+        `A fair coin is thrown ${n} times. What is the chance of exactly ${plural(k, "head")}?`,
         frac(choose, 2 ** n),
         { hint: "a fraction" },
       );

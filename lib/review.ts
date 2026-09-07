@@ -197,6 +197,18 @@ export type Summary = {
   strong: TopicTally[];
   /** Every question to go back to, in the order they were asked. */
   review: AnswerDetail[];
+  /**
+   * Answers that passed without being exact, in the order they were asked.
+   *
+   * These used to vanish. `review` is the questions you got wrong, so a round
+   * that scored 0.80 — shown to the student at the reveal as "Close — 80% of
+   * the marks" — appeared in no list at all, and the summary went on to say
+   * "Clean sweep — nothing to review" a few seconds after telling them there
+   * was. The pass mark is not the problem and is not moved: `correct` still
+   * means what it meant, and XP, streaks and elimination are untouched. What
+   * was wrong was letting a near miss leave no trace.
+   */
+  close: AnswerDetail[];
 };
 
 function asTally(b: Bucket): TopicTally {
@@ -220,6 +232,9 @@ export function summarize(details: AnswerDetail[]): Summary {
     weak: struggles(topics).map(asTally),
     strong: solid(topics).map(asTally),
     review: details.filter((d) => !d.correct),
+    // Passed, but not exactly. Only the proximity kinds can land here — an
+    // exact kind scores one or nothing and never in between.
+    close: details.filter((d) => d.correct && d.score < 1),
   };
 }
 
@@ -229,7 +244,15 @@ export function summarize(details: AnswerDetail[]): Summary {
  */
 export function verdict(s: Summary): string {
   if (s.total === 0) return "No questions answered.";
-  if (s.correct === s.total) return "Clean sweep — nothing to review.";
+
+  if (s.correct === s.total) {
+    // A sweep is still a sweep with a near miss in it, but "nothing to review"
+    // is not true of a set the student was shown a partial score on.
+    if (s.close.length === 0) return "Clean sweep — nothing to review.";
+    return s.close.length === 1
+      ? "Clean sweep — though one was close."
+      : `Clean sweep — though ${s.close.length} were close.`;
+  }
 
   if (s.weak.length === 1) return `One idea to go back to: ${s.weak[0].topic}.`;
 

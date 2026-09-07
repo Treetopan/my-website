@@ -53,6 +53,15 @@ export type RoomPlayer = {
    * to write — the host reads it and applies it.
    */
   pendingTarget?: string | null;
+  /**
+   * The position whose reveal this player has finished reading, written when
+   * they press on. Same reasoning as `pendingTarget`: a player's own node is
+   * the one thing they may write, and the host is what acts on it.
+   *
+   * Held as a position rather than a flag so it never needs clearing — a
+   * readiness for round three says nothing about round four.
+   */
+  readyFor?: number | null;
   joinedAt: number | object;
 };
 

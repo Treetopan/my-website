@@ -13,6 +13,7 @@ import {
   piFrac,
   plot,
   point,
+  put,
   radical,
   signed,
   slider,
@@ -2071,7 +2072,15 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const dy = r.nonzero(-4, 4);
       return point(
         `Translate (${x}, ${y}) by ⟨${dx}, ${dy}⟩. Place the image.`,
-        { span: 10, x: x + dx, y: y + dy },
+        {
+          span: 10,
+          x: x + dx,
+          y: y + dy,
+          steps: [
+            `x' = x + v_(1) = ${put(x)} + ${put(dx)} = ${x + dx}`,
+            `y' = y + v_(2) = ${put(y)} + ${put(dy)} = ${y + dy}`,
+          ],
+        },
       );
     },
     (r) => {
@@ -2167,7 +2176,18 @@ export const GEOMETRY: Record<string, ((r: Rng) => Built)[]> = {
       const dy = r.nonzero(-3, 3);
       return point(
         `Translate (${x}, ${y}) by ⟨${dx}, ${dy}⟩, then reflect the result in the x-axis. Place the image.`,
-        { span: 10, x: x + dx, y: -(y + dy) },
+        {
+          span: 10,
+          x: x + dx,
+          y: -(y + dy),
+          // The translation is one line and the reflection is the other, which
+          // is also where this goes wrong: the reflection is applied to the
+          // translated point, not to the one in the question.
+          steps: [
+            `Translated: ${put(x)} + ${put(dx)} = ${x + dx}, and ${put(y)} + ${put(dy)} = ${y + dy}`,
+            `Reflected in the x-axis: y' = -${put(y + dy)} = ${-(y + dy)}`,
+          ],
+        },
       );
     },
     (r) => {

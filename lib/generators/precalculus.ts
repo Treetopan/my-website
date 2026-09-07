@@ -3,6 +3,7 @@ import "server-only";
 import {
   among,
   ask,
+  detStep,
   dot,
   fill,
   frac,
@@ -12,6 +13,7 @@ import {
   plot,
   point,
   poly,
+  put,
   signed,
   slider,
   vertical,
@@ -226,7 +228,13 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `What is the magnitude of the vector ⟨${x}, ${y}⟩?`,
         magnitude,
-        { hint: "a number" },
+        {
+          hint: "a number",
+          steps: [
+            `|v| = √(v_(1)^2 + v_(2)^2) = √(${put(x)}^2 + ${put(y)}^2) = ` +
+              `√${a * a + b * b} = ${magnitude}`,
+          ],
+        },
       );
     },
   ],
@@ -243,7 +251,13 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `What is ⟨${a}, ${b}⟩ · ⟨${c}, ${d}⟩?`,
         a * c + b * d,
-        { hint: "a number" },
+        {
+          hint: "a number",
+          steps: [
+            `v·w = v_(1)·w_(1) + v_(2)·w_(2) = ` +
+              `${put(a)}${put(c)} + ${put(b)}${put(d)} = ${a * c + b * d}`,
+          ],
+        },
       );
     },
   ],
@@ -1035,6 +1049,11 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
           `⟨${a[0] + b[0] + 1}, ${a[1] + b[1]}⟩`,
         ],
         r,
+        undefined,
+        [
+          `v_(1) + w_(1) = ${put(a[0])} + ${put(b[0])} = ${a[0] + b[0]}`,
+          `v_(2) + w_(2) = ${put(a[1])} + ${put(b[1])} = ${a[1] + b[1]}`,
+        ],
       );
     },
   ],
@@ -1061,6 +1080,11 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
           `⟨${frac(-x, length)}, ${frac(-y, length)}⟩`,
         ],
         r,
+        undefined,
+        [
+          `|v| = √(v_(1)^2 + v_(2)^2) = √(${put(x)}^2 + ${put(y)}^2) = ${length}`,
+          `v̂ = ⟨v_(1)/|v|, v_(2)/|v|⟩ = ⟨${x}/${length}, ${y}/${length}⟩`,
+        ],
       );
     },
   ],
@@ -1126,7 +1150,7 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `What is the determinant of [[${a}, ${b}], [${c}, ${d}]]?`,
         a * d - b * c,
-        { hint: "ad - bc" },
+        { hint: "ad - bc", steps: [detStep(a, b, c, d)] },
       );
     },
   ],
@@ -1138,26 +1162,40 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       const x = r.nonzero(-6, 6);
       const y = r.nonzero(-6, 6);
       const kind = r.int(0, 2);
-      const matrices = [
-        { name: "[[1, 0], [0, 1]]", image: [x, y] },
-        { name: "[[-1, 0], [0, 1]]", image: [-x, y] },
-        { name: "[[0, -1], [1, 0]]", image: [-y, x] },
+      // The four entries rather than the printed matrix, because the coaching
+      // has to substitute them one at a time and re-parsing the string it
+      // already built to get them back would be the long way round.
+      const matrices: [number, number, number, number][] = [
+        [1, 0, 0, 1],
+        [-1, 0, 0, 1],
+        [0, -1, 1, 0],
       ];
-      const m = matrices[kind];
+      const [p, q, s, t] = matrices[kind];
+      const image = [p * x + q * y, s * x + t * y];
       // A transformation matrix moves a point somewhere. Reading four
       // coordinate pairs is a different exercise from seeing where it went, so
       // the original is marked and the image is placed.
-      return point(`Apply ${m.name} to the marked point, and place its image.`, {
-        span,
-        x: m.image[0],
-        y: m.image[1],
-        zero: 2,
-        figure: graph({
+      return point(
+        `Apply [[${p}, ${q}], [${s}, ${t}]] to the marked point, and place its image.`,
+        {
           span,
-          curves: [],
-          marks: [dot(x, y, { label: `(${x}, ${y})` })],
-        }),
-      });
+          x: image[0],
+          y: image[1],
+          zero: 2,
+          figure: graph({
+            span,
+            curves: [],
+            marks: [dot(x, y, { label: `(${x}, ${y})` })],
+          }),
+          // Two components, so two lines — the whole of what this answer has.
+          steps: [
+            `x' = a_(11)·x + a_(12)·y = ` +
+              `${put(p)}${put(x)} + ${put(q)}${put(y)} = ${image[0]}`,
+            `y' = a_(21)·x + a_(22)·y = ` +
+              `${put(s)}${put(x)} + ${put(t)}${put(y)} = ${image[1]}`,
+          ],
+        },
+      );
     },
   ],
 
@@ -1185,7 +1223,10 @@ export const PRECALCULUS: Record<string, ((r: Rng) => Built)[]> = {
       return fill(
         `A transformation has matrix [[${a}, ${b}], [0, ${d}]]. By what factor does it scale area?`,
         a * d,
-        { hint: "The size of the determinant" },
+        {
+          hint: "The size of the determinant",
+          steps: [detStep(a, b, 0, d), `Area scales by |det| = ${a * d}`],
+        },
       );
     },
   ],

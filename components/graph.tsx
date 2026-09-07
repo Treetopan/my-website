@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useId, useRef } from "react";
-import type { Curve, Figure, Point } from "@/lib/questions";
+import {
+  frameOf,
+  type Curve,
+  type Figure,
+  type Frame,
+  type Point,
+} from "@/lib/questions";
 
 /**
  * The coordinate grid, and the curves drawn on it.
@@ -22,18 +28,36 @@ import type { Curve, Figure, Point } from "@/lib/questions";
 export const VIEW = 100;
 const MARGIN = 8;
 
-/** Screen units per grid unit, and the two conversions. */
-export function useGrid(span: number) {
+/** The plot box: the drawing area once the margin the numbers live in is off. */
+const REACH = VIEW / 2 - MARGIN;
+
+/**
+ * Screen units per grid unit, and the two conversions.
+ *
+ * Takes the window rather than a span, so a first-quadrant question draws
+ * 0..10 and a four-quadrant one draws -10..10 off the same code. One scale
+ * serves both axes — the wider of the two decides it — so the grid stays
+ * square and a distance keeps meaning one thing.
+ */
+export function useGrid(frame: Frame) {
   const svg = useRef<SVGSVGElement>(null);
   const half = VIEW / 2;
-  const unit = (half - MARGIN) / span;
+
+  const { minX, maxX, minY, maxY } = frame;
+  const wide = Math.max(maxX - minX, maxY - minY) || 1;
+  const unit = (REACH * 2) / wide;
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
 
   const toView = useCallback(
-    (p: Point) => ({ x: half + p.x * unit, y: half - p.y * unit }),
-    [half, unit],
+    (p: Point) => ({
+      x: half + (p.x - midX) * unit,
+      y: half - (p.y - midY) * unit,
+    }),
+    [half, midX, midY, unit],
   );
 
-  /** Screen coordinates back to whole grid units, clamped to the grid. */
+  /** Screen coordinates back to whole grid units, clamped to the window. */
   const toGrid = useCallback(
     (clientX: number, clientY: number): Point | null => {
       const box = svg.current?.getBoundingClientRect();
@@ -42,90 +66,224 @@ export function useGrid(span: number) {
       const vx = ((clientX - box.left) / box.width) * VIEW;
       const vy = ((clientY - box.top) / box.height) * VIEW;
 
-      const clamp = (n: number) => Math.max(-span, Math.min(span, n));
+      const clamp = (n: number, low: number, high: number) =>
+        Math.max(low, Math.min(high, n));
+
       return {
-        x: clamp(Math.round((vx - half) / unit)),
-        y: clamp(Math.round((half - vy) / unit)),
+        x: clamp(Math.round((vx - half) / unit + midX), minX, maxX),
+        y: clamp(Math.round((half - vy) / unit + midY), minY, maxY),
       };
     },
-    [half, span, unit],
+    [half, midX, midY, unit, minX, maxX, minY, maxY],
   );
 
   return { svg, toView, toGrid };
 }
 
-export function Axes({ span, figure }: { span: number; figure?: Figure | null }) {
-  const half = VIEW / 2;
-  const unit = (half - MARGIN) / span;
-  const reach = half - MARGIN;
+/**
+ * How far apart the ruled lines go, and how far apart the numbers on them do.
+ *
+ * Past a certain density gridlines stop being a scale and become a texture,
+ * and numbers stop being readable at all — so the two are chosen separately,
+ * and a wide grid is ruled every fifth unit and numbered every tenth rather
+ * than being given up on.
+ */
+function steps(wide: number): { rule: number; label: number } {
+  const rule = wide <= 20 ? 1 : wide <= 50 ? 5 : 10;
+  let label = rule;
+  // At most a dozen numbers to an axis: any closer and "10" runs into the
+  // "12" beside it at the size these are drawn.
+  for (const times of [1, 2, 5, 10]) {
+    label = rule * times;
+    if (wide / label <= 12) break;
+  }
+  return { rule, label };
+}
 
-  // Past a certain density the gridlines stop being a scale and start being a
-  // texture, so a wide grid is ruled every second or fifth unit instead.
-  const gap = span <= 10 ? 1 : span <= 25 ? 5 : 10;
-  const ticks: number[] = [];
-  for (let t = -span; t <= span; t += gap) ticks.push(t);
+/** The multiples of `gap` between `low` and `high`, inclusive. */
+function ticks(low: number, high: number, gap: number): number[] {
+  const out: number[] = [];
+  for (let t = Math.ceil(low / gap) * gap; t <= high + 1e-9; t += gap) {
+    out.push(Math.round(t * 1000) / 1000);
+  }
+  return out;
+}
+
+/**
+ * The ruled grid, the two axes, and the numbers on them.
+ *
+ * The numbers are the point. This used to label only the far corners, on the
+ * reasoning that a number per gridline turns a grid into a table — true of a
+ * graph you read a shape off, and exactly wrong on a skill whose whole content
+ * is "count four across and seven up". There was nothing to count against.
+ * Now every ruled line far enough from its neighbour to stay legible carries
+ * its value, the origin says 0, and an axis with a name of its own carries
+ * that at its far end.
+ */
+export function Axes({
+  frame,
+  figure,
+}: {
+  frame: Frame;
+  figure?: Figure | null;
+}) {
+  const half = VIEW / 2;
+  const { minX, maxX, minY, maxY } = frame;
+  const wide = Math.max(maxX - minX, maxY - minY) || 1;
+  const unit = (REACH * 2) / wide;
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+
+  const vx = (x: number) => half + (x - midX) * unit;
+  const vy = (y: number) => half - (y - midY) * unit;
+
+  const { rule, label } = steps(wide);
+  const down = ticks(minX, maxX, rule);
+  const across = ticks(minY, maxY, rule);
+
+  // Where the numbers hang. The axis carries them when it is inside the
+  // window; when the window starts at the origin the axis *is* the edge and
+  // they hang off it into the margin — which is what the margin is for.
+  const baseY = Math.min(Math.max(0, minY), maxY);
+  const baseX = Math.min(Math.max(0, minX), maxX);
+  const numbered = (t: number) => Math.abs(t % label) < 1e-9;
 
   return (
     <g>
-      {ticks.map((t) => (
-        <g key={t}>
-          <line
-            x1={half + t * unit}
-            y1={half - reach}
-            x2={half + t * unit}
-            y2={half + reach}
-            className="stroke-line-soft"
-            strokeWidth={t === 0 ? 0 : 0.3}
-          />
-          <line
-            x1={half - reach}
-            y1={half + t * unit}
-            x2={half + reach}
-            y2={half + t * unit}
-            className="stroke-line-soft"
-            strokeWidth={t === 0 ? 0 : 0.3}
-          />
-        </g>
+      {down.map((t) => (
+        <line
+          key={`v${t}`}
+          x1={vx(t)}
+          y1={vy(maxY)}
+          x2={vx(t)}
+          y2={vy(minY)}
+          className="stroke-line-soft"
+          strokeWidth={t === 0 ? 0 : 0.3}
+        />
+      ))}
+      {across.map((t) => (
+        <line
+          key={`h${t}`}
+          x1={vx(minX)}
+          y1={vy(t)}
+          x2={vx(maxX)}
+          y2={vy(t)}
+          className="stroke-line-soft"
+          strokeWidth={t === 0 ? 0 : 0.3}
+        />
       ))}
 
       <line
-        x1={half - reach}
-        y1={half}
-        x2={half + reach}
-        y2={half}
+        x1={vx(minX)}
+        y1={vy(baseY)}
+        x2={vx(maxX)}
+        y2={vy(baseY)}
         className="stroke-line"
         strokeWidth={0.6}
       />
       <line
-        x1={half}
-        y1={half - reach}
-        x2={half}
-        y2={half + reach}
+        x1={vx(baseX)}
+        y1={vy(minY)}
+        x2={vx(baseX)}
+        y2={vy(maxY)}
         className="stroke-line"
         strokeWidth={0.6}
       />
 
-      {/* Only the extremes are labelled. A number on every gridline turns the
-          grid into a table, and the point is to read position, not to read. */}
-      <text
-        x={half + reach - 1}
-        y={half + 4.5}
-        textAnchor="end"
-        className="fill-faint"
-        fontSize={3.4}
-      >
-        {figure?.xLabel ? `${figure.xLabel} = ${span}` : span}
-      </text>
-      <text
-        x={half + 1.5}
-        y={half - reach + 3.6}
-        className="fill-faint"
-        fontSize={3.4}
-      >
-        {figure?.yLabel ? `${figure.yLabel} = ${span}` : span}
-      </text>
+      {down.filter(numbered).map((t) =>
+        t === 0 ? null : (
+          <text
+            key={`nx${t}`}
+            x={vx(t)}
+            y={vy(baseY) + 4.2}
+            textAnchor="middle"
+            className="fill-faint"
+            fontSize={3.2}
+          >
+            {t}
+          </text>
+        ),
+      )}
+      {across.filter(numbered).map((t) =>
+        t === 0 ? null : (
+          <text
+            key={`ny${t}`}
+            x={vx(baseX) - 1.6}
+            y={vy(t) + 1.2}
+            textAnchor="end"
+            className="fill-faint"
+            fontSize={3.2}
+          >
+            {t}
+          </text>
+        ),
+      )}
+
+      {/* The origin, named once, in the corner between the two axes — and only
+          where it is actually in view. */}
+      {baseX === 0 && baseY === 0 && (
+        <text
+          x={vx(0) - 1.6}
+          y={vy(0) + 4.2}
+          textAnchor="end"
+          className="fill-faint"
+          fontSize={3.2}
+        >
+          0
+        </text>
+      )}
+
+      {figure?.xLabel && (
+        <text
+          x={vx(maxX)}
+          y={vy(baseY) - 1.8}
+          textAnchor="end"
+          className="fill-faint"
+          fontSize={3.6}
+          fontStyle="italic"
+        >
+          {figure.xLabel}
+        </text>
+      )}
+      {figure?.yLabel && (
+        <text
+          x={vx(baseX) + 1.6}
+          y={vy(maxY) + 3.2}
+          className="fill-faint"
+          fontSize={3.6}
+          fontStyle="italic"
+        >
+          {figure.yLabel}
+        </text>
+      )}
     </g>
   );
+}
+
+/**
+ * How a grid reads out loud.
+ *
+ * The whole of what a screen reader used to get from one of these was the two
+ * corner numbers — "10 / 10" — which describes nothing. A student who cannot
+ * see the picture needs the same three facts a sighted one takes from it at a
+ * glance: what the axes run between, what is already drawn on it, and what
+ * they have put there. The first two are here; the third is announced by the
+ * inputs as it changes, because it is the part that moves.
+ */
+export function describeGrid(frame: Frame, figure?: Figure | null): string {
+  const axes =
+    `Coordinate grid. ${figure?.xLabel ?? "x"} runs from ${frame.minX} to ${frame.maxX}. ` +
+    `${figure?.yLabel ?? "y"} runs from ${frame.minY} to ${frame.maxY}.`;
+
+  const marks = figure?.marks?.length
+    ? " Marked: " +
+      figure.marks
+        .map((m) => `${m.label ? m.label + " at " : ""}(${m.at.x}, ${m.at.y})`)
+        .join(", ") +
+      "."
+    : "";
+
+  return axes + marks + (figure?.caption ? " " + figure.caption : "");
 }
 
 /**
@@ -145,7 +303,7 @@ export function Drawn({
 }) {
   const clip = useId();
   const half = VIEW / 2;
-  const reach = half - MARGIN;
+  const reach = REACH;
 
   return (
     <g>
@@ -250,7 +408,8 @@ function Stroke({
  * slider question is asked about.
  */
 export function FigureView({ figure }: { figure: Figure }) {
-  const { svg, toView } = useGrid(figure.span);
+  const frame = frameOf(figure.span, figure.frame);
+  const { svg, toView } = useGrid(frame);
 
   return (
     <figure className="mb-7 flex flex-col gap-2">
@@ -258,10 +417,10 @@ export function FigureView({ figure }: { figure: Figure }) {
         ref={svg}
         viewBox={`0 0 ${VIEW} ${VIEW}`}
         role="img"
-        aria-label={figure.caption ?? "The graph this question is about"}
+        aria-label={describeGrid(frame, figure)}
         className="w-full max-w-[340px] rounded-sm border border-line-soft bg-surface-2/40"
       >
-        <Axes span={figure.span} figure={figure} />
+        <Axes frame={frame} figure={figure} />
         <Drawn figure={figure} toView={toView} />
       </svg>
 

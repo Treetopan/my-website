@@ -7,12 +7,14 @@ import {
   dot,
   dp,
   fill,
+  firstQuadrant,
   frac,
   gcd,
   graph,
   mixed,
   order,
   other,
+  plural,
   point,
   properFraction,
   shuffled,
@@ -386,7 +388,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const total = dp(r.int(20, 99) / 10, 1);
       const known = dp(r.int(5, total * 10 - 5) / 10, 1);
-      return slider(`A tank held ${known} litres and now holds ${total} litres. Place how much went in.`, {
+      return slider(`A tank held ${plural(known, "litre")} and now holds ${plural(total, "litre")}. Place how much went in.`, {
         min: 0,
         max: 10,
         step: 0.1,
@@ -1207,7 +1209,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const shadedColumns = r.int(1, columns - 1);
       const shadedRows = r.int(1, rows - 1);
       return fill(
-        `An area model is ${columns} columns across and ${rows} rows down, with ${shadedColumns} columns and ${shadedRows} rows shaded. What fraction of it is shaded both ways?`,
+        `An area model is ${plural(columns, "column")} across and ${plural(rows, "row")} down, with ${plural(shadedColumns, "column")} and ${plural(shadedRows, "row")} shaded. What fraction of it is shaded both ways?`,
         frac(shadedColumns * shadedRows, columns * rows),
         { hint: "a fraction" },
       );
@@ -1617,7 +1619,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const step = r.int(2, Math.floor(9 / times));
       return point(
         `Pattern A adds ${first} and pattern B adds ${first * times}, both starting at 0. Plot the pair (A, B) at step ${step}.`,
-        { span: 10, x: first * step, y: first * times * step },
+        { span: 10, frame: firstQuadrant(), x: first * step, y: first * times * step },
       );
     },
   ],
@@ -1629,7 +1631,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const input = r.int(1, Math.floor(9 / times));
       return point(
         `A rule pairs each input with ${times} times itself. Plot the point for an input of ${input}.`,
-        { span: 10, x: input, y: input * times },
+        { span: 10, frame: firstQuadrant(), x: input, y: input * times },
       );
     },
     (r) => {
@@ -1686,8 +1688,10 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const along = r.int(2, 9);
       const onX = r.bool();
       return point(
-        `Plot the point ${along} units from the origin along the ${onX ? "x" : "y"}-axis, in the positive direction.`,
-        { span: 10, x: onX ? along : 0, y: onX ? 0 : along },
+        `Plot the point ${plural(along, "unit")} from the origin along the ${
+          onX ? "x" : "y"
+        }-axis, in the positive direction.`,
+        { span: 10, frame: firstQuadrant(), x: onX ? along : 0, y: onX ? 0 : along },
       );
     },
     (r) => {
@@ -1716,14 +1720,19 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
     (r) => {
       const x = r.int(1, 9);
       const y = r.int(1, 9);
-      return point(`Plot (${x}, ${y}).`, { span: 10, x, y });
+      return point(`Plot (${x}, ${y}).`, {
+        span: 10,
+        frame: firstQuadrant(),
+        x,
+        y,
+      });
     },
     (r) => {
       const x = r.int(1, 9);
       const y = r.int(1, 9);
       return point(
-        `Plot the point ${x} units right and ${y} units up from the origin.`,
-        { span: 10, x, y },
+        `Plot the point ${plural(x, "unit")} right and ${plural(y, "unit")} up from the origin.`,
+        { span: 10, frame: firstQuadrant(), x, y },
       );
     },
     (r) => {
@@ -1731,7 +1740,9 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const y = r.int(1, 9);
       const wantY = r.bool();
       return fill(
-        `Point P is ${x} units right and ${y} units up from the origin. What is its ${wantY ? "y" : "x"}-coordinate?`,
+        `Point P is ${plural(x, "unit")} right and ${plural(y, "unit")} up from the origin. What is its ${
+          wantY ? "y" : "x"
+        }-coordinate?`,
         wantY ? y : x,
         { hint: "a number" },
       );
@@ -1748,7 +1759,12 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
         x,
         {
           hint: "a number",
-          figure: graph({ span: 10, curves: [], marks: [dot(x, y, { label: "P" })] }),
+          figure: graph({
+            span: 10,
+            frame: firstQuadrant(),
+            curves: [],
+            marks: [dot(x, y, { label: "P" })],
+          }),
         },
       );
     },
@@ -1760,7 +1776,12 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
         y,
         {
           hint: "a number",
-          figure: graph({ span: 10, curves: [], marks: [dot(x, y, { label: "R" })] }),
+          figure: graph({
+            span: 10,
+            frame: firstQuadrant(),
+            curves: [],
+            marks: [dot(x, y, { label: "R" })],
+          }),
         },
       );
     },
@@ -1774,7 +1795,12 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
         value: y,
         full: 1,
         zero: 3,
-        figure: graph({ span: 10, curves: [], marks: [dot(x, y, { label: "T" })] }),
+        figure: graph({
+          span: 10,
+          frame: firstQuadrant(),
+          curves: [],
+          marks: [dot(x, y, { label: "T" })],
+        }),
       });
     },
   ],
@@ -1818,8 +1844,11 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const east = r.int(1, 9);
       const north = r.int(1, 9);
       return point(
-        `On a map, the school is ${east} blocks east and ${north} blocks north of the crossroads at the origin. Plot the school.`,
-        { span: 10, x: east, y: north },
+        `On a map, the school is ${plural(east, "block")} east and ${plural(
+          north,
+          "block",
+        )} north of the crossroads at the origin. Plot the school.`,
+        { span: 10, frame: firstQuadrant(), x: east, y: north },
       );
     },
     (r) => {
@@ -1912,7 +1941,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
     },
     (r) => {
       const halves = r.int(1, 9);
-      return slider(`Place the number of grams in ${dp(halves / 2)} kilograms.`, {
+      return slider(`Place the number of grams in ${plural(dp(halves / 2), "kilogram")}.`, {
         min: 0,
         max: 5000,
         step: 100,
@@ -1943,7 +1972,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
     },
     (r) => {
       const pounds = r.int(1, 6);
-      return slider(`Place the number of ounces in ${pounds} pounds.`, {
+      return slider(`Place the number of ounces in ${plural(pounds, "pound")}.`, {
         min: 0,
         max: 96,
         step: 1,
@@ -1970,7 +1999,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const glasses = r.int(4, 12);
       const each = r.pick([125, 200, 250, 500]);
       return fill(
-        `A jug holds ${dp((glasses * each) / 1000)} litres and a glass holds ${each} mL. How many glasses does the jug fill?`,
+        `A jug holds ${plural(dp((glasses * each) / 1000), "litre")} and a glass holds ${each} mL. How many glasses does the jug fill?`,
         glasses,
         { unit: "glasses", hint: "a number" },
       );
@@ -1979,7 +2008,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const bottles = r.int(2, 12);
       const each = r.pick([250, 500]);
       return slider(
-        `A tank holds ${dp((bottles * each) / 1000)} litres. Place how many ${each} mL bottles it fills.`,
+        `A tank holds ${plural(dp((bottles * each) / 1000), "litre")}. Place how many ${each} mL bottles it fills.`,
         { min: 0, max: 15, step: 1, value: bottles, full: 1, zero: 4 },
       );
     },
@@ -2170,7 +2199,7 @@ export const GRADE_5: Record<string, ((r: Rng) => Built)[]> = {
       const halves = r.int(1, 5);
       const threeQuarters = r.int(1, 5);
       return slider(
-        `A line plot shows ${halves} seedlings at 1/2 cm and ${threeQuarters} at 3/4 cm. Place their total height.`,
+        `A line plot shows ${plural(halves, "seedling")} at 1/2 cm and ${threeQuarters} at 3/4 cm. Place their total height.`,
         {
           min: 0,
           max: 10,

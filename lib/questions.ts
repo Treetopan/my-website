@@ -49,7 +49,22 @@ export type QuestionKind =
   | "slider"
   | "point"
   | "line"
-  | "order";
+  | "order"
+  | "matrix";
+
+/**
+ * The most cells a matrix question may ask a student to fill in.
+ *
+ * Two of the three games run on a clock, and typing nine cells inside a racer
+ * round is a typing test rather than a maths question. A result bigger than
+ * this is still worth asking about — it is asked as a single entry instead,
+ * which is the better question anyway once the entry asked for is not always
+ * the top-left one.
+ *
+ * Also the cap `parseResponse` enforces on the way in, so the number is a
+ * bound on work the grader can be made to do and not only a design choice.
+ */
+export const MAX_MATRIX_CELLS = 4;
 
 // ─── Figures ─────────────────────────────────────────────
 
@@ -190,13 +205,40 @@ export type OrderQuestion = Identity & {
   items: string[];
 };
 
+/**
+ * Fill in every entry of a result matrix.
+ *
+ * The sixth kind, and the first whose score is a count rather than a distance.
+ * A matrix question asked as `fill` can only ever ask about one entry, which
+ * is why every one of them asked about the top-left: there was nowhere to put
+ * the other three. Asked this way the question is the operation rather than a
+ * sample of it, and a student who can do three entries and not the fourth
+ * says so on the screen instead of scoring zero.
+ *
+ * Graded as entries-right over entries-total, which lands on the same 0–1
+ * scale the proximity kinds use and means `PASS` reads as "three of four".
+ * That is a genuine partial score and not a proximity one: the entries are
+ * discrete, each is right or wrong, and nothing here is *nearly* correct. It
+ * is the reason this kind shows its working at any score below a perfect one
+ * rather than below the pass mark — see `wantsExplaining`.
+ */
+export type MatrixQuestion = Identity & {
+  kind: "matrix";
+  /** The shape of the result to be filled in. Never more than `MAX_MATRIX_CELLS`. */
+  rows: number;
+  cols: number;
+  /** Placeholder for the whole grid, e.g. "whole numbers". */
+  hint?: string;
+};
+
 export type Question =
   | ChoiceQuestion
   | FillQuestion
   | SliderQuestion
   | PointQuestion
   | LineQuestion
-  | OrderQuestion;
+  | OrderQuestion
+  | MatrixQuestion;
 
 // ─── Answering ───────────────────────────────────────────
 
@@ -212,7 +254,9 @@ export type Response =
   | { kind: "slider"; value: number | null }
   | { kind: "point"; at: Point | null }
   | { kind: "line"; through: [Point, Point] | null }
-  | { kind: "order"; order: number[] | null };
+  | { kind: "order"; order: number[] | null }
+  /** Row-major, one string per cell. Null until the first keystroke. */
+  | { kind: "matrix"; cells: string[] | null };
 
 /** The correct answer, sent back only with a verdict. */
 export type Reveal =
@@ -221,7 +265,8 @@ export type Reveal =
   | { kind: "slider"; value: number }
   | { kind: "point"; at: Point }
   | { kind: "line"; slope: number; intercept: number }
-  | { kind: "order"; order: number[] };
+  | { kind: "order"; order: number[] }
+  | { kind: "matrix"; cells: string[] };
 
 export type Verdict = {
   /** 0 to 1. Only the proximity kinds ever land between the two. */
@@ -245,6 +290,44 @@ export type Verdict = {
  * were wrong teaches them nothing they can act on.
  */
 export const PASS = 0.6;
+
+/**
+ * Whether a score has earned an explanation.
+ *
+ * The pass mark almost everywhere, and anything short of exact on a matrix.
+ *
+ * The difference is not a preference, it is what the scores mean. On a point,
+ * a slider or a line the score is a distance, and 0.95 is a student who put it
+ * very nearly in the right place — telling them how they missed teaches them
+ * nothing, because they did not miss. A matrix score is a count of discrete
+ * entries, each simply right or wrong, so 0.75 is not "nearly right"; it is
+ * three correct entries and one specific arithmetic error, which is exactly
+ * the thing worth naming.
+ *
+ * Deliberately not generalised past this one kind. Widening it to the
+ * proximity kinds would put coaching under answers that did not need any.
+ */
+export function wantsExplaining(kind: QuestionKind, score: number): boolean {
+  return score < (kind === "matrix" ? 1 : PASS);
+}
+
+/**
+ * Cells written back as a matrix literal, which `MathText` then draws.
+ *
+ * The review lists describe every answer as a string, so this is what makes a
+ * matrix answer render as a matrix in them rather than as a row of numbers. An
+ * empty cell becomes a question mark: a half-filled grid is an answer, and the
+ * review has to show which half.
+ */
+export function writeMatrix(cells: string[], cols: number): string {
+  const wide = Math.max(1, cols);
+  const rows: string[] = [];
+  for (let at = 0; at < cells.length; at += wide) {
+    const row = cells.slice(at, at + wide).map((c) => c.trim() || "?");
+    rows.push(`[${row.join(", ")}]`);
+  }
+  return `[${rows.join(", ")}]`;
+}
 
 /**
  * Turns an error into a score.
@@ -291,6 +374,11 @@ export function emptyResponse(kind: QuestionKind): Response {
       return { kind: "line", through: null };
     case "order":
       return { kind: "order", order: null };
+    case "matrix":
+      // Null rather than a grid of empty strings, because the shape is a
+      // property of the question and this function is handed only the kind.
+      // The input builds the empty grid it needs from the question itself.
+      return { kind: "matrix", cells: null };
   }
 }
 
@@ -351,9 +439,32 @@ export function parseResponse(value: unknown): Response | null {
       return order ? { kind: "order", order } : null;
     }
 
+    case "matrix": {
+      if (blank(r.cells)) return { kind: "matrix", cells: null };
+      const cells = parseCells(r.cells);
+      return cells ? { kind: "matrix", cells } : null;
+    }
+
     default:
       return null;
   }
+}
+
+/**
+ * Reads a grid of typed cells back out of untrusted data.
+ *
+ * The first kind whose response is an unbounded array of strings, so both
+ * bounds are enforced here rather than trusted: at most `MAX_MATRIX_CELLS`
+ * cells, and each no longer than a `fill` answer is allowed to be. Neither
+ * limit is reachable by the input — they exist for a request that did not
+ * come from it.
+ */
+function parseCells(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  if (value.length === 0 || value.length > MAX_MATRIX_CELLS) return null;
+  return value.every((c) => typeof c === "string" && c.length <= 100)
+    ? (value as string[])
+    : null;
 }
 
 /**
@@ -422,6 +533,10 @@ export function parseReveal(value: unknown): Reveal | null {
             intercept: r.intercept as number,
           }
         : null;
+    case "matrix": {
+      const cells = parseCells(r.cells);
+      return cells ? { kind: "matrix", cells } : null;
+    }
     default:
       return null;
   }
@@ -446,6 +561,14 @@ export function isBlank(response: Response): boolean {
       // something, which is what tells an untouched question from an answered
       // one — and the scramble is never the answer, so nothing is lost.
       return response.order === null;
+    case "matrix":
+      // Every cell empty, and not merely some. A half-filled grid is an
+      // answer: it gets scored on the entries that are there, and reads as
+      // "You said" in the review rather than as a clock that ran out.
+      return (
+        response.cells === null ||
+        response.cells.every((cell) => cell.trim() === "")
+      );
   }
 }
 
@@ -515,6 +638,11 @@ export function describeReveal(reveal: Reveal, question: Question): string {
     }
     case "order":
       return question.kind === "order" ? sequence(reveal.order, question) : "—";
+    case "matrix":
+      return writeMatrix(
+        reveal.cells,
+        question.kind === "matrix" ? question.cols : reveal.cells.length,
+      );
   }
 }
 
@@ -553,6 +681,13 @@ export function describeResponse(response: Response, question: Question): string
       return question.kind === "order"
         ? sequence(response.order, question)
         : "—";
+    case "matrix": {
+      if (isBlank(response)) return "No answer";
+      return writeMatrix(
+        response.cells!,
+        question.kind === "matrix" ? question.cols : response.cells!.length,
+      );
+    }
   }
 }
 

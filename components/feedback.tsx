@@ -1,7 +1,7 @@
 "use client";
 
 import type { Question } from "@/lib/curriculum";
-import { diagnose } from "@/lib/coaching";
+import { diagnose, entryLines } from "@/lib/coaching";
 import { MathText } from "@/components/math-text";
 import type { Response, Reveal } from "@/lib/questions";
 
@@ -29,6 +29,7 @@ export function Feedback({
   reveal,
   response,
   steps,
+  perEntry,
   tight,
 }: {
   question: Question;
@@ -36,11 +37,23 @@ export function Feedback({
   response: Response;
   /** From the server, only ever on a miss. The rule, or worked steps. */
   steps?: string[];
+  /** From the server too: the working for each cell of a matrix answer. */
+  perEntry?: string[];
   /** Denser, for the stacked list in the post-game summary. */
   tight?: boolean;
 }) {
   const said = diagnose(question, reveal, response);
-  const lines = said ? [...(steps ?? []), said] : (steps ?? []);
+  // Between the rule and the diagnosis, because that is where they belong in
+  // the argument: here is the method, here is what it gives for the entries
+  // you missed, here is how your answer differed.
+  const entries = entryLines(
+    reveal,
+    response,
+    perEntry,
+    question.kind === "matrix" ? question.cols : 1,
+  );
+
+  const lines = [...(steps ?? []), ...entries, ...(said ? [said] : [])];
   if (lines.length === 0) return null;
 
   if (tight) {

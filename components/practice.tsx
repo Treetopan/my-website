@@ -18,13 +18,13 @@ import {
   xpForAnswer,
   type Progress,
 } from "@/lib/progression";
-import { QuestionStage } from "@/components/question-stage";
+import { LeaveGame, QuestionStage } from "@/components/question-stage";
 import { Wordmark } from "@/components/wordmark";
 import { PracticeReport } from "@/components/practice-report";
 import { GradeError, grade, openSession } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
 import {
-  PASS,
+  wantsExplaining,
   emptyResponse,
   type Response as Answered,
   type Reveal,
@@ -85,6 +85,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
   const [reveal, setReveal] = useState<Reveal | null>(null);
   /** Why the last answer was wrong. Server-sent, and only ever on a miss. */
   const [steps, setSteps] = useState<string[] | undefined>(undefined);
+  const [perEntry, setPerEntry] = useState<string[] | undefined>(undefined);
   const [score, setScore] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
@@ -162,6 +163,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
       setReveal(verdict.reveal);
       setScore(verdict.score);
       setSteps(verdict.steps);
+      setPerEntry(verdict.perEntry);
       setPhase("revealed");
 
       setAnswers((prev) => [
@@ -178,6 +180,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
           speed,
           ms: msTaken,
           steps: verdict.steps,
+          perEntry: verdict.perEntry,
         },
       ]);
     },
@@ -217,8 +220,19 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
     askedAt.current = Date.now();
   }, [phase, index, question, sessionId]);
 
-  /** The answer was wrong, so there is an explanation on screen to read. */
-  const missed = score !== null && score < PASS;
+  /**
+   * There is an explanation on the screen, so the reveal waits to be dismissed.
+   *
+   * Not the same thing as having got it wrong, which is what this used to ask.
+   * A matrix that scored three of four passed and still has a wrong entry
+   * named underneath it, and flicking past that after a second is the same
+   * disappearance the close-ones list exists to stop — worse, in fact, since
+   * the end screen would then print working for a question the student was
+   * never shown any. The same predicate the reveal itself is gated on, so the
+   * two cannot disagree about whether there is something down there to read.
+   */
+  const explaining =
+    !!question && score !== null && wantsExplaining(question.kind, score);
 
   const advance = useCallback(() => {
     if (index >= total - 1) {
@@ -228,6 +242,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
     setReveal(null);
     setScore(null);
     setSteps(undefined);
+    setPerEntry(undefined);
     setIndex(index + 1);
     setPhase("asking");
   }, [index, total]);
@@ -238,7 +253,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
   useEffect(() => {
     if (phase !== "revealed") return;
 
-    const id = missed ? null : window.setTimeout(advance, REVEAL_MS);
+    const id = explaining ? null : window.setTimeout(advance, REVEAL_MS);
 
     const onKey = (e: KeyboardEvent) => {
       // Not on a held key: the same press that submitted the answer would
@@ -253,7 +268,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
       if (id !== null) window.clearTimeout(id);
       window.removeEventListener("keydown", onKey);
     };
-  }, [phase, missed, advance]);
+  }, [phase, explaining, advance]);
 
   const correct = answers.filter((a) => a.correct).length;
   const xpEarned = answers.reduce((sum, a) => sum + xpForAnswer(a), 0);
@@ -330,9 +345,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
               {correct}/{answers.length} right
             </span>
           )}
-          <Link href="/" className="text-faint transition-colors hover:text-ink">
-            Leave
-          </Link>
+          <LeaveGame />
         </span>
       </header>
 
@@ -368,6 +381,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
                 setReveal(null);
                 setScore(null);
                 setSteps(undefined);
+    setPerEntry(undefined);
                 setSessionId(null);
                 setQuestions([]);
                 setFault(null);
@@ -390,6 +404,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
                 reveal={reveal}
                 score={score}
                 steps={steps}
+                perEntry={perEntry}
                 onDraft={setDraft}
                 onSubmit={(response) => {
                   if (phase === "asking") {
@@ -406,7 +421,7 @@ export function Practice({ subunitIds }: { subunitIds: string[] }) {
                 </p>
               )}
 
-              {phase === "revealed" && missed && (
+              {phase === "revealed" && explaining && (
                 <Continue onGo={advance} last={index >= total - 1} />
               )}
             </div>

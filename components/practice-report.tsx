@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { levelProgress, type Progress } from "@/lib/progression";
-import { ReviewList } from "@/components/review-list";
+import { CloseList, ReviewList } from "@/components/review-list";
 import {
   praise,
   reviewPractice,
@@ -151,6 +151,16 @@ export function PracticeReport({
       {p.review.length > 0 && (
         <div className="mb-8">
           <ReviewList details={p.review} open />
+        </div>
+      )}
+
+      {/* Under the misses, because a miss is the thing to go back to first.
+          This was in the race summary and not here, which meant a practice set
+          with a partly-right answer in it showed that answer nowhere — the
+          same disappearance `close` was added to stop. */}
+      {p.close.length > 0 && (
+        <div className="mb-8">
+          <CloseList details={p.close} />
         </div>
       )}
 

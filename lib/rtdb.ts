@@ -76,10 +76,19 @@ export type Reveal = {
   /** The right answer, as graded by the server. */
   answer: Answer;
   /**
-   * Why it was wrong, from the server. Written only when the turn was missed,
-   * so a table that is answering well broadcasts exactly what it always did.
+   * Why it was wrong, from the server. Written only when the turn had
+   * something left to explain, so a table that is answering well broadcasts
+   * exactly what it always did.
    */
   steps?: string[] | null;
+  /**
+   * The working for each cell of a matrix answer, row-major.
+   *
+   * Written here rather than kept on the answering client because the room
+   * replays a turn from this node — a player who reloads mid-round reads their
+   * own verdict back out of it, and would otherwise lose the explanation.
+   */
+  perEntry?: string[] | null;
 };
 
 /** One player's half of a mirrored question, once the round has settled. */
@@ -167,6 +176,12 @@ export type Room = {
    * same number so no two people see a different countdown.
    */
   turnMs?: number | null;
+  /**
+   * How many full laps of the table have been played, which is all the
+   * ratchet is now. The clock itself is worked out from the question, so this
+   * only says how much of that question's budget the turn gets.
+   */
+  lap?: number | null;
   reveal: Reveal | null;
   players: Record<string, RoomPlayer>;
   winnerUid?: string | null;

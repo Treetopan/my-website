@@ -66,6 +66,15 @@ export type Resolved = {
    * with the question — only ever back with a verdict, and only a wrong one.
    */
   steps?: string[];
+  /**
+   * One line of working per cell of a matrix answer, row-major.
+   *
+   * Built here, at mint time, because it depends only on the question — and
+   * sent only with a verdict, for the same reason `steps` is: per-cell working
+   * beside an unanswered question is not a hint, it is the answer. Which of
+   * these lines a student is shown is decided on the client, from the response.
+   */
+  perEntry?: string[];
 };
 
 /**
@@ -75,11 +84,19 @@ export type Resolved = {
  * question or an answer, never both.
  */
 function split(built: Built, id: string, topic: string): Resolved {
-  return { ...divide(built, id, topic), steps: built.steps };
+  return {
+    ...divide(built, id, topic),
+    steps: built.steps,
+    perEntry: built.kind === "matrix" ? built.perEntry : undefined,
+  };
 }
 
 /** The question and answer halves; `split` re-attaches the steps around them. */
-function divide(built: Built, id: string, topic: string): Omit<Resolved, "steps"> {
+function divide(
+  built: Built,
+  id: string,
+  topic: string,
+): Omit<Resolved, "steps" | "perEntry"> {
   switch (built.kind) {
     case "choice":
       return {
@@ -184,6 +201,25 @@ function divide(built: Built, id: string, topic: string): Omit<Resolved, "steps"
           order: built.answer,
           full: built.full,
           zero: built.zero,
+        },
+      };
+
+    case "matrix":
+      return {
+        question: {
+          kind: "matrix",
+          id,
+          topic,
+          prompt: built.prompt,
+          rows: built.rows,
+          cols: built.cols,
+          hint: built.hint,
+          figure: built.figure,
+        },
+        answer: {
+          kind: "matrix",
+          cells: built.cells,
+          tolerance: built.tolerance,
         },
       };
   }

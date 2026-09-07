@@ -45,6 +45,15 @@ function wrongAnswers(kind: Response["kind"]): Response[] {
         { kind: "fill", text: "1/2" },
         { kind: "fill", text: "not a number" },
       ];
+    case "matrix":
+      // Sized wrong on purpose as well as valued wrong: a grid of the wrong
+      // length is the one response the scorer refuses outright, and the
+      // diagnosis has to survive it rather than index off the end.
+      return [
+        { kind: "matrix", cells: ["0", "0", "0", "0"] },
+        { kind: "matrix", cells: ["1", "-1"] },
+        { kind: "matrix", cells: ["", "", "", ""] },
+      ];
     case "slider":
       return [{ kind: "slider", value: 0 }, { kind: "slider", value: -3.5 }];
     case "point":

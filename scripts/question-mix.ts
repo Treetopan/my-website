@@ -40,6 +40,7 @@ const KINDS: QuestionKind[] = [
   "point",
   "line",
   "order",
+  "matrix",
 ];
 
 type Tally = Record<QuestionKind, number> & { total: number; figures: number };
@@ -52,6 +53,7 @@ function empty(): Tally {
     point: 0,
     line: 0,
     order: 0,
+    matrix: 0,
     total: 0,
     figures: 0,
   };

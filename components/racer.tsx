@@ -20,14 +20,14 @@ import {
   xpForAnswer,
   type Progress,
 } from "@/lib/progression";
-import { QuestionStage } from "@/components/question-stage";
+import { LeaveGame, QuestionStage } from "@/components/question-stage";
 import { Wordmark } from "@/components/wordmark";
 import { Track3D } from "@/components/racer-track-3d";
 import { SessionSummary } from "@/components/session-summary";
 import { GradeError, grade, openSession } from "@/lib/grade";
 import type { AnswerDetail } from "@/lib/review";
 import {
-  PASS,
+  wantsExplaining,
   emptyResponse,
   type Response as Answered,
   type Reveal,
@@ -171,6 +171,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
   const [reveal, setReveal] = useState<Reveal | null>(null);
   /** Why the last answer was wrong. Server-sent, and only ever on a miss. */
   const [steps, setSteps] = useState<string[] | undefined>(undefined);
+  const [perEntry, setPerEntry] = useState<string[] | undefined>(undefined);
   const [score, setScore] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
@@ -281,6 +282,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
       setReveal(verdict.reveal);
       setScore(verdict.score);
       setSteps(verdict.steps);
+      setPerEntry(verdict.perEntry);
       setPhase("revealed");
 
       setAnswers((prev) => [
@@ -296,6 +298,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
           score: verdict.score,
           speed,
           steps: verdict.steps,
+          perEntry: verdict.perEntry,
         },
       ]);
 
@@ -344,8 +347,19 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
   const [asked, setAsked] = useState<{ index: number; at: number } | null>(null);
   const askedAt = asked?.index === index ? asked.at : 0;
 
-  /** The answer was wrong, so there is an explanation on screen to read. */
-  const missed = score !== null && score < PASS;
+  /**
+   * There is an explanation on the screen, so the reveal waits to be dismissed.
+   *
+   * Not the same thing as having got it wrong, which is what this used to ask.
+   * A matrix that scored three of four passed and still has a wrong entry
+   * named underneath it, and flicking past that after a second is the same
+   * disappearance the close-ones list exists to stop — worse, in fact, since
+   * the end screen would then print working for a question the student was
+   * never shown any. The same predicate the reveal itself is gated on, so the
+   * two cannot disagree about whether there is something down there to read.
+   */
+  const explaining =
+    !!question && score !== null && wantsExplaining(question.kind, score);
 
   const advance = useCallback(() => {
     if (index >= total - 1) {
@@ -355,6 +369,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
     setReveal(null);
     setScore(null);
     setSteps(undefined);
+    setPerEntry(undefined);
     setLastGain(null);
     setIndex(index + 1);
     setPhase("asking");
@@ -368,7 +383,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
     // knows how long a sentence takes to read, and this is the one part of a
     // race worth being slow in — the rival's clock is stopped either way, so
     // staying with an explanation cannot cost the race.
-    const id = missed ? null : window.setTimeout(advance, REVEAL_MS);
+    const id = explaining ? null : window.setTimeout(advance, REVEAL_MS);
 
     const onKey = (e: KeyboardEvent) => {
       // Not on a held key: the same press that submitted the answer would
@@ -383,7 +398,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
       if (id !== null) window.clearTimeout(id);
       window.removeEventListener("keydown", onKey);
     };
-  }, [phase, missed, advance]);
+  }, [phase, explaining, advance]);
 
   // What the answers have earned: four a question for the first three, two a
   // question after that, one back for every one missed.
@@ -571,9 +586,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
           <span className="font-mono text-[11px] text-faint tnum">
             {phase === "over" ? "Finished" : `Q${index + 1}`}
           </span>
-          <Link href="/" className="text-faint transition-colors hover:text-ink">
-            Leave
-          </Link>
+          <LeaveGame />
         </span>
       </header>
 
@@ -646,6 +659,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
                 reveal={reveal}
                 score={score}
                 steps={steps}
+                perEntry={perEntry}
                 onDraft={setDraft}
                 onSubmit={(response) => {
                   // Timed from the answer, not from the last tick, so the
@@ -666,7 +680,7 @@ export function Racer({ subunitIds }: { subunitIds: string[] }) {
                 </p>
               )}
 
-              {phase === "revealed" && missed && <Continue onGo={advance} />}
+              {phase === "revealed" && explaining && <Continue onGo={advance} />}
             </div>
           )
         )}

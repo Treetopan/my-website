@@ -44,6 +44,12 @@ export type AnswerDetail = {
    * nothing about a finished session is written down anywhere.
    */
   steps?: string[];
+  /**
+   * The working for each cell of a matrix answer, row-major. Arrives with the
+   * verdict the same way `steps` does, and is narrowed to the entries the
+   * student actually missed at the moment it is rendered.
+   */
+  perEntry?: string[];
 };
 
 /** The question text, for a summary that no longer stores it separately. */
@@ -80,6 +86,7 @@ export const FORMAT: Record<QuestionKind, string> = {
   point: "Placed on a grid",
   line: "Drawn line",
   order: "Put in order",
+  matrix: "Filled in a matrix",
 };
 
 /**

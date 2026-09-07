@@ -8,14 +8,16 @@ import {
   type FillQuestion,
   type Frame,
   type LineQuestion,
+  type MatrixQuestion,
   type OrderQuestion,
   type Point,
   type PointQuestion,
   type Reveal,
   type SliderQuestion,
+  writeMatrix,
 } from "@/lib/questions";
 import { Axes, Drawn, VIEW, describeGrid, useGrid } from "@/components/graph";
-import { MathText } from "@/components/math-text";
+import { MathText, MatrixFrame } from "@/components/math-text";
 
 /**
  * The answer inputs for the kinds that are not multiple choice.
@@ -100,6 +102,134 @@ export function FillAnswer({
           The answer was{" "}
           <span className="font-mono text-correct">
             <MathText text={right} />
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Fill in the result matrix ───────────────────────────
+
+/**
+ * Type every entry of a result matrix.
+ *
+ * Drawn in the same brackets a matrix in the prompt is drawn in, because it is
+ * the same object: the question shows two matrices and an empty third, and the
+ * empty one is the answer. Anything else would make the result look like a
+ * form rather than like a matrix.
+ *
+ * Keyboard first, throughout. Tab moves between cells because the inputs are
+ * in reading order in the DOM and nothing overrides that; Enter submits from
+ * any cell rather than only the last, since a student who has filled the grid
+ * should not have to find their way back to a particular box to send it.
+ *
+ * On the reveal each cell is marked on its own. That is the whole reason this
+ * kind exists — "three of these four are right, and it is this one that is
+ * not" is a positional fact, and saying it in prose would throw the position
+ * away.
+ */
+export function MatrixAnswer({
+  question,
+  draft,
+  locked,
+  reveal,
+  onDraft,
+  onSubmit,
+}: {
+  question: MatrixQuestion;
+  draft: string[] | null;
+  locked: boolean;
+  reveal: Reveal | null;
+  onDraft: (cells: string[]) => void;
+  onSubmit: () => void;
+}) {
+  const first = useRef<HTMLInputElement>(null);
+  const size = question.rows * question.cols;
+  const cells = draft ?? Array<string>(size).fill("");
+  const right = reveal?.kind === "matrix" ? reveal.cells : null;
+
+  useEffect(() => {
+    if (!locked) first.current?.focus();
+  }, [locked, question.id]);
+
+  /** Compared as text, then as value — the two ways the server accepts a cell. */
+  const isRight = (at: number) => {
+    if (!right) return false;
+    const said = (cells[at] ?? "").trim();
+    if (said === right[at].trim()) return true;
+    const a = Number(said);
+    const b = Number(right[at]);
+    return said !== "" && Number.isFinite(a) && Number.isFinite(b) && a === b;
+  };
+
+  const filled = cells.some((c) => c.trim() !== "");
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-4">
+        <span className="text-[20px] sm:text-[26px]">
+          <MatrixFrame cols={question.cols} gap>
+            {cells.map((cell, at) => {
+              const marked = right !== null;
+              const ok = marked && isRight(at);
+
+              return (
+                <input
+                  key={at}
+                  ref={at === 0 ? first : undefined}
+                  value={cell}
+                  disabled={locked}
+                  inputMode="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label={`Row ${Math.floor(at / question.cols) + 1}, column ${
+                    (at % question.cols) + 1
+                  } of the result`}
+                  onChange={(e) => {
+                    const next = [...cells];
+                    next[at] = e.target.value;
+                    onDraft(next);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !locked && filled) {
+                      e.preventDefault();
+                      onSubmit();
+                    }
+                  }}
+                  className={
+                    "box w-16 px-2 py-2 text-center font-mono text-[16px] " +
+                    "text-ink outline-none disabled:cursor-default " +
+                    (!marked
+                      ? "focus:border-accent"
+                      : ok
+                        ? "animate-correct border-correct bg-correct/12"
+                        : "border-out bg-out/12")
+                  }
+                />
+              );
+            })}
+          </MatrixFrame>
+        </span>
+
+        {!locked && (
+          <Commit onClick={onSubmit} disabled={!filled} hint="Enter" />
+        )}
+      </div>
+
+      {/* Through MathText, because a hint on this kind is as likely to be a
+          formula with a matrix in it as it is to be a sentence. */}
+      {question.hint && !locked && (
+        <p className="text-[13px] text-faint">
+          <MathText text={question.hint} />
+        </p>
+      )}
+
+      {right !== null && cells.some((_, at) => !isRight(at)) && (
+        <p className="text-[14px] text-muted">
+          The answer was{" "}
+          <span className="font-mono text-correct">
+            <MathText text={writeMatrix(right, question.cols)} />
           </span>
         </p>
       )}

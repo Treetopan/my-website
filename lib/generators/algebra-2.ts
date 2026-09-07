@@ -3,11 +3,14 @@ import "server-only";
 import {
   among,
   ask,
+  cell,
   detStep,
   frac,
   graph,
   head,
   fill,
+  lay,
+  matrix,
   put,
   piFrac,
   plot,
@@ -29,28 +32,145 @@ import {
  * a numeric answer is typed, dragged or placed. A vertex, a centre and the
  * solution of a system are all points, so they are answered on a grid.
  */
+/**
+ * The shapes a sum is asked at, split by how much of it is asked for.
+ *
+ * Every one of these is a legal addition — matching shapes, and that is the
+ * only rule — so the split is about the answer rather than the maths. The
+ * whole-result list is exactly the shapes with four cells or fewer; the
+ * entry list is exactly the ones with more, which is what stops a student
+ * ever being asked to type six boxes against a clock.
+ */
+const SUM_WHOLE_SHAPES: [number, number][] = [
+  // Listed twice to weight it. The square is the case the course is about and
+  // the only one of these with four cells to fill; the others are here so the
+  // shape is something a student reads rather than assumes, not so that the
+  // square becomes rare.
+  [2, 2],
+  [2, 2],
+  [2, 1],
+  [1, 2],
+  [1, 3],
+  [3, 1],
+];
+
+const SUM_ENTRY_SHAPES: [number, number][] = [
+  [2, 3],
+  [3, 2],
+  [3, 3],
+];
+
+/**
+ * The shapes a product is asked at, as `[n, k, p]`: an n×k times a k×p.
+ *
+ * The inner dimension has to match — that is the whole rule of the thing —
+ * and the product is n×p, which is what the split below is on. Four cells or
+ * fewer and the student fills the result in; more and it is one entry of it.
+ */
+const PRODUCT_WHOLE_SHAPES: [number, number, number][] = [
+  // Weighted the same way and for the same reason: 2×2 by 2×2 is the product
+  // the subunit is really teaching, and the only one here with four cells.
+  [2, 2, 2],
+  [2, 2, 2],
+  [2, 2, 1],
+  [1, 3, 2],
+  [2, 3, 1],
+  [1, 2, 3],
+];
+
+const PRODUCT_ENTRY_SHAPES: [number, number, number][] = [
+  [2, 3, 3],
+  [3, 2, 3],
+  [3, 3, 2],
+  [3, 2, 2],
+];
+
+/** A run of small entries. Kept tight so a product stays mental arithmetic. */
+function roll(r: Rng, count: number): number[] {
+  return Array.from({ length: count }, () => r.int(-5, 5));
+}
+
+/**
+ * One entry of a product, worked out with this roll's own numbers.
+ *
+ * `c_(21) = a_(21)·b_(11) + a_(22)·b_(21) = (3)(1) + (4)(2) = 11` — the line
+ * the whole change was asked for. Written once because both generators in 1.5
+ * need it, the entry one for its single line and the whole-result one for all
+ * of them.
+ */
+function productStep(
+  a: number[],
+  b: number[],
+  k: number,
+  p: number,
+  at: number,
+  total: number,
+): string {
+  const row = Math.floor(at / p);
+  const col = at % p;
+
+  const named: string[] = [];
+  const numbers: string[] = [];
+  for (let i = 0; i < k; i++) {
+    named.push(`a_(${row + 1}${i + 1})·b_(${i + 1}${col + 1})`);
+    numbers.push(`${put(a[row * k + i])}${put(b[i * p + col])}`);
+  }
+
+  return `c_(${row + 1}${col + 1}) = ${named.join(" + ")} = ${numbers.join(" + ")} = ${total}`;
+}
+
 export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
   // ── 1.5 Matrix multiplication ──
   "math/algebra-2/unit-1/1.5": [
     (r) => {
-      const m = [r.int(-5, 5), r.int(-5, 5), r.int(-5, 5), r.int(-5, 5)];
-      const v = [r.nonzero(-5, 5), r.nonzero(-5, 5)];
-      const top = m[0] * v[0] + m[1] * v[1];
-      // Written as a one-column matrix rather than as the pair (x, y): a
-      // column vector that renders as a row is the exact confusion this
-      // question is about, since which of the two is a row decides which
-      // multiplication is even defined.
+      // The shapes with more than four cells in the product, so this asks for
+      // one entry of it. Which entry varies too — asking for the top-left
+      // every time taught students to look at the first row and stop.
+      const [n, k, p] = r.pick(PRODUCT_ENTRY_SHAPES);
+      const a = roll(r, n * k);
+      const b = roll(r, k * p);
+      const at = r.int(0, n * p - 1);
+      const row = Math.floor(at / p);
+      const col = at % p;
+      const terms = Array.from({ length: k }, (_, i) => a[row * k + i] * b[i * p + col]);
+      const total = terms.reduce((sum, t) => sum + t, 0);
+
       return fill(
-        `Multiply [[${m[0]}, ${m[1]}], [${m[2]}, ${m[3]}]] by [[${v[0]}], [${v[1]}]]. What is the top entry?`,
-        top,
+        `Multiply ${lay(a, k)} by ${lay(b, p)}.   What is the entry in row ${
+          row + 1
+        }, column ${col + 1}?`,
+        total,
         {
           hint: "a number",
-          steps: [
-            `c_(11) = a_(11)·x_(1) + a_(12)·x_(2) = ` +
-              `${put(m[0])}${put(v[0])} + ${put(m[1])}${put(v[1])} = ${top}`,
-          ],
+          steps: [productStep(a, b, k, p, at, total)],
         },
       );
+    },
+
+    (r) => {
+      // The shapes whose product fits in four cells, so the whole of it is
+      // asked for. A column vector among them on purpose: which operand is
+      // the column decides whether the multiplication is defined at all, and
+      // that is what this subunit is for.
+      const [n, k, p] = r.pick(PRODUCT_WHOLE_SHAPES);
+      const a = roll(r, n * k);
+      const b = roll(r, k * p);
+
+      const cells = Array.from({ length: n * p }, (_, at) => {
+        const row = Math.floor(at / p);
+        const col = at % p;
+        let sum = 0;
+        for (let i = 0; i < k; i++) sum += a[row * k + i] * b[i * p + col];
+        return sum;
+      });
+
+      return matrix(`Multiply ${lay(a, k)} by ${lay(b, p)}.   Fill in the result.`, {
+        rows: n,
+        cols: p,
+        cells,
+        hint: "One number in each cell. Tab moves along, Enter submits.",
+        perEntry: cells.map((v, at) => productStep(a, b, k, p, at, v)),
+      });
     },
   ],
 
@@ -516,23 +636,60 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
   ],
 
   // ── 1.4 Matrix operations ──
+  //
+  // Two generators, split by how much of the answer is asked for. Addition is
+  // the same arithmetic at every size, so the shape is free to vary; what
+  // decides which of the two asks a given roll is the size of the result. Up
+  // to four cells the student fills the whole thing in, which is the question
+  // the subunit is actually about. Past that it is one entry, because a
+  // six-cell grid on a fifteen-second clock is a typing test.
   "math/algebra-2/unit-1/1.4": [
     (r) => {
-      const a = [r.int(-9, 9), r.int(-9, 9), r.int(-9, 9), r.int(-9, 9)];
-      const b = [r.int(-9, 9), r.int(-9, 9), r.int(-9, 9), r.int(-9, 9)];
+      const [rows, cols] = r.pick(SUM_ENTRY_SHAPES);
+      const size = rows * cols;
+      const a = Array.from({ length: size }, () => r.int(-9, 9));
+      const b = Array.from({ length: size }, () => r.int(-9, 9));
       const take = r.bool();
-      const s = take ? -1 : 1;
-      const entry = a[0] + s * b[0];
       const sign = take ? "-" : "+";
+      const at = r.int(0, size - 1);
+      const entry = a[at] + (take ? -1 : 1) * b[at];
+
       return fill(
-        `[[${a[0]}, ${a[1]}], [${a[2]}, ${a[3]}]] ${sign} [[${b[0]}, ${b[1]}], [${b[2]}, ${b[3]}]].   What is the top-left entry?`,
+        `${lay(a, cols)} ${sign} ${lay(b, cols)}.   What is the entry in row ${
+          Math.floor(at / cols) + 1
+        }, column ${(at % cols) + 1}?`,
         entry,
         {
           hint: "a number",
           steps: [
-            `c_(11) = a_(11) ${sign} b_(11) = ` +
-              `${put(a[0])} ${sign} ${put(b[0])} = ${entry}`,
+            `${cell("c", at, cols)} = ${cell("a", at, cols)} ${sign} ${cell("b", at, cols)} = ` +
+              `${put(a[at])} ${sign} ${put(b[at])} = ${entry}`,
           ],
+        },
+      );
+    },
+
+    (r) => {
+      const [rows, cols] = r.pick(SUM_WHOLE_SHAPES);
+      const size = rows * cols;
+      const a = Array.from({ length: size }, () => r.int(-9, 9));
+      const b = Array.from({ length: size }, () => r.int(-9, 9));
+      const take = r.bool();
+      const sign = take ? "-" : "+";
+      const sum = a.map((v, i) => v + (take ? -1 : 1) * b[i]);
+
+      return matrix(
+        `${lay(a, cols)} ${sign} ${lay(b, cols)}.   Fill in the result.`,
+        {
+          rows,
+          cols,
+          cells: sum,
+          hint: "One number in each cell. Tab moves along, Enter submits.",
+          perEntry: sum.map(
+            (v, i) =>
+              `${cell("c", i, cols)} = ${cell("a", i, cols)} ${sign} ${cell("b", i, cols)} = ` +
+              `${put(a[i])} ${sign} ${put(b[i])} = ${v}`,
+          ),
         },
       );
     },
@@ -549,19 +706,64 @@ export const ALGEBRA_2: Record<string, ((r: Rng) => Built)[]> = {
       // one value that would make the determinant vanish.
       const d = a * rolled === b * c ? rolled + (rolled > 0 ? 1 : -1) : rolled;
       const det = a * d - b * c;
+      // Which entry of the inverse is asked for now varies. The four are four
+      // different mistakes — two of them carry a minus the other two do not —
+      // and asking only for the top-left never tested the two that do.
+      const top = [d, -b, -c, a];
+      const at = r.int(0, 3);
+      const named = ["a_(22)", "-a_(12)", "-a_(21)", "a_(11)"];
+
       return fill(
-        `A⁻¹ = (1/det)·[[d, -b], [-c, a]].   What is the top-left entry of the inverse of [[${a}, ${b}], [${c}, ${d}]]?`,
-        frac(d, det),
+        `A⁻¹ = (1/det)·[[d, -b], [-c, a]].   What is the entry in row ${
+          Math.floor(at / 2) + 1
+        }, column ${(at % 2) + 1} of the inverse of ${lay([a, b, c, d], 2)}?`,
+        frac(top[at], det),
         {
           hint: "a number or fraction",
-          // The only two-line case in the set, and it earns the second line:
-          // the determinant is a separate calculation that the entry then
-          // divides by, so a miss is either the det or the division and the
-          // student cannot tell which without seeing both.
+          // Two lines, and the second earns its place: the determinant is a
+          // separate calculation that the entry then divides by, so a miss is
+          // either the det or the division and the student cannot tell which
+          // without seeing both.
           steps: [
             detStep(a, b, c, d),
-            `(A⁻¹)_(11) = a_(22)/det = ${d}/${det} = ${frac(d, det)}`,
+            `(A⁻¹)${cell("", at, 2)} = ${named[at]}/det = ${put(top[at])}/${put(det)} = ${frac(top[at], det)}`,
           ],
+        },
+      );
+    },
+
+    (r) => {
+      // Built to have a determinant of exactly ±1, which is what makes the
+      // whole inverse askable: every entry comes out a whole number, so this
+      // is four pieces of arithmetic rather than four fractions typed against
+      // a clock. [[1, k], [m, 1 + km]] has determinant 1 for any k and m, and
+      // none of the three shuffles below changes its size — transposing and
+      // negating leave it alone, swapping the rows flips its sign.
+      const k = r.nonzero(-4, 4);
+      const m = r.nonzero(-4, 4);
+
+      let M = [1, k, m, 1 + k * m];
+      if (r.bool()) M = [M[0], M[2], M[1], M[3]];
+      if (r.bool()) M = M.map((v) => -v);
+      if (r.bool()) M = [M[2], M[3], M[0], M[1]];
+
+      const [a, b, c, d] = M;
+      const det = a * d - b * c;
+      const inverse = [d / det, -b / det, -c / det, a / det];
+      const named = ["a_(22)", "-a_(12)", "-a_(21)", "a_(11)"];
+      const raw = [d, -b, -c, a];
+
+      return matrix(
+        `The determinant of ${lay(M, 2)} is ${det}.   Fill in its inverse.`,
+        {
+          rows: 2,
+          cols: 2,
+          cells: inverse,
+          hint: "A⁻¹ = (1/det)·[[d, -b], [-c, a]]",
+          perEntry: inverse.map(
+            (v, at) =>
+              `(A⁻¹)${cell("", at, 2)} = ${named[at]}/det = ${put(raw[at])}/${put(det)} = ${v}`,
+          ),
         },
       );
     },

@@ -22,11 +22,21 @@ export type Verdict = {
   /** The score a proximity answer has to clear to count as right. */
   pass: number;
   /**
-   * Why it was wrong, in a line or two. Present only on a miss, and only when
-   * something is on file — the client pairs it with its own read of how the
-   * answer missed, which it works out locally from the reveal.
+   * Why it was wrong, in a line or two. Present only on an answer with
+   * something left to explain, and only when something is on file — the client
+   * pairs it with its own read of how the answer missed, which it works out
+   * locally from the reveal.
    */
   steps?: string[];
+  /**
+   * The working for each cell of a matrix answer, row-major.
+   *
+   * Rides on the verdict rather than on the question, for the reason `steps`
+   * does: it is the answer written out, and beside an unanswered question it
+   * would simply be the answer. Which lines are shown is decided here, from
+   * the response — the server has no way to know which entries were wrong.
+   */
+  perEntry?: string[];
 };
 
 export type OpenedSession = {

@@ -957,6 +957,7 @@ const METHODS: Record<string, string> = {
 
   // ─── Algebra 2 ─────────────────────────────────────────
   "Matrix multiplication": "Row times column: multiply pairs across and sum. Order matters.",
+  "A whole matrix product": "Entry (i, j) is row i of the first matrix paired off against column j of the second, and summed.",
   "Determinants": "For a 2×2, the determinant is ad - bc.",
   "Powers of i": "Powers of i cycle every four: i, -1, -i, 1. Take the exponent mod 4.",
   "Multiplying complex numbers": "Expand as binomials, then replace i² with -1.",
@@ -982,7 +983,9 @@ const METHODS: Record<string, string> = {
   "Systems in two variables": "The solution is the point both equations accept — where the two graphs cross.",
   "Systems in three variables": "Eliminate one variable from two different pairs, then solve the 2×2 that is left.",
   "Adding matrices": "Add entry by entry. Only same-sized matrices add.",
+  "A whole matrix sum": "Each entry of the result is the two entries in that same position, added.",
   "Entries of an inverse matrix": "For a 2×2, swap a and d, negate b and c, and divide by the determinant.",
+  "A whole inverse matrix": "Swap the two diagonal entries, negate the other two, then divide every entry by the determinant.",
   "When a system can be solved by matrices": "A system has a unique matrix solution exactly when the determinant is non-zero.",
   "The vertex from vertex form": "y = a(x - h)² + k has vertex (h, k). The h sign flips.",
   "Solving by factoring": "Set the equation to zero first, then factor, then set each factor to zero.",

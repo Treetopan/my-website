@@ -21,6 +21,7 @@ import { coachingFor } from "@/lib/coaching.server";
 import {
   PASS,
   parseResponse,
+  wantsExplaining,
   type Response as Answered,
   type Reveal,
 } from "@/lib/questions";
@@ -203,7 +204,7 @@ export async function POST(req: NextRequest) {
 
       const verdict = grade(answer, submitted);
       reveal = verdict.reveal;
-      if (!verdict.correct) missed = true;
+      if (wantsExplaining(question.kind, verdict.score)) missed = true;
       results[seat.uid] = {
         score: verdict.score,
         correct: verdict.correct,
@@ -219,7 +220,10 @@ export async function POST(req: NextRequest) {
       reveal,
       pass: PASS,
       ...(missed
-        ? { steps: coachingFor(found.steps, question.topic, from) }
+        ? {
+            steps: coachingFor(found.steps, question.topic, from),
+            ...(found.perEntry ? { perEntry: found.perEntry } : {}),
+          }
         : {}),
     };
 
@@ -247,12 +251,21 @@ export async function POST(req: NextRequest) {
     response: submitted,
     /** The bar a score has to clear to count as right, so the UI can say so. */
     pass: PASS,
-    // Only ever on a miss, so a right answer costs exactly what it always did.
-    // Never sent with the question itself — a method line beside an unanswered
-    // question is a hint, and this is a game.
-    ...(correct
-      ? {}
-      : { steps: coachingFor(found.steps, question.topic, from) }),
+    // Only ever on an answer that has something left to explain, so a right
+    // answer costs exactly what it always did. Never sent with the question
+    // itself — a method line beside an unanswered question is a hint, and
+    // per-cell working beside one is the answer outright.
+    //
+    // `wantsExplaining` rather than `!correct` because a matrix that scored
+    // three of four passed and still got an entry wrong, and that entry is the
+    // whole thing worth saying. On every other kind this is the pass mark and
+    // nothing changes.
+    ...(wantsExplaining(question.kind, score)
+      ? {
+          steps: coachingFor(found.steps, question.topic, from),
+          ...(found.perEntry ? { perEntry: found.perEntry } : {}),
+        }
+      : {}),
   };
 
   // Recorded before it is sent. A bot's answer was rolled once, above, and
@@ -320,7 +333,12 @@ function parseTable(value: unknown): Seat[] | null {
 function resolve(
   subunitIds: string[],
   questionId: string,
-): { question: Question; answer: Answer; steps?: string[] } | null {
+): {
+  question: Question;
+  answer: Answer;
+  steps?: string[];
+  perEntry?: string[];
+} | null {
   const instance = resolveInstance(questionId);
   if (instance) return instance;
 

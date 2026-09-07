@@ -139,8 +139,93 @@ export function diagnose(
       if (response.order.length !== reveal.order.length) return null;
       return ordering(response.order, reveal.order);
     }
+
+    case "matrix":
+      // Every cell is marked right or wrong on the screen, and `entryLines`
+      // below names the wrong ones and shows their working. Saying "two of
+      // four were right" on top of that is the same repetition a multiple
+      // choice question would be.
+      return null;
   }
 }
+
+/**
+ * Which cells of a matrix answer are wrong, in reading order.
+ *
+ * Compared as text after normalising, which is not how the server grades —
+ * it also accepts numeric equivalents, so a student who typed 0.5 against a
+ * key of 1/2 scored the cell and would be named here as having missed it. The
+ * two are reconciled by comparing values as well as spellings, below; what
+ * cannot be reconciled is a tolerance, which only the server knows. No matrix
+ * generator sets one, and a comment is cheaper than shipping the answer key to
+ * the browser to find out.
+ */
+function wrongCells(given: string[], correct: string[]): number[] {
+  const out: number[] = [];
+
+  for (let i = 0; i < correct.length; i++) {
+    const said = (given[i] ?? "").trim();
+    if (said === correct[i].trim()) continue;
+
+    const a = readNumber(said);
+    const b = readNumber(correct[i]);
+    if (a !== null && b !== null && a === b) continue;
+
+    out.push(i);
+  }
+
+  return out;
+}
+
+/** "c₂₁" — the entry at a position, named the way a textbook names it. */
+function entryName(at: number, cols: number): string {
+  return `c_(${Math.floor(at / cols) + 1}${(at % cols) + 1})`;
+}
+
+/**
+ * The working for the entries that were actually wrong, capped.
+ *
+ * The cap is the whole reason this runs on the client. `perEntry` is built
+ * when the question is minted and holds a line for every cell, because at that
+ * point there is no answer to compare against; picking out the two that
+ * matter needs the response, which only exists here.
+ *
+ * Two lines and a count, rather than four lines. A student who got one entry
+ * wrong wants that entry; a student who got all four wrong is not going to
+ * read four lines of arithmetic, and the method line above them is the part
+ * that helps anyway.
+ */
+export function entryLines(
+  reveal: Reveal,
+  response: Response,
+  perEntry: string[] | undefined,
+  cols: number,
+): string[] {
+  if (reveal.kind !== "matrix" || response.kind !== "matrix") return [];
+  if (!perEntry?.length) return [];
+
+  const wrong = wrongCells(response.cells ?? [], reveal.cells);
+  if (wrong.length === 0) return [];
+
+  const shown = wrong.slice(0, ENTRY_CAP);
+  const lines = shown.map((at) => perEntry[at]).filter(Boolean);
+
+  const rest = wrong.length - shown.length;
+  if (rest > 0) {
+    lines.push(
+      `…and ${rest} other ${rest === 1 ? "entry" : "entries"}: ` +
+        wrong
+          .slice(ENTRY_CAP)
+          .map((at) => entryName(at, cols))
+          .join(", "),
+    );
+  }
+
+  return lines;
+}
+
+/** How many entries are worked through before the rest are only counted. */
+const ENTRY_CAP = 2;
 
 /**
  * How one sequence missed another.

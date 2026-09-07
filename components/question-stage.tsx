@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Question } from "@/lib/curriculum";
 import {
-  PASS,
+  wantsExplaining,
   emptyResponse,
   type Point,
   type Response,
@@ -12,6 +13,7 @@ import {
 import {
   FillAnswer,
   LineAnswer,
+  MatrixAnswer,
   OrderAnswer,
   PointAnswer,
   SliderAnswer,
@@ -37,6 +39,7 @@ export function QuestionStage({
   reveal,
   score,
   steps,
+  perEntry,
   disabled,
   steady,
   rival,
@@ -61,6 +64,12 @@ export function QuestionStage({
    * what keeps it feedback rather than a hint.
    */
   steps?: string[];
+  /**
+   * The working for each cell of a matrix answer, row-major. Arrives with the
+   * verdict the same way `steps` does; `Feedback` narrows it to the entries
+   * that were actually wrong.
+   */
+  perEntry?: string[];
   /** True when it isn't your turn — the question shows but doesn't respond. */
   disabled?: boolean;
   /**
@@ -209,6 +218,17 @@ export function QuestionStage({
         />
       )}
 
+      {question.kind === "matrix" && answer.kind === "matrix" && (
+        <MatrixAnswer
+          question={question}
+          draft={answer.cells}
+          locked={locked}
+          reveal={reveal}
+          onDraft={(cells) => onDraft({ kind: "matrix", cells })}
+          onSubmit={() => onSubmit(answer)}
+        />
+      )}
+
       {question.kind === "order" && answer.kind === "order" && (
         <OrderAnswer
           question={question}
@@ -223,12 +243,13 @@ export function QuestionStage({
       {/* Only after the reveal, and only on a miss. The threshold is the public
           one: on the proximity kinds "wrong" starts below full marks, and a
           part-marked answer is exactly the one worth explaining. */}
-      {revealed && score !== null && score < PASS && (
+      {revealed && score !== null && wantsExplaining(question.kind, score) && (
         <Feedback
           question={question}
           reveal={reveal}
           response={answer}
           steps={steps}
+          perEntry={perEntry}
         />
       )}
     </div>
@@ -296,6 +317,49 @@ function Options({
 }
 
 /** The clock as a line. The only always-moving element on a game screen. */
+/**
+ * Leaving a game, with one press of resistance in the way.
+ *
+ * This used to be a plain `<Link href="/">`, and an anchor fires on Enter.
+ * The header sits before the question in the document, so a single Shift+Tab
+ * out of the first answer input lands on it — and Enter is the key every
+ * input on the screen tells you to press. That was survivable while a typed
+ * answer meant one box and one Tab to the Answer button. A matrix is four
+ * boxes with Tab as the way between them, which makes tabbing part of
+ * answering, and one stray press could end a race or a round of Last One
+ * Standing outright with no way back into it.
+ *
+ * So it arms instead of firing. The first press changes the label to say what
+ * the second will do, and the arming lapses on its own, because a control
+ * that quietly means something different from what it said a minute ago is
+ * its own trap. Still a real button, still reachable and operable from the
+ * keyboard — the fix is a confirmation, not a removal from the tab order.
+ */
+export function LeaveGame({ className = "" }: { className?: string }) {
+  const router = useRouter();
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const id = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [armed]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => (armed ? router.push("/") : setArmed(true))}
+      className={
+        "transition-colors " +
+        (armed ? "text-out" : "text-faint hover:text-ink") +
+        (className ? ` ${className}` : "")
+      }
+    >
+      {armed ? "Leave — sure?" : "Leave"}
+    </button>
+  );
+}
+
 export function ClockRail({
   fraction,
   urgent,

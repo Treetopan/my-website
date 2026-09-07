@@ -52,6 +52,13 @@ export type Answer =
       /** Error is the number of pairs the response puts the wrong way round. */
       full: number;
       zero: number;
+    }
+  | {
+      kind: "matrix";
+      /** One per cell of the result, row-major. Each graded like a `fill`. */
+      cells: { accept: string[]; show: string }[];
+      /** Numeric cells also match by value, within this. */
+      tolerance?: number;
     };
 
 export type Graded = { score: number; correct: boolean; reveal: Reveal };
@@ -85,24 +92,9 @@ function scoreOf(answer: Answer, response: Response): number {
         ? 1
         : 0;
 
-    case "fill": {
+    case "fill":
       if (response.kind !== "fill") return 0;
-      const given = normalise(response.text);
-      if (answer.accept.some((form) => normalise(form) === given)) return 1;
-
-      // Numeric equivalence catches the forms the accept list did not think of
-      // — 0.5 against 1/2, or 6.0 against 6.
-      const asNumber = readNumber(response.text);
-      if (asNumber === null) return 0;
-
-      const tolerance = answer.tolerance ?? 0;
-      return answer.accept.some((form) => {
-        const target = readNumber(form);
-        return target !== null && Math.abs(target - asNumber) <= tolerance;
-      })
-        ? 1
-        : 0;
-    }
+      return matches(answer.accept, answer.tolerance, response.text) ? 1 : 0;
 
     case "slider": {
       if (response.kind !== "slider" || response.value === null) return 0;
@@ -144,7 +136,49 @@ function scoreOf(answer: Answer, response: Response): number {
         answer.zero,
       );
     }
+
+    case "matrix": {
+      if (response.kind !== "matrix" || !response.cells) return 0;
+      // A grid of the wrong size is not a worse answer to this question, it is
+      // an answer to a different one — the same rule an ordering follows.
+      if (response.cells.length !== answer.cells.length) return 0;
+
+      const right = answer.cells.filter((cell, i) =>
+        matches(cell.accept, answer.tolerance, response.cells![i]),
+      ).length;
+
+      // The one score in the game that is a count rather than a distance. It
+      // lands on the same 0–1 scale, so `PASS` reads as three of four.
+      return right / answer.cells.length;
+    }
   }
+}
+
+/**
+ * Whether a typed answer matches one of the forms on file.
+ *
+ * Shared by `fill` and by every cell of a `matrix`, which is the point: a
+ * matrix entry is a typed answer, and a student who writes 1/2 where the key
+ * says 0.5 has got the entry right in both places or in neither.
+ */
+function matches(
+  accept: string[],
+  tolerance: number | undefined,
+  text: string,
+): boolean {
+  const given = normalise(text);
+  if (accept.some((form) => normalise(form) === given)) return true;
+
+  // Numeric equivalence catches the forms the accept list did not think of —
+  // 0.5 against 1/2, or 6.0 against 6.
+  const asNumber = readNumber(text);
+  if (asNumber === null) return false;
+
+  const slack = tolerance ?? 0;
+  return accept.some((form) => {
+    const target = readNumber(form);
+    return target !== null && Math.abs(target - asNumber) <= slack;
+  });
 }
 
 function revealOf(answer: Answer): Reveal {
@@ -161,6 +195,8 @@ function revealOf(answer: Answer): Reveal {
       return { kind: "line", slope: answer.slope, intercept: answer.intercept };
     case "order":
       return { kind: "order", order: answer.order };
+    case "matrix":
+      return { kind: "matrix", cells: answer.cells.map((c) => c.show) };
   }
 }
 
@@ -365,7 +401,61 @@ export function botResponse(
       if (inversions(out, answer.order) < answer.zero) out.reverse();
       return { kind: "order", order: out };
     }
+
+    case "matrix": {
+      const show = answer.cells.map((c) => c.show);
+      if (right) return { kind: "matrix", cells: show };
+
+      // `missing` is no use here: it aims for a band on the proximity curve,
+      // and this score has no curve — it is a count of cells. The same intent
+      // is met directly instead. A miss keeps as many cells as it can while
+      // still scoring under the pass mark, and at least one, so the bot makes
+      // the mistake a person makes rather than the one only a bot makes.
+      //
+      // On four cells that is one or two right (0.25 or 0.5, both misses); on
+      // two it is exactly one. A one-cell result cannot be missed partially
+      // and is asked as a `fill`, not as this.
+      const total = show.length;
+      let most = 0;
+      for (let keep = total - 1; keep >= 1; keep--) {
+        if (keep / total < PASS) {
+          most = keep;
+          break;
+        }
+      }
+
+      const keep = most > 0 ? 1 + Math.floor(Math.random() * most) : 0;
+      const kept = new Set<number>();
+      while (kept.size < keep) kept.add(Math.floor(Math.random() * total));
+
+      return {
+        kind: "matrix",
+        cells: show.map((cell, i) => (kept.has(i) ? cell : nudgeCell(cell))),
+      };
+    }
   }
+}
+
+/**
+ * A wrong cell that still looks like an attempt.
+ *
+ * Kept tidier than `nudgeText` because a matrix shows every cell at once and
+ * one entry reading 1.1666666666666667 beside three clean ones is obviously
+ * the computer's answer rather than a player's. A whole number moves by a
+ * small whole number; anything else flips its sign, which is the slip these
+ * questions actually invite — the minus in an inverse, the minus in a
+ * subtraction.
+ */
+function nudgeCell(show: string): string {
+  const value = readNumber(show);
+  if (value === null) return show === "0" ? "1" : "0";
+
+  if (Number.isInteger(value)) {
+    const off = 1 + Math.floor(Math.random() * 3);
+    return String(value + (Math.random() < 0.5 ? off : -off));
+  }
+
+  return show.startsWith("-") ? show.slice(1) : `-${show}`;
 }
 
 /** A wrong answer that still looks like an attempt: the number, off by a bit. */

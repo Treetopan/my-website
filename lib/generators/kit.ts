@@ -1,7 +1,9 @@
 import "server-only";
 
 import {
+  MAX_MATRIX_CELLS,
   pairCount,
+  writeMatrix,
   type Curve,
   type Figure,
   type Frame,
@@ -57,6 +59,22 @@ export function put(n: number | string): string {
  * all five — so the line that shows the substitution is written once here
  * rather than five times with the letters shuffled.
  */
+/**
+ * A flat row-major list written as the literal `MathText` draws as a matrix.
+ *
+ * Generators build prompts by pasting strings, so a matrix in a prompt is a
+ * string like any other — this is the one place that string is spelled, so a
+ * 2×3 never comes out written as a 3×2 because an author counted wrong.
+ */
+export function lay(cells: (number | string)[], cols: number): string {
+  return writeMatrix(cells.map(String), cols);
+}
+
+/** `c_(21)` — the entry at a row-major position, named the way a book names it. */
+export function cell(name: string, at: number, cols: number): string {
+  return `${name}_(${Math.floor(at / cols) + 1}${(at % cols) + 1})`;
+}
+
 export function detStep(a: number, b: number, c: number, d: number): string {
   return (
     `det = a_(11)·a_(22) - a_(12)·a_(21) = ` +
@@ -203,6 +221,27 @@ export type Built =
       zero: number;
       figure?: Figure;
       steps?: string[];
+    }
+  | {
+      kind: "matrix";
+      prompt: string;
+      rows: number;
+      cols: number;
+      hint?: string;
+      /** Row-major, one per cell. Each cell's accepted spellings. */
+      cells: { accept: string[]; show: string }[];
+      tolerance?: number;
+      figure?: Figure;
+      steps?: string[];
+      /**
+       * The working for each cell, row-major and the same length as `cells`.
+       *
+       * Positional on purpose: the client picks out the lines for the entries
+       * the student actually got wrong, which is the only place that choice
+       * can be made — this is built when the question is minted, long before
+       * there is an answer to compare against.
+       */
+      perEntry?: string[];
     };
 
 /**
@@ -400,6 +439,85 @@ export function line(
     zero: spec.zero ?? spec.span,
     figure: spec.figure,
     steps: spec.steps,
+  };
+}
+
+/**
+ * Fill in every entry of a result matrix.
+ *
+ * For the questions whose answer *is* a matrix. Asked as a `fill` those can
+ * only ever ask about one entry, and the whole of Algebra 2 unit 1 did — every
+ * one of them about the top-left, because there was nowhere to put the rest.
+ * Here the answer is the operation rather than a sample of it, and a student
+ * who gets three entries and misses the fourth scores three quarters and is
+ * shown which one went wrong.
+ *
+ * Capped at `MAX_MATRIX_CELLS`, checked here rather than left to an author:
+ * two of the three games are on a clock, and a result bigger than the cap is
+ * asked as a single entry instead. `cells` is row-major and its length has to
+ * be exactly `rows * cols`, because a grid that disagrees with its own shape
+ * would be graded against cells the student was never shown.
+ *
+ * `perEntry` is the working for each cell, in the same order. It never travels
+ * with the question — only back with a verdict, like `steps` — and the client
+ * shows only the lines for the entries that were actually wrong.
+ */
+export function matrix(
+  prompt: string,
+  spec: {
+    rows: number;
+    cols: number;
+    /** Row-major. A number, or the exact string to accept and show. */
+    cells: (number | string)[];
+    /** Extra accepted spellings per cell, row-major. */
+    accept?: (number | string)[][];
+    hint?: string;
+    tolerance?: number;
+    figure?: Figure;
+    /** Worked steps for this exact roll, printed under the topic method. */
+    steps?: string[];
+    /** One line of working per cell, row-major. */
+    perEntry?: string[];
+  },
+): Built {
+  const wanted = spec.rows * spec.cols;
+
+  // Authoring bugs, not runtime conditions — `check:templates` builds every
+  // generator over thousands of seeds, so this fires there and never at a
+  // student.
+  if (spec.cells.length !== wanted) {
+    throw new Error(
+      `matrix: ${spec.rows}x${spec.cols} needs ${wanted} cells, got ${spec.cells.length}: ${prompt}`,
+    );
+  }
+  if (wanted > MAX_MATRIX_CELLS || wanted < 2) {
+    throw new Error(
+      `matrix: ${wanted} cells is outside 2..${MAX_MATRIX_CELLS}: ${prompt}`,
+    );
+  }
+  if (spec.perEntry && spec.perEntry.length !== wanted) {
+    throw new Error(
+      `matrix: ${spec.perEntry.length} lines of working for ${wanted} cells: ${prompt}`,
+    );
+  }
+
+  return {
+    kind: "matrix",
+    prompt,
+    rows: spec.rows,
+    cols: spec.cols,
+    hint: spec.hint,
+    cells: spec.cells.map((cell, i) => {
+      const show = String(cell);
+      return {
+        show,
+        accept: [show, ...(spec.accept?.[i] ?? []).map(String)],
+      };
+    }),
+    tolerance: spec.tolerance,
+    figure: spec.figure,
+    steps: spec.steps,
+    perEntry: spec.perEntry,
   };
 }
 

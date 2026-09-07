@@ -66,6 +66,7 @@ export function ReviewList({
               reveal={d.reveal}
               response={d.response}
               steps={d.steps}
+              perEntry={d.perEntry}
               tight
             />
 
@@ -129,6 +130,21 @@ export function CloseList({ details }: { details: AnswerDetail[] }) {
                 · {Math.round(d.score * 100)}% of the marks
               </span>
             </p>
+
+            {/* A close one on a proximity kind has nothing to explain — the
+                placement was inside the radius that counts as right. A close
+                one on a matrix has three right entries and one wrong, and the
+                wrong one is the whole reason this list exists. `Feedback`
+                renders nothing when there is nothing on file, so this is the
+                distinction rather than a condition on the kind. */}
+            <Feedback
+              question={d.question}
+              reveal={d.reveal}
+              response={d.response}
+              steps={d.steps}
+              perEntry={d.perEntry}
+              tight
+            />
 
             <span className="font-mono text-[10px] tracking-[0.12em] text-faint uppercase">
               {d.topic}

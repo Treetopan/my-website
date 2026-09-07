@@ -2243,7 +2243,7 @@ const OWN: Record<string, string[]> = {
   ],
 
   // ─── Algebra 2 ─────────────────────────────────────────
-  "math/algebra-2/unit-1/1.5": ["Matrix multiplication"],
+  "math/algebra-2/unit-1/1.5": ["Matrix multiplication", "A whole matrix product"],
   "math/algebra-2/unit-1/1.6": ["Determinants"],
   "math/algebra-2/unit-2/2.5": ["Powers of i"],
   "math/algebra-2/unit-2/2.6": ["Multiplying complex numbers"],
@@ -2270,8 +2270,11 @@ const OWN: Record<string, string[]> = {
   "math/algebra-2/unit-1/1.1": ["Evaluating a linear function"],
   "math/algebra-2/unit-1/1.2": ["Systems in two variables"],
   "math/algebra-2/unit-1/1.3": ["Systems in three variables"],
-  "math/algebra-2/unit-1/1.4": ["Adding matrices"],
-  "math/algebra-2/unit-1/1.7": ["Entries of an inverse matrix"],
+  "math/algebra-2/unit-1/1.4": ["Adding matrices", "A whole matrix sum"],
+  "math/algebra-2/unit-1/1.7": [
+    "Entries of an inverse matrix",
+    "A whole inverse matrix",
+  ],
   "math/algebra-2/unit-1/1.8": ["When a system can be solved by matrices"],
   "math/algebra-2/unit-2/2.1": ["The vertex from vertex form"],
   "math/algebra-2/unit-2/2.2": ["Solving by factoring"],

@@ -261,23 +261,58 @@ function Bracket({ side, angle }: { side: "left" | "right"; angle: boolean }) {
  */
 function GridView({ rows, angle }: Grid) {
   return (
+    <MatrixFrame cols={rows[0].length} angle={angle}>
+      {rows.flatMap((row, r) =>
+        row.map((entry, c) => (
+          <span key={`${r}-${c}`} className="text-right">
+            {raise(entry)}
+          </span>
+        )),
+      )}
+    </MatrixFrame>
+  );
+}
+
+/**
+ * Brackets around a grid of anything, laid out in `cols` columns.
+ *
+ * Exported so that the matrix *input* is the same object as a matrix that is
+ * merely being read. A question that draws its operands one way and then asks
+ * for the result in a box that looks like something else has quietly told the
+ * student the two are different sorts of thing, and they are not.
+ *
+ * The children are grid items in reading order — text spans here, `<input>`s
+ * over in `answer-inputs`.
+ */
+export function MatrixFrame({
+  cols,
+  angle,
+  gap,
+  children,
+}: {
+  cols: number;
+  angle?: boolean;
+  /** Wider tracks, for cells that are inputs rather than glyphs. */
+  gap?: boolean;
+  children: ReactNode;
+}) {
+  return (
     <span className="mx-[0.15em] inline-flex items-stretch align-middle">
-      <Bracket side="left" angle={angle} />
+      <Bracket side="left" angle={!!angle} />
 
       <span
-        className="tnum inline-grid gap-x-[0.6em] gap-y-[0.1em] px-[0.3em] py-[0.12em]"
-        style={{ gridTemplateColumns: `repeat(${rows[0].length}, auto)` }}
+        className={
+          "tnum inline-grid " +
+          (gap
+            ? "gap-x-2 gap-y-2 px-2 py-2"
+            : "gap-x-[0.6em] gap-y-[0.1em] px-[0.3em] py-[0.12em]")
+        }
+        style={{ gridTemplateColumns: `repeat(${cols}, auto)` }}
       >
-        {rows.flatMap((row, r) =>
-          row.map((entry, c) => (
-            <span key={`${r}-${c}`} className="text-right">
-              {raise(entry)}
-            </span>
-          )),
-        )}
+        {children}
       </span>
 
-      <Bracket side="right" angle={angle} />
+      <Bracket side="right" angle={!!angle} />
     </span>
   );
 }

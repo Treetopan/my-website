@@ -19,7 +19,8 @@ import {
 } from "../lib/templates";
 import { resolveInstance } from "../lib/templates.server";
 import { getSubunit, type Question } from "../lib/curriculum";
-import type { Answer } from "../lib/grading.server";
+import { MAX_MATRIX_CELLS, PASS, writeMatrix } from "../lib/questions";
+import { botResponse, grade, type Answer } from "../lib/grading.server";
 
 const SEEDS_PER_GENERATOR = 20_000;
 
@@ -49,10 +50,16 @@ function visibleText(question: Question, answer: Answer): string[] {
   if (question.figure?.caption) out.push(question.figure.caption);
   if (question.kind === "choice") out.push(...question.options);
   if (question.kind === "fill" && question.hint) out.push(question.hint);
+  if (question.kind === "matrix" && question.hint) out.push(question.hint);
   if (question.kind === "slider" || question.kind === "fill") {
     if (question.unit) out.push(question.unit);
   }
   if (answer.kind === "fill") out.push(answer.show, ...answer.accept);
+  // Every cell of a matrix answer is shown at the reveal, so each is read for
+  // the same smells a single typed answer would be.
+  if (answer.kind === "matrix") {
+    for (const cell of answer.cells) out.push(cell.show, ...cell.accept);
+  }
   if (answer.kind === "slider") out.push(String(answer.value));
   if (answer.kind === "point") out.push(`(${answer.at.x}, ${answer.at.y})`);
   if (answer.kind === "line") {
@@ -87,6 +94,13 @@ function sampleAnswer(question: Question, answer: Answer): string {
       return question.kind === "order"
         ? answer.order.map((i, at) => `${at + 1}. ${question.items[i]}`).join("  ")
         : "?";
+    case "matrix": {
+      const cols = question.kind === "matrix" ? question.cols : answer.cells.length;
+      return `= ${writeMatrix(
+        answer.cells.map((c) => c.show),
+        cols,
+      )}   (${answer.cells.length} cells)`;
+    }
   }
 }
 
@@ -196,6 +210,49 @@ for (const [subunitId, topics] of Object.entries(GENERATED)) {
         if (!answer.accept.length) fail("no accepted answers");
         if (!answer.accept.includes(answer.show)) {
           fail(`the revealed answer "${answer.show}" is not itself accepted`);
+        }
+      }
+
+      if (question.kind === "matrix" && answer.kind === "matrix") {
+        const wanted = question.rows * question.cols;
+        if (answer.cells.length !== wanted) {
+          fail(
+            `${question.rows}x${question.cols} asks for ${wanted} cells but has ${answer.cells.length}`,
+          );
+        }
+        if (wanted > MAX_MATRIX_CELLS) {
+          fail(`${wanted} cells is over the ${MAX_MATRIX_CELLS}-cell cap`);
+        }
+        for (const [i, cell] of answer.cells.entries()) {
+          if (!cell.show.trim()) fail(`cell ${i} has nothing to reveal`);
+          if (!cell.accept.includes(cell.show)) {
+            fail(`cell ${i}'s revealed answer "${cell.show}" is not itself accepted`);
+          }
+        }
+
+        // The bot invariant, which `check:grids` only enforces on the two
+        // kinds drawn on a grid. It matters more here than anywhere: this is
+        // the one kind whose miss is *meant* to score something, so the line
+        // between "a near miss" and "quietly passing" is the whole design.
+        //
+        // Sampled, like the same check over in `check:grids`. The bot is
+        // rolled a dozen times on each seed it visits, so one seed in two
+        // hundred is still thousands of throws per generator — and the cell
+        // checks above, which are the cheap ones, run on every seed.
+        for (let roll = 0; roll < 12 && seed % 200 === 0; roll++) {
+          const missed = grade(answer, botResponse(answer, question, 0));
+          if (missed.score >= PASS) {
+            fail(`a bot miss scored ${missed.score.toFixed(2)}, at or above the pass mark`);
+            break;
+          }
+          if (missed.score === 0) {
+            fail("a bot miss got every entry wrong, which is the all-or-nothing problem again");
+            break;
+          }
+          if (grade(answer, botResponse(answer, question, 1)).score < 1) {
+            fail("a bot hit did not get every entry right");
+            break;
+          }
         }
       }
 

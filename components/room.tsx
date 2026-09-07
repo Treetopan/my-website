@@ -556,8 +556,21 @@ export function Room({
         return;
       }
 
-      // Anything else left the position unclaimed. Leave the turn open rather
-      // than guessing an outcome; the clock will come round again.
+      // Turned away before the position was claimed, so the question is still
+      // live and the clock will bring it round again. The one case where
+      // doing nothing is the right answer.
+      if (e instanceof GradeError && e.retryable) return;
+
+      // Anything else is a session that cannot be graded again — expired,
+      // unauthenticated, or gone. Doing nothing here is what froze the table:
+      // the turn stayed open, the host retried into the same failure every
+      // time the deadline came round, and nobody saw a countdown move, an
+      // Answer button, or a word of explanation. Only the host finds out, so
+      // the host writes it where the whole table is already listening.
+      await updateRoom(roomId, {
+        fault:
+          e instanceof GradeError ? e.message : "Lost contact with the server.",
+      });
       return;
     }
 
@@ -946,6 +959,35 @@ export function Room({
               {error}
             </p>
           )}
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── The game cannot go on ──────────────────────────────
+  //
+  // Ahead of every other branch, because it can happen in any of them and
+  // because what it replaces is a screen that looks alive. There is nothing
+  // to salvage: a grading session cannot be reopened, and the questions in
+  // this room are graded by position in it.
+  if (room.fault) {
+    return (
+      <Shell subtitle="Last One Standing">
+        <div className="animate-question-in max-w-md text-center">
+          <p className="eyebrow mb-4 text-out">Game over</p>
+          <h2 className="mb-3 text-2xl font-medium tracking-[-0.025em]">
+            {room.fault}
+          </h2>
+          <p className="mb-7 text-[14px] text-muted">
+            Nothing from this table was lost — every answer already graded has
+            been counted. A new game starts a new session.
+          </p>
+          <Link
+            href="/"
+            className="rounded-lg bg-accent px-5 py-2.5 text-[14px] font-medium text-accent-ink transition-colors hover:bg-accent-hi"
+          >
+            Back to library
+          </Link>
         </div>
       </Shell>
     );

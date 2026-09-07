@@ -182,6 +182,16 @@ export type Room = {
    * only says how much of that question's budget the turn gets.
    */
   lap?: number | null;
+  /**
+   * Why the game cannot go on, written once by the host.
+   *
+   * Only the host grades, so only the host ever learns that the grading
+   * session has died — and a table whose host has quietly given up looks
+   * exactly like a table waiting for somebody to think. So the host says so
+   * here, where every seat is already listening, rather than only on its own
+   * screen. Everybody stops together and everybody gets the same sentence.
+   */
+  fault?: string | null;
   reveal: Reveal | null;
   players: Record<string, RoomPlayer>;
   winnerUid?: string | null;

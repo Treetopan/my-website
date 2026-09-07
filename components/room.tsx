@@ -148,8 +148,21 @@ function missTurns(bots: number): number[] {
  * matters most, because a player who pressed an answer and lost the round
  * anyway has every reason to think the game lost it for them.
  */
-function endingFor(won: boolean, last: AnswerDetail | undefined): string {
+function endingFor(
+  won: boolean,
+  last: AnswerDetail | undefined,
+  /** Whether you were still in the game in the last state anybody saw. */
+  standing: boolean,
+): string {
   if (won) return "Last one standing.";
+
+  // Still alive and not the winner means this is the fallback snapshot: the
+  // room vanished while the game was still going, so the finish was never
+  // seen. A properly finished room leaves exactly one player standing and
+  // that player is the winner, so this cannot be reached by one. Saying "you
+  // were removed" here would be inventing an ending that did not happen.
+  if (standing) return "The game ended before it finished.";
+
   if (!last) return "You were removed.";
   if (ranOut(last)) return "You ran out of time.";
   if (!last.correct) return "You missed your last question.";
@@ -229,11 +242,39 @@ export function Room({
   // copy of the final state and renders the summary from that.
   const [finalRoom, setFinalRoom] = useState<RoomData | null>(null);
 
+  /**
+   * The last state the room was seen in, for the moment it stops existing.
+   *
+   * Taking the snapshot on `finished` alone was a three-second race, and the
+   * players most likely to lose it are the ones with the least reason to be
+   * watching: eliminated early, tab in the background, a phone asleep in a
+   * pocket. Losing it meant `room` went null with no snapshot to fall back
+   * on, the render dropped through to the entry screen, and somebody who had
+   * just lost a game was shown "Around the table, one at a time — create a
+   * room". That does not read as an ending, it reads as a crash.
+   *
+   * A ref rather than state on purpose: it is written on every snapshot and
+   * read only once, so making it state would re-render the table on every
+   * tick of somebody else's turn for a value nothing draws.
+   */
+  const lastSeen = useRef<RoomData | null>(null);
+
   useEffect(() => {
     if (!roomId) return;
     return watchRoom(roomId, (r) => {
       setRoom(r);
-      if (r?.status === "finished") setFinalRoom((prev) => prev ?? r);
+
+      if (r) {
+        lastSeen.current = r;
+        if (r.status === "finished") setFinalRoom((prev) => prev ?? r);
+      } else if (lastSeen.current && lastSeen.current.status !== "lobby") {
+        // The node is gone. Only the host deletes it, and only three seconds
+        // after writing `finished`, so a client that was in a game and now
+        // sees nothing has almost certainly missed that write rather than
+        // never having been in one. The last state it did see is a better
+        // account of the game than no account at all.
+        setFinalRoom((prev) => prev ?? lastSeen.current);
+      }
 
       // A turn the clock ran out on never produced a click, so capture it
       // here or it would vanish from the summary entirely. -1 means no answer.
@@ -825,8 +866,13 @@ export function Room({
   const won = !!user && (finalRoom ?? room)?.winnerUid === user.uid;
   const savedRef = useRef(false);
 
+  // Triggered off the snapshot rather than off a live `finished` status, for
+  // the same reason the snapshot exists: a client that missed the three-second
+  // window did not only lose its summary, it never recorded the session at
+  // all — so the XP for a game it had played went nowhere. `finalRoom` is set
+  // by both paths, so this now fires whichever way the game ended.
   useEffect(() => {
-    if (room?.status !== "finished" || savedRef.current || !user || !found) return;
+    if (!finalRoom || savedRef.current || !user || !found) return;
     savedRef.current = true;
 
     const xp = myAnswers.reduce((s, a) => s + xpForAnswer(a), 0) + (won ? 50 : 0);
@@ -856,7 +902,7 @@ export function Room({
         // progress from before the game, which is the one thing it is not.
         setAfterP(applySession(snapshot, { xp: xp, won: won, at: new Date() }));
       });
-  }, [room?.status, user, found, myAnswers, won, progress, subunitIds]);
+  }, [finalRoom, user, found, myAnswers, won, progress, subunitIds]);
 
   // Host: bin the room once it is over. The delay gives the other clients a
   // moment to take their snapshot before the data disappears.
@@ -879,10 +925,23 @@ export function Room({
     return (
       <Shell subtitle={subtitle}>
         <SessionSummary
-          headline={endingFor(won, myAnswers[myAnswers.length - 1])}
-          detail={`${selectionNames(found)} · won by ${
-            finalRoom.players[finalRoom.winnerUid ?? ""]?.displayName ?? "nobody"
-          }`}
+          headline={endingFor(
+            won,
+            myAnswers[myAnswers.length - 1],
+            !!user && finalRoom.players[user.uid]?.alive === true,
+          )}
+          // The winner is only named when this snapshot is the one that
+          // declared one. A fallback snapshot was taken mid-game, so its
+          // `winnerUid` is null — and "won by nobody" would be a claim about
+          // the game rather than an admission about the snapshot.
+          detail={
+            finalRoom.status === "finished"
+              ? `${selectionNames(found)} · won by ${
+                  finalRoom.players[finalRoom.winnerUid ?? ""]?.displayName ??
+                  "nobody"
+                }`
+              : selectionNames(found)
+          }
           details={myAnswers}
           xpEarned={
             myAnswers.reduce((s, a) => s + xpForAnswer(a), 0) + (won ? 50 : 0)

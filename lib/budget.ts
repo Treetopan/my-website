@@ -79,10 +79,40 @@ export function budgetMs(question: Question): number {
  * only the answerer's: at a table, everybody waits. The floor stops the
  * ratchet from turning a question into a reflex test.
  *
- * Both are guard rails rather than working parts. Nothing in the curriculum
- * reaches the ceiling at full pressure — the largest budget is a hard topic
- * with a four-cell matrix, at 43s — so the ceiling only ever bites if the
- * costs above are raised later, which is exactly when a guard rail should.
+ * Both are guard rails rather than working parts today — neither binds on any
+ * question in the curriculum, measured across 400 simulated rooms. **Read the
+ * margins below before changing any number in this file**, because the floor
+ * is closer than it looks.
+ *
+ * ── The floor, 8s: 0.25s of room ────────────────────────
+ *
+ * The closest case is an *easy topic answered by choosing*, at the pressure
+ * floor: par 15s + input 0s = a 15s budget, times 0.55, is 8.25s. That is a
+ * quarter of a second above this clamp, and 233 of the 1706 generators are
+ * tagged easy, so it is a case that comes up constantly rather than a corner.
+ *
+ * Cross that line and the clamp starts binding, which is not a crash but is a
+ * silent behaviour change: escalation stops early for easy questions while it
+ * carries on for hard ones, so the ratchet quietly means something different
+ * depending on the question. Three things move it, and only three:
+ *
+ *   · `PRESSURE_FLOOR` below 0.534
+ *   · `DIFFICULTY.easy.seconds` below 14.6 (in `curriculum.ts`, and it also
+ *     moves the racer's idle rule and the library's advertised times)
+ *   · this constant above 8.25s
+ *
+ * Trimming an input cost cannot do it, despite being the obvious suspect:
+ * `choice` is already zero, so the smallest budget is already the smallest it
+ * can be. Retagging a subunit down to easy cannot either — easy is the
+ * shortest par there is, so a retag reaches this same 8.25s and no lower.
+ *
+ * ── The ceiling, 45s: 2s of room ────────────────────────
+ *
+ * The largest budget is a hard topic with a four-cell matrix: 30s par plus
+ * 13s of input, at 43s, and only at full pressure on the opening lap. Raising
+ * `PER_CELL` past 3s, or adding a kind that costs more to enter than a line
+ * does, brings this into play — at which point a table starts waiting 45s on
+ * one player, which is the thing the ceiling exists to refuse.
  */
 export const TURN_FLOOR_MS = 8_000;
 export const TURN_CEILING_MS = 45_000;

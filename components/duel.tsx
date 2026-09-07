@@ -43,7 +43,8 @@ import {
   xpForAnswer,
   type Progress,
 } from "@/lib/progression";
-import { ClockRail, QuestionStage } from "@/components/question-stage";
+import { ClockRail, LeaveGame, QuestionStage } from "@/components/question-stage";
+import { budgetMs } from "@/lib/budget";
 import { Wordmark } from "@/components/wordmark";
 import { InviteFriends } from "@/components/friends";
 import { RoomTable3D } from "@/components/room-table-3d";
@@ -193,9 +194,15 @@ export function Duel({
   // The clock belongs to the question showing, not to the selection: a duel
   // can mix subunits, and a hard round should still be given its thirty
   // seconds. Every client reads it off the same question, so the clocks agree.
-  const totalMs =
-    DIFFICULTY[question ? difficultyOfQuestion(question.id) : "medium"].seconds *
-    1000;
+  //
+  // Par was the whole of it, which under-timed anything slow to *enter* rather
+  // than slow to work out — a four-cell matrix got the same twenty-two seconds
+  // as a question you answer by clicking one of four options. The input cost
+  // is added now. There is no ratchet and no ceiling here, because a duel is
+  // simultaneous: a longer round is longer for both players at once and
+  // nobody is sitting waiting on anybody, which is the cost a table pays and
+  // this game does not.
+  const totalMs = question ? budgetMs(question) : DIFFICULTY.medium.seconds * 1000;
 
   const startedAt =
     typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
@@ -1036,9 +1043,7 @@ export function Duel({
           >
             {settled ? "—" : `0:${String(Math.ceil(msLeft / 1000)).padStart(2, "0")}`}
           </span>
-          <Link href="/" className="text-faint transition-colors hover:text-ink">
-            Leave
-          </Link>
+          <LeaveGame />
         </span>
       </header>
 

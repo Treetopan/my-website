@@ -44,7 +44,8 @@ import {
   nextTurn,
   seated,
 } from "@/lib/table";
-import { ClockRail, QuestionStage } from "@/components/question-stage";
+import { ClockRail, LeaveGame, QuestionStage } from "@/components/question-stage";
+import { revealMs, saySeconds, turnMs as turnFor } from "@/lib/budget";
 import { Wordmark } from "@/components/wordmark";
 import { InviteFriends } from "@/components/friends";
 import { RoomTable3D } from "@/components/room-table-3d";
@@ -59,29 +60,32 @@ import {
 } from "@/lib/questions";
 
 const SEATS = 3;
-const REVEAL_MS = 1900;
 const BOT_NAMES = ["Mara", "Dev", "Priya"];
 const BOT_THINK = [1200, 2600];
 const BOT_CHOOSE_MS = 1600;
 
 /**
- * The clock on a turn.
+ * The clock on a turn now belongs to the question, not to the table.
  *
- * Half a minute to start with, and two seconds less every time the table has
- * been all the way round — so the game tightens as it goes rather than being
- * fast from the first question, and the pressure arrives once everybody knows
- * what they are doing. The floor is there because a question still has to be
- * read: past a certain point a shorter clock stops testing the maths and
- * starts testing how quickly somebody can find the answer box.
+ * It used to be half a minute flat, two seconds less every lap, floored at
+ * ten. The reasoning written here was that a room mixes subunits, so timing
+ * each turn by its own question would hand one player forty seconds and the
+ * next fifteen at the same table — and that unfairness was the thing to
+ * avoid.
  *
- * It is the table's clock rather than the question's. A room mixes subunits,
- * so timing each turn by the difficulty of the question it happened to deal
- * would hand one player forty seconds and the next fifteen, at the same table,
- * for the same round.
+ * That had it backwards. Giving an integral and a two-digit sum the same
+ * thirty seconds is not fairness, it is a flat rate that happens to suit
+ * whatever sits in the middle; and the room was the one game that took it,
+ * while the racer and the duel had been pricing each question by its own par
+ * for as long as they have existed. What the table is owed is not equal
+ * seconds, it is equal *difficulty* of clock — which is what `lib/budget.ts`
+ * works out, from the topic's par plus what the answer costs to enter.
+ *
+ * The ratchet survives, because a round of this closing in is where its
+ * tension comes from. It is a multiplier now rather than two flat seconds:
+ * two seconds off a 35-second matrix and two off a 15-second recall question
+ * are not the same squeeze. The floor and ceiling live with the budget.
  */
-const TURN_MS = 30_000;
-const TURN_STEP_MS = 2_000;
-const TURN_FLOOR_MS = 10_000;
 
 /**
  * How long past the deadline the host waits before grading a turn itself.
@@ -207,6 +211,7 @@ export function Room({
         correct: boolean;
         score: number;
         steps?: string[];
+        perEntry?: string[];
       }
     >
   >({});
@@ -240,6 +245,7 @@ export function Room({
           correct: r.reveal.correct,
           score: r.reveal.score,
           steps: r.reveal.steps ?? undefined,
+          perEntry: r.reveal.perEntry ?? undefined,
         };
         setMyPicks((prev) => (at in prev ? prev : { ...prev, [at]: entry }));
       }
@@ -267,10 +273,17 @@ export function Room({
   const index = room?.currentIndex ?? 0;
   const question = questions[index];
 
-  // The clock the whole table is playing to, written by the host and read by
-  // everyone, so no two people are counting down to a different moment. An
-  // older room that never had one still gets a full turn.
-  const totalMs = room?.turnMs ?? TURN_MS;
+  // The clock this turn is playing to, written by the host and read by
+  // everyone, so no two people are counting down to a different moment. It is
+  // worked out from the question rather than agreed once for the table, which
+  // is why it is written rather than derived here: a client that computed it
+  // would be computing it from its own copy of the question, and a room mid
+  // deal has clients holding different ones for a frame.
+  //
+  // A room started before any of this still has a number on it, and a room
+  // that somehow has none falls back to the question in front of it.
+  const totalMs =
+    room?.turnMs ?? (question ? turnFor(question, room?.lap ?? 0) : 30_000);
 
   const startedAt =
     typeof room?.questionStartedAt === "number" ? room.questionStartedAt : null;
@@ -335,6 +348,7 @@ export function Room({
         correct: entry.correct,
         score: entry.score,
         steps: entry.steps,
+        perEntry: entry.perEntry,
         // Last One Standing pays no speed bonus — survival is the mechanic.
         speed: 0,
       };
@@ -468,7 +482,7 @@ export function Room({
       opened.sessionId,
       opened.order,
       opened.questions,
-      TURN_MS,
+      turnFor(opened.questions[0], 0),
     );
   }
 
@@ -565,6 +579,7 @@ export function Room({
         // rest of the table never saw the question, and being told why an
         // answer they never worked on was wrong teaches nobody anything.
         steps: verdict.steps ?? null,
+        perEntry: verdict.perEntry ?? null,
       },
       players: {
         ...room.players,
@@ -696,16 +711,22 @@ export function Room({
       const seatOf = (uid: string | null) =>
         uid ? (room.players[uid]?.seat ?? 0) : 0;
       const lapped = next !== null && seatOf(next) <= seatOf(room.reveal!.uid);
-      const clock = room.turnMs ?? TURN_MS;
+      const lap = (room.lap ?? 0) + (lapped ? 1 : 0);
+      const at = room.currentIndex + 1;
 
       await updateRoom(roomId, {
         turnUid: next,
-        turnMs: lapped ? Math.max(TURN_FLOOR_MS, clock - TURN_STEP_MS) : clock,
-        currentIndex: room.currentIndex + 1,
+        lap,
+        // Worked out from the question the next player is about to get rather
+        // than carried forward from the last one, which is the whole change:
+        // the clock now belongs to the question, and the lap only says how
+        // much of it that question gets.
+        turnMs: turnFor(room.questions[at], lap),
+        currentIndex: at,
         reveal: null,
         questionStartedAt: { ".sv": "timestamp" } as unknown as number,
       });
-    }, REVEAL_MS);
+    }, revealMs(room.questions[room.currentIndex]));
 
     return () => clearTimeout(id);
   }, [isHost, roomId, room]);
@@ -755,6 +776,10 @@ export function Room({
         chooserUid: null,
         turnUid: first,
         currentIndex: room.currentIndex + 1,
+        // A new round is a new question, so it gets its own budget. The lap
+        // carries over: the pressure a table has built up is a property of how
+        // long the game has been going, not of which round it is in.
+        turnMs: turnFor(room.questions[room.currentIndex + 1], room.lap ?? 0),
         reveal: null,
         questionStartedAt: { ".sv": "timestamp" } as unknown as number,
       });
@@ -1120,26 +1145,39 @@ export function Room({
               moves round the table — but a countdown with nobody's name on it
               reads as one clock the whole table is sharing, and as time being
               taken off you while somebody else thinks. */}
-          <span className="flex items-baseline gap-2 font-mono text-[13px] tnum">
+          {/* Your own countdown is the biggest thing in this header, and it
+              was not. A flat clock could afford to be a 13px number in a
+              corner: after two turns you knew you had thirty seconds and you
+              stopped looking. A clock that is 35 seconds on a matrix and 15 on
+              a recall question has to be read every turn, so it has to be
+              legible from wherever the eyes actually are — which is the
+              question in the middle, not the corner. Somebody else's turn
+              stays small; it is information, not a deadline. */}
+          <span className="flex items-baseline gap-2 font-mono tnum">
             {/* Read off the seat rather than off `myTurn`, which goes false
                 the moment the reveal lands — a turn is still yours while you
                 are being told how it went. */}
-            <span className={mySeatUp ? "text-accent" : "text-faint"}>
+            <span
+              className={
+                "text-[13px] " + (mySeatUp ? "text-accent" : "text-faint")
+              }
+            >
               {mySeatUp ? "You" : (turnPlayer?.displayName ?? "—")}
             </span>
             <span
               className={
-                msLeft <= 5000 && myTurn
+                (mySeatUp ? "text-[22px] font-medium " : "text-[13px] ") +
+                (msLeft <= 5000 && myTurn
                   ? "animate-clock-urgent text-out"
-                  : "text-muted"
+                  : mySeatUp
+                    ? "text-ink"
+                    : "text-muted")
               }
             >
               {reveal ? "—" : `0:${String(Math.ceil(msLeft / 1000)).padStart(2, "0")}`}
             </span>
           </span>
-          <Link href="/" className="text-faint transition-colors hover:text-ink">
-            Leave
-          </Link>
+          <LeaveGame />
         </span>
       </header>
 
@@ -1165,8 +1203,19 @@ export function Room({
           ) : (
             question && (
               <div className="w-full max-w-3xl">
-                {/* Whose turn it is, stated once, above the question. */}
-                <p className="mb-4 text-[14px] text-accent">Your turn</p>
+                {/* Whose turn it is and how long it is worth, stated once,
+                    above the question. The size of a turn is the thing a flat
+                    clock gave away for free — you learned it once and never
+                    thought about it again. A budget that changes per question
+                    has to say itself out loud at the start, before the clock
+                    starts eating it, or the first a player knows of a short
+                    turn is running out of it. */}
+                <p className="mb-4 flex flex-wrap items-baseline gap-x-2 text-[14px] text-accent">
+                  <span>Your turn</span>
+                  <span className="font-mono text-[13px] text-muted tnum">
+                    · {saySeconds(totalMs)}
+                  </span>
+                </p>
 
                 <QuestionStage
                   question={question}
@@ -1179,6 +1228,7 @@ export function Room({
                   reveal={reveal ? reveal.answer : null}
                   score={reveal ? reveal.score : null}
                   steps={reveal?.steps ?? undefined}
+                  perEntry={reveal?.perEntry ?? undefined}
                   disabled={!myTurn || answered}
                   onDraft={setDraft}
                   onSubmit={commit}

@@ -492,26 +492,51 @@ export function subunitStockLabel(subunit: Subunit): string {
 const QUICK_PLAY_COURSE = "math/algebra-1";
 
 /**
+ * The courses a student can name as the one they are taking.
+ *
+ * Maths only, because maths is the stocked subject and the question asks about
+ * it by name. Read off `SUBJECTS` rather than typed out again, so a course
+ * added there is offered here without anybody remembering to — the same
+ * reasoning as the survey's course list.
+ */
+export function courseChoices(): Course[] {
+  return getSubject("math")?.courses ?? [];
+}
+
+/**
  * A selection to start a race on with no questions asked — the whole point
  * being that a first-time visitor should not have to make five choices before
  * seeing a single question.
  *
- * The first playable unit of the default course, and the first three subunits
+ * The first playable unit of the preferred course, and the first three subunits
  * of it that have anything to ask. Three rather than one because a race across
  * a couple of related subunits is the session the library steers everybody to
  * anyway, and rather than four because this is meant to be the short way in.
+ *
+ * `taking` is the course the student said they are in. It comes first when
+ * there is one, because a guess is only worth making about somebody who has
+ * not told us — and then `QUICK_PLAY_COURSE` behind it, so a student who
+ * skipped the question, or who named a course that has since left the
+ * syllabus, lands where a stranger lands rather than nowhere.
  *
  * Falls back to the first playable unit anywhere in the syllabus, so this
  * cannot return an empty selection while the library has anything at all to
  * offer. Null only if nothing is stocked, which is the same state that already
  * disables every course card.
  */
-export function quickPlaySelection(): Selection | null {
+export function quickPlaySelection(taking?: string | null): Selection | null {
   const courses = SUBJECTS.flatMap((subject) =>
     subject.courses.map((course) => ({ subject, course })),
   );
 
-  const preferred = courses.filter(({ course }) => course.id === QUICK_PLAY_COURSE);
+  // In order of preference, and deduped — naming the default course as the one
+  // you are taking should not make it two candidates.
+  const wanted = [taking, QUICK_PLAY_COURSE].filter(
+    (id, i, all): id is string => !!id && all.indexOf(id) === i,
+  );
+  const preferred = wanted.flatMap((id) =>
+    courses.filter(({ course }) => course.id === id),
+  );
 
   for (const { subject, course } of [...preferred, ...courses]) {
     for (const unit of course.units) {

@@ -11,6 +11,7 @@ import {
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   updateProfile,
@@ -38,6 +39,15 @@ type AuthState = {
     username: string,
   ) => Promise<ClaimResult>;
   signIn: (email: string, password: string) => Promise<void>;
+  /**
+   * Sends a reset link, and says nothing about whether it went anywhere.
+   *
+   * An address with no account is not an error here: reporting one would undo
+   * the care taken over the sign-in message, since "no account" is exactly
+   * what that message refuses to say. The caller shows the same line whatever
+   * happened, so a reset is not a second way to test an address.
+   */
+  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** Claims a username for the signed-in player, or says why it could not be. */
   setUsername: (username: string) => Promise<ClaimResult>;
@@ -46,34 +56,65 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 /**
- * Firebase surfaces error codes, not sentences. Anything we do not have a
- * specific line for falls through to the raw message rather than a shrug.
+ * What went wrong, in a sentence, and what kind of wrong it was.
+ *
+ * The kind exists because one failure needs more than a sentence. Sign-in is
+ * the only error a player can be genuinely stuck on, and it is also the one
+ * whose message is not allowed to be specific: saying whether the email or the
+ * password was the wrong half would let anybody test an address, one guess at
+ * a time, and learn whether it is registered. So the message stays ambiguous
+ * and the screen offers the two ways out instead — which means the screen has
+ * to know which error it is looking at.
+ *
+ * Anything without a line of its own falls through to the raw message rather
+ * than a shrug.
  */
-export function authErrorMessage(error: unknown): string {
+export type AuthProblem = {
+  message: string;
+  /** `credentials` is the sign-in failure the form offers a way past. */
+  kind: "credentials" | "other";
+};
+
+export function authProblem(error: unknown): AuthProblem {
   const code =
     typeof error === "object" && error && "code" in error
       ? String((error as { code: unknown }).code)
       : "";
 
+  const say = (message: string): AuthProblem => ({ message, kind: "other" });
+
   switch (code) {
     case "auth/email-already-in-use":
-      return "That email already has an account. Sign in instead.";
+      return say("That email already has an account. Sign in instead.");
     case "auth/invalid-email":
-      return "That email address isn't valid.";
+      return say("That email address isn't valid.");
     case "auth/weak-password":
-      return "Passwords need at least six characters.";
+      return say("Passwords need at least six characters.");
+
+    // Three codes, one sentence, deliberately. Firebase collapses the last two
+    // into `invalid-credential` while Email Enumeration Protection is on — it
+    // is on for this project — and they stay listed because a browser running
+    // an older build can still be handed them. All three have to read the same
+    // either way: the difference between them is the leak.
     case "auth/invalid-credential":
     case "auth/wrong-password":
     case "auth/user-not-found":
-      return "Email or password is incorrect.";
+      return {
+        message:
+          "We couldn't sign you in. Check your email and password — or create an account.",
+        kind: "credentials",
+      };
+
     case "auth/too-many-requests":
-      return "Too many attempts. Wait a minute and try again.";
+      return say("Too many attempts. Wait a minute and try again.");
     case "auth/network-request-failed":
-      return "Can't reach Firebase. Check your connection.";
+      return say("Can't reach Firebase. Check your connection.");
     default:
-      return error instanceof Error
-        ? error.message
-        : "Something went wrong. Try again.";
+      return say(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Try again.",
+      );
   }
 }
 
@@ -151,6 +192,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       async signIn(email, password) {
         await signInWithEmailAndPassword(auth, email, password);
+      },
+
+      async resetPassword(email) {
+        try {
+          await sendPasswordResetEmail(auth, email);
+        } catch (err) {
+          // Swallowed only for the one code that would give the game away.
+          // A malformed address or a rate limit is still worth reporting,
+          // because neither says anything about who has an account.
+          const code =
+            typeof err === "object" && err && "code" in err
+              ? String((err as { code: unknown }).code)
+              : "";
+          if (code !== "auth/user-not-found") throw err;
+        }
       },
 
       async signOut() {

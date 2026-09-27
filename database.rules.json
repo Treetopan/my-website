@@ -84,6 +84,21 @@
         // does not run — which is what lets the old rows be cleaned out.
         "email": {
           ".validate": false
+        },
+
+        // Which maths the student says they are taking: a curriculum course id
+        // and the time they were asked. Shaped here as well as in the client
+        // because this node is the one a stale build can still write to, and a
+        // course that is not a course id would read as a course we no longer
+        // have on every screen that names it.
+        //
+        // `at` without `id` is the whole of how a skip is stored, so neither
+        // is required — what is refused is either of them holding nonsense.
+        "course": {
+          "id": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]+\/[a-z0-9-]+$/)"
+          },
+          "at": { ".validate": "newData.isNumber()" }
         }
       }
     },

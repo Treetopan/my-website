@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DIFFICULTY,
   SUBJECTS,
@@ -20,6 +20,8 @@ import {
   type Unit,
 } from "@/lib/curriculum";
 import { MAX_SUBUNITS, encodeSelection } from "@/lib/selection";
+import { useAuth } from "@/lib/auth-context";
+import { watchCourse } from "@/lib/account";
 
 /**
  * Practice is in this list without being a game — it is the way to sit with
@@ -79,6 +81,17 @@ function count(n: number, noun: string): string {
 
 export function Library() {
   const router = useRouter();
+  const { user } = useAuth();
+
+  /**
+   * The course the student said they are taking, stamped with the uid it was
+   * read for — the same guard the rest of the app uses, so one account's answer
+   * can never be read as another's for a frame.
+   */
+  const [mine, setMine] = useState<{
+    uid: string;
+    courseId: string | null;
+  } | null>(null);
 
   const [game, setGame] = useState<GameId | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -89,6 +102,55 @@ export function Library() {
    * order they were tapped — the launch bar reads as the syllabus does.
    */
   const [picked, setPicked] = useState<Subunit[]>([]);
+
+  /**
+   * True once the student has picked a subject themselves.
+   *
+   * The course arrives from the database a moment after this screen renders,
+   * and by then they may already be walking down it. Opening the steps
+   * somewhere is a courtesy; moving them under somebody mid-tap is not, so the
+   * default is dropped rather than applied late.
+   */
+  const touched = useRef(false);
+  /** The opening is offered once per visit, however often the record changes. */
+  const opened = useRef(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const uid = user.uid;
+
+    return watchCourse(uid, (choice) => {
+      const courseId = choice.status === "chosen" ? choice.courseId : null;
+      setMine({ uid, courseId });
+
+      if (opened.current) return;
+      opened.current = true;
+      if (touched.current || !courseId) return;
+
+      // Opens the steps on their own course rather than at the top. The unit is
+      // left alone: the course is what they told us, the unit is this week's
+      // and we have no way to know it.
+      const theirSubject = SUBJECTS.find((s) =>
+        s.courses.some((c) => c.id === courseId),
+      );
+      const theirCourse = theirSubject?.courses.find((c) => c.id === courseId);
+      if (theirSubject && theirCourse) {
+        setSubject(theirSubject);
+        setCourse(theirCourse);
+      }
+    });
+  }, [user]);
+
+  /**
+   * Their course id, or undefined while it is still being read — which is not
+   * the same as null. A screen that named a course before the answer arrived
+   * would name the wrong one.
+   */
+  const taking = user
+    ? mine?.uid === user.uid
+      ? mine.courseId
+      : undefined
+    : null;
 
   /**
    * A duel is won by whichever answer was closer, so it can only be played
@@ -126,6 +188,7 @@ export function Library() {
   // Each choice invalidates everything downstream of it — a stale unit from a
   // different course is the one bug this screen could easily ship with.
   function chooseSubject(next: Subject) {
+    touched.current = true;
     setSubject(next);
     setCourse(null);
     setUnit(null);
@@ -156,7 +219,7 @@ export function Library() {
    * single question appears, which is four more than somebody who has just
    * arrived wants to make to find out whether they like the game at all.
    */
-  const quick = useMemo(() => quickPlaySelection(), []);
+  const quick = useMemo(() => quickPlaySelection(taking), [taking]);
 
   function startQuick() {
     if (!quick) return;
@@ -180,7 +243,11 @@ export function Library() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 pt-14 pb-24">
-      {quick && <QuickPlay selection={quick} onGo={startQuick} />}
+      {/* Held back until the course has been read, so this never names
+          Algebra 1 for a second to somebody who told us Precalculus. */}
+      {taking !== undefined && quick && (
+        <QuickPlay selection={quick} onGo={startQuick} />
+      )}
 
       <Step n="01" title="Choose a game">
         <div className="grid gap-3 sm:grid-cols-2">

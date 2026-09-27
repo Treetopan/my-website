@@ -86,7 +86,11 @@ export const SURVEY: SurveyQuestion[] = [
     id: "stage",
     kind: "choice",
     prompt: "Where are you right now?",
-    note: "So the questions land at the right level.",
+    // No note. It used to say the answer set the level the questions land at,
+    // which was never true of anything here — a survey answer changes nothing.
+    // The course on the account is what does that job now, so the sentence is
+    // gone rather than made true: two mechanisms aiming at the same thing is
+    // how they come to disagree.
     options: [
       { value: "middle", label: "Middle school" },
       { value: "9-10", label: "9th–10th grade" },

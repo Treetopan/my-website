@@ -84,22 +84,42 @@
         // does not run — which is what lets the old rows be cleaned out.
         "email": {
           ".validate": false
-        },
-
-        // Which maths the student says they are taking: a curriculum course id
-        // and the time they were asked. Shaped here as well as in the client
-        // because this node is the one a stale build can still write to, and a
-        // course that is not a course id would read as a course we no longer
-        // have on every screen that names it.
-        //
-        // `at` without `id` is the whole of how a skip is stored, so neither
-        // is required — what is refused is either of them holding nonsense.
-        "course": {
-          "id": {
-            ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]+\/[a-z0-9-]+$/)"
-          },
-          "at": { ".validate": "newData.isNumber()" }
         }
+      }
+    },
+
+    // Which maths a student says they are taking, one record per player.
+    //
+    // A node of its own rather than a field on the profile, and this is the
+    // whole reason: a row of /users is readable by every signed-in account —
+    // that is what lets a room show names — and /usernames maps a name to a
+    // uid for anyone signed in too. A maths level on the profile would be
+    // walkable by anybody who signed up: read the index, read a row per uid,
+    // and you have a list of the school-age students here and the level each
+    // one is working at. Nothing social reads this value; only the student's
+    // own screens do, so nobody else can read it. Same reasoning as /surveys.
+    //
+    // Read and written by its owner and by nobody else — not even an admin,
+    // who has no screen that wants it and would only widen who can be asked
+    // for it.
+    "courses": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+
+        // A record always says when it was made: that is what tells "skipped"
+        // apart from "never asked", and a record that cannot say which would
+        // put the sign-up question back in front of somebody who answered it.
+        ".validate": "newData.hasChild('at')",
+
+        // `at` alone is the whole of how a skip is stored, so `id` is not
+        // required — what is refused is either of them holding nonsense, and
+        // anything else being stored here at all.
+        "id": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]+\/[a-z0-9-]+$/)"
+        },
+        "at": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
       }
     },
 

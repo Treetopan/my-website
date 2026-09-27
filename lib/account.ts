@@ -15,8 +15,10 @@ import { EMPTY_PROGRESS, type Progress } from "@/lib/progression";
  * users/{uid}/username     the name its owner claimed
  * users/{uid}/createdAt    server time the account was made
  * users/{uid}/progress     xp, streak, played, won
- * users/{uid}/course       the course they say they are taking
  * ```
+ *
+ * The course a student is taking is deliberately NOT here — see `courses/`
+ * below.
  *
  * No email. Firebase Auth already holds one per account and this node is
  * readable by every signed-in player — a room shows names out of it — so a
@@ -30,8 +32,6 @@ export type Account = {
   uid: string;
   username: string | null;
   createdAt: number | null;
-  /** The course id they picked, or null if they have not picked one. */
-  courseId: string | null;
   progress: Progress;
 };
 
@@ -46,7 +46,6 @@ function toAccount(uid: string, raw: unknown): Account {
     uid,
     username: typeof row.username === "string" ? row.username : null,
     createdAt: typeof row.createdAt === "number" ? row.createdAt : null,
-    courseId: readCourse(row.course).id,
     progress: {
       ...EMPTY_PROGRESS,
       ...((row.progress ?? {}) as Partial<Progress>),
@@ -63,22 +62,31 @@ export function watchAccount(uid: string, cb: (account: Account) => void) {
 // ─── The course a student is taking ──────────────────────
 
 /**
- * Which maths a student says they are in, kept under `users/{uid}/course` as
+ * Which maths a student says they are in, kept under `courses/{uid}` as
  *
  * ```
- * users/{uid}/course/id    a curriculum course id, absent when they skipped
- * users/{uid}/course/at    server time they were asked
+ * courses/{uid}/id    a curriculum course id, absent when they skipped
+ * courses/{uid}/at    server time they were asked
  * ```
+ *
+ * Its own node, and not a field on the profile, because of who may read it.
+ * Every signed-in account can read every row of `users` — that is what lets a
+ * room show names — and `/usernames` maps a name to a uid for anyone signed
+ * in. A maths level on the profile would therefore be walkable: sign up, read
+ * the index, and you have a list of the school-age students using this app and
+ * what maths each one is taking. Nothing social needs this value; only the
+ * student's own screens do. So it lives where only its owner can read it, for
+ * the same reason the survey answers live under `surveys/{uid}`.
  *
  * Two fields rather than one because "never asked" and "asked, and would
  * rather not say" have to be told apart. Only the second stops the question
  * being asked again, and a bare `id` cannot express it: its absence would mean
  * both, and a student who skipped would meet the same screen every visit.
  *
- * It is a subtree rather than a pair of top-level fields so that reading it is
- * one narrow listener and writing it is one `set` that cannot reach `progress`
- * — changing your course is a default changing, not a reset, and the write
- * should not be *able* to touch XP or a streak, not merely avoid it.
+ * Being a node of its own also means the write that changes it cannot reach
+ * `progress` at all — changing your course is a default changing, not a reset,
+ * and the write should not be *able* to touch XP or a streak, not merely
+ * avoid it.
  *
  * The id is stored, never the name. A course renamed in the curriculum keeps
  * every account pointing at it, and a course removed from it reads as a course
@@ -111,7 +119,7 @@ function readCourse(raw: unknown): { id: string | null; askedAt: number | null }
 
 export function watchCourse(uid: string, cb: (choice: CourseChoice) => void) {
   return onValue(
-    ref(realtimeDb, `users/${uid}/course`),
+    ref(realtimeDb, `courses/${uid}`),
     (snap) => {
       const { id, askedAt } = readCourse(snap.val());
       if (id) cb({ status: "chosen", courseId: id });
@@ -128,7 +136,7 @@ export function watchCourse(uid: string, cb: (choice: CourseChoice) => void) {
  */
 export async function setCourse(uid: string, courseId: string) {
   if (!getCourse(courseId)) return;
-  await set(ref(realtimeDb, `users/${uid}/course`), {
+  await set(ref(realtimeDb, `courses/${uid}`), {
     id: courseId,
     at: serverTimestamp(),
   });
@@ -140,5 +148,5 @@ export async function setCourse(uid: string, courseId: string) {
  * answer from the profile must write this rather than delete the subtree.
  */
 export async function skipCourse(uid: string) {
-  await set(ref(realtimeDb, `users/${uid}/course`), { at: serverTimestamp() });
+  await set(ref(realtimeDb, `courses/${uid}`), { at: serverTimestamp() });
 }

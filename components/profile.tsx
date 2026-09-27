@@ -7,7 +7,9 @@ import {
   setCourse,
   skipCourse,
   watchAccount,
+  watchCourse,
   type Account,
+  type CourseChoice,
 } from "@/lib/account";
 import { readResults, type SessionResult } from "@/lib/rtdb";
 import { courseChoices, describeAll, selectionNames } from "@/lib/curriculum";
@@ -36,6 +38,9 @@ export function Profile() {
   const [account, setAccount] = useState<Account | null>(null);
   const [results, setResults] = useState<(SessionResult & { id: string })[]>([]);
   const [survey, setSurvey] = useState<SurveyState>({ status: "loading" });
+  // Its own listener, on its own node: the course is no longer a field of the
+  // account, because only its owner may read it.
+  const [choice, setChoice] = useState<CourseChoice>({ status: "loading" });
   const [taking, setTaking] = useState(false);
 
   useEffect(() => {
@@ -43,6 +48,7 @@ export function Profile() {
     const stop = [
       watchAccount(user.uid, setAccount),
       watchSurvey(user.uid, setSurvey),
+      watchCourse(user.uid, setChoice),
     ];
     readResults(user.uid).then(setResults).catch(() => setResults([]));
     return () => stop.forEach((off) => off());
@@ -206,7 +212,10 @@ export function Profile() {
           leaves your XP, streak and history alone.
         </p>
 
-        <CourseEditor uid={user.uid} courseId={account?.courseId ?? null} />
+        <CourseEditor
+          uid={user.uid}
+          courseId={choice.status === "chosen" ? choice.courseId : null}
+        />
       </section>
 
       {/* ── The survey ──────────────────────────────────── */}

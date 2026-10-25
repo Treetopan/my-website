@@ -116,7 +116,7 @@
         // required — what is refused is either of them holding nonsense, and
         // anything else being stored here at all.
         "id": {
-          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]+\/[a-z0-9-]+$/)"
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]+\\/[a-z0-9-]+$/)"
         },
         "at": { ".validate": "newData.isNumber()" },
         "$other": { ".validate": false }

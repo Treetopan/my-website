@@ -49,7 +49,7 @@ export function CourseGate({ uid }: { uid: string }) {
 
       <p className="eyebrow">Your course</p>
       <h1 className="mt-2 text-[32px] leading-tight font-semibold tracking-[-0.035em]">
-        Which maths are you taking?
+        Which math are you taking?
       </h1>
       <p className="mt-2.5 text-[15px] text-muted">
         It sets what Quick play offers and where the library opens. You can

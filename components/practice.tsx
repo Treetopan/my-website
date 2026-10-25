@@ -459,7 +459,7 @@ function Missing() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
       <h1 className="text-2xl font-semibold tracking-[-0.03em]">
-        That isn&apos;t a subunit we can practise.
+        That isn&apos;t a subunit we can practice.
       </h1>
       <p className="max-w-sm text-[15px] text-muted">
         Pick again from the library — the subunits with a question count are

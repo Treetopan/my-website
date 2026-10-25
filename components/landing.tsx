@@ -36,7 +36,7 @@ export function Landing() {
           />
           <Game
             name="Last One Standing"
-            body="This is a turned based game. A wrong answer removes you from the round, but your not out if the winner chooses not to banish you. Also watch out, the clcok gets faster each time everyone answers a question!"
+            body="This is a turn-based game. A wrong answer removes you from the round, but you're not out if the winner chooses not to banish you. Also watch out, the clock gets faster each time everyone answers a question!"
           />
         </dl>
 

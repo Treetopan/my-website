@@ -68,7 +68,7 @@ const PATHS: Record<GameId, string> = {
 };
 
 const LAUNCH: Record<GameId, string> = {
-  practice: "Start practising",
+  practice: "Start practicing",
   racer: "Start Racer",
   mirror: "Open a duel",
   "last-one-standing": "Open a room",
@@ -389,7 +389,7 @@ export function Library() {
       {unit && (
         <Step
           n="05"
-          title="Choose what to practise"
+          title="Choose what to practice"
           note={`Take up to ${MAX_SUBUNITS} subunits. They are dealt in turn into one session, so a mix is one game rather than several.`}
         >
           <div className="flex flex-col gap-2.5">

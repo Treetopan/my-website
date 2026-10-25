@@ -32,11 +32,11 @@ export function Landing() {
         <dl className="mt-8 flex flex-col gap-4">
           <Game
             name="Racer"
-            body="Head to head. Every correct answer puts road between your car and theirs."
+            body="1v1 against your friend. The key to winning this game is being fast and accurate, just like an F1 racer!"
           />
           <Game
             name="Last One Standing"
-            body="Turn by turn. A wrong answer puts you out for the round, and the clock gets shorter every lap of the table."
+            body="This is a turned based game. A wrong answer removes you from the round, but your not out if the winner chooses not to banish you. Also watch out, the clcok gets faster each time everyone answers a question!"
           />
         </dl>
 

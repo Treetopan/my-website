@@ -114,6 +114,11 @@ export function Library() {
   const touched = useRef(false);
   /** The opening is offered once per visit, however often the record changes. */
   const opened = useRef(false);
+  /**
+   * True once the student has asked to see every course, not just their own.
+   * A view for this visit, not a setting: their saved course is untouched.
+   */
+  const [allCourses, setAllCourses] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -125,7 +130,13 @@ export function Library() {
 
       if (opened.current) return;
       opened.current = true;
-      if (touched.current || !courseId) return;
+      if (!courseId) return;
+      // Somebody already down the steps keeps the list they are looking at
+      // rather than having it fold up under them.
+      if (touched.current) {
+        setAllCourses(true);
+        return;
+      }
 
       // Opens the steps on their own course rather than at the top. The unit is
       // left alone: the course is what they told us, the unit is this week's
@@ -159,6 +170,17 @@ export function Library() {
    * here rather than in each step.
    */
   const duelling = game === "mirror";
+
+  /**
+   * The courses step three lists: only theirs, once they have told us one and
+   * it is in this subject. The rest are folded away, not removed — going back
+   * over last year's course or ahead to next year's is one tap.
+   */
+  function shownCourses(s: Subject): Course[] {
+    if (allCourses || !taking) return s.courses;
+    const theirs = s.courses.filter((c) => c.id === taking);
+    return theirs.length > 0 ? theirs : s.courses;
+  }
   const offerable = (su: Subunit) => (duelling ? canDuel(su) : hasContent(su));
 
   function chooseGame(next: GameId) {
@@ -289,7 +311,7 @@ export function Library() {
       {subject && (
         <Step n="03" title="Choose a course">
           <div className="grid gap-3 sm:grid-cols-2">
-            {subject.courses.map((c) => {
+            {shownCourses(subject).map((c) => {
               const duellable = subunitsOf(c).filter(canDuel).length;
               const stocked = duelling ? duellable > 0 : isStocked(c);
               const units = count(c.units.length, "unit");
@@ -314,6 +336,16 @@ export function Library() {
               );
             })}
           </div>
+          {shownCourses(subject).length < subject.courses.length && (
+            <button
+              type="button"
+              onClick={() => setAllCourses(true)}
+              aria-expanded={false}
+              className="mt-4 text-[13px] text-faint transition-colors hover:text-ink"
+            >
+              Show other courses
+            </button>
+          )}
         </Step>
       )}
 

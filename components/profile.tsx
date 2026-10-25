@@ -3,11 +3,19 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { watchAccount, type Account } from "@/lib/account";
+import {
+  setCourse,
+  skipCourse,
+  watchAccount,
+  watchCourse,
+  type Account,
+  type CourseChoice,
+} from "@/lib/account";
 import { readResults, type SessionResult } from "@/lib/rtdb";
-import { describeAll, selectionNames } from "@/lib/curriculum";
+import { courseChoices, describeAll, selectionNames } from "@/lib/curriculum";
 import { levelProgress, streakIsLive } from "@/lib/progression";
 import { SurveyGate } from "@/components/survey-gate";
+import { CourseChips } from "@/components/course-gate";
 import {
   SURVEY,
   labelFor,
@@ -30,6 +38,9 @@ export function Profile() {
   const [account, setAccount] = useState<Account | null>(null);
   const [results, setResults] = useState<(SessionResult & { id: string })[]>([]);
   const [survey, setSurvey] = useState<SurveyState>({ status: "loading" });
+  // Its own listener, on its own node: the course is no longer a field of the
+  // account, because only its owner may read it.
+  const [choice, setChoice] = useState<CourseChoice>({ status: "loading" });
   const [taking, setTaking] = useState(false);
 
   useEffect(() => {
@@ -37,6 +48,7 @@ export function Profile() {
     const stop = [
       watchAccount(user.uid, setAccount),
       watchSurvey(user.uid, setSurvey),
+      watchCourse(user.uid, setChoice),
     ];
     readResults(user.uid).then(setResults).catch(() => setResults([]));
     return () => stop.forEach((off) => off());
@@ -190,6 +202,22 @@ export function Profile() {
         )}
       </section>
 
+      {/* ── The course ──────────────────────────────────── */}
+      <section className="border-t border-line-soft pt-8 pb-10">
+        <h2 className="text-[22px] font-medium tracking-[-0.02em]">
+          Your course
+        </h2>
+        <p className="mt-2 mb-5 text-[13.5px] text-faint">
+          What Quick play offers, and where the library opens. Changing it
+          leaves your XP, streak and history alone.
+        </p>
+
+        <CourseEditor
+          uid={user.uid}
+          courseId={choice.status === "chosen" ? choice.courseId : null}
+        />
+      </section>
+
       {/* ── The survey ──────────────────────────────────── */}
       <section className="border-t border-line-soft pt-8">
         <h2 className="text-[22px] font-medium tracking-[-0.02em]">
@@ -203,6 +231,63 @@ export function Profile() {
         <SurveyAnswersView survey={survey} onTake={() => setTaking(true)} />
       </section>
     </main>
+  );
+}
+
+/**
+ * The course, changeable in one press.
+ *
+ * There is no Save button because there is nothing to save up: the answer is a
+ * single choice, so the tap *is* the edit. Pressing the course already on
+ * clears it, the same gesture the chips have everywhere else, and clearing
+ * records a skip rather than wiping the subtree — the student has still been
+ * asked, and the sign-up question must not come back at them for having
+ * changed their mind.
+ *
+ * The value is the watched one from the account rather than local state, so
+ * what is shown is what is stored. That also makes the write its own feedback:
+ * the chip moves when the database says it moved, not when it was tapped.
+ */
+function CourseEditor({
+  uid,
+  courseId,
+}: {
+  uid: string;
+  courseId: string | null;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function pick(next: string | null) {
+    setBusy(true);
+    setProblem(null);
+    try {
+      if (next) await setCourse(uid, next);
+      else await skipCourse(uid);
+    } catch {
+      setProblem("That didn't save. Check your connection and try again.");
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <CourseChips
+        courses={courseChoices()}
+        value={courseId}
+        disabled={busy}
+        onPick={pick}
+      />
+
+      {problem && (
+        <p
+          role="alert"
+          className="rounded-sm border border-out/40 bg-out/8 px-3.5 py-2.5 text-[13px] text-ink"
+        >
+          {problem}
+        </p>
+      )}
+    </div>
   );
 }
 

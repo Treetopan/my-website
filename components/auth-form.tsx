@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { authErrorMessage, useAuth } from "@/lib/auth-context";
+import { authProblem, useAuth, type AuthProblem } from "@/lib/auth-context";
 import { Wordmark } from "@/components/wordmark";
 import { USERNAME_MAX, checkUsername } from "@/lib/username";
 
@@ -31,13 +31,19 @@ const COPY = {
 export function AuthForm({ mode }: { mode: Mode }) {
   const copy = COPY[mode];
   const router = useRouter();
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp, resetPassword } = useAuth();
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthProblem | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * What the reset link did, once it has been asked for. It replaces the error
+   * rather than sitting under it: the error was a dead end, and this is the
+   * thing that is no longer true once a link is on its way.
+   */
+  const [sent, setSent] = useState<string | null>(null);
 
   // Someone already signed in has no business on this page.
   useEffect(() => {
@@ -47,6 +53,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSent(null);
     setBusy(true);
 
     try {
@@ -55,7 +62,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         // the field being typed into rather than on the screen after it.
         const checked = checkUsername(username);
         if (!checked.ok) {
-          setError(checked.problem);
+          setError({ message: checked.problem, kind: "other" });
           setBusy(false);
           return;
         }
@@ -63,15 +70,41 @@ export function AuthForm({ mode }: { mode: Mode }) {
         // A name that was claimed a second ago by somebody else does not undo
         // the account: it is made, it is signed in, and the gate asks again.
         const claim = await signUp(email.trim(), password, checked.username);
-        if (!claim.ok) setError(claim.problem);
+        if (!claim.ok) setError({ message: claim.problem, kind: "other" });
       } else {
         await signIn(email.trim(), password);
       }
       router.replace("/");
     } catch (err) {
-      setError(authErrorMessage(err));
+      setError(authProblem(err));
       setBusy(false);
     }
+  }
+
+  /**
+   * The other half of the answer to "I can't tell what to do next".
+   *
+   * It uses the address already typed into the form rather than sending
+   * somebody to a second screen to type it again — by the time this button is
+   * on screen there is an address in the field by definition, because a sign-in
+   * had to be attempted for the error to appear at all.
+   */
+  async function onReset() {
+    const address = email.trim();
+    if (!address) {
+      setError({ message: "Type your email above first.", kind: "other" });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await resetPassword(address);
+      setError(null);
+      setSent(address);
+    } catch (err) {
+      setError(authProblem(err));
+    }
+    setBusy(false);
   }
 
   return (
@@ -123,11 +156,42 @@ export function AuthForm({ mode }: { mode: Mode }) {
           />
 
           {error && (
-            <p
+            <div
               role="alert"
-              className="rounded-sm border border-out/40 bg-out/8 px-3.5 py-2.5 text-[13px] text-ink"
+              className="flex flex-col gap-2.5 rounded-sm border border-out/40 bg-out/8 px-3.5 py-2.5 text-[13px] text-ink"
             >
-              {error}
+              <p>{error.message}</p>
+
+              {/* The ways out live in the error rather than at the foot of the
+                  page, because the foot is not where somebody is looking when
+                  they have just been told no. */}
+              {error.kind === "credentials" && (
+                <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <Link
+                    href="/signup"
+                    className="text-accent transition-colors hover:text-accent-hi"
+                  >
+                    Create an account
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={onReset}
+                    disabled={busy}
+                    className="text-accent transition-colors hover:text-accent-hi disabled:text-faint"
+                  >
+                    Forgot password
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
+
+          {sent && (
+            <p
+              role="status"
+              className="rounded-sm border border-line bg-surface-2 px-3.5 py-2.5 text-[13px] text-muted"
+            >
+              If {sent} has an account, a reset link is on its way.
             </p>
           )}
 

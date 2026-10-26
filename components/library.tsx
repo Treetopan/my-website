@@ -48,7 +48,7 @@ const GAMES: { id: GameId; name: string; blurb: string; meta: string }[] = [
     id: "mirror",
     name: "Mirror Duel",
     blurb:
-      "Two players competing to see who can answer the same question quickest and most accurately.",
+      "Two players competing to see who can answer the same question most accurately.",
     meta: "2 players · answers placed on a grid · ~3 min",
   },
   {

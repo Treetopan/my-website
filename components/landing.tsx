@@ -32,7 +32,7 @@ export function Landing() {
         <dl className="mt-8 flex flex-col gap-4">
           <Game
             name="Racer"
-            body="1v1 against your friend. The key to winning this game is being fast and accurate, just like an F1 racer!"
+            body="1v1 against a bot (changes coming soon). The key to winning this game is being fast and accurate, just like an F1 racer!"
           />
           <Game
             name="Last One Standing"

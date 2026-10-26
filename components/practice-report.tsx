@@ -170,7 +170,7 @@ export function PracticeReport({
           onClick={onAgain}
           className="rounded-lg bg-accent px-5 py-2.5 text-[14px] font-medium text-accent-ink transition-colors hover:bg-accent-hi"
         >
-          Practise again
+          Practice again
         </button>
         <Link
           href="/"

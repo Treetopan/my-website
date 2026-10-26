@@ -129,7 +129,7 @@ export const SURVEY: SurveyQuestion[] = [
   {
     id: "frequency",
     kind: "choice",
-    prompt: "How often do you want to practise?",
+    prompt: "How often do you want to practice?",
     note: "An honest answer is worth more here than an ambitious one.",
     options: [
       { value: "daily", label: "Every day" },

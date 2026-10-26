@@ -35,26 +35,26 @@ const GAMES: { id: GameId; name: string; blurb: string; meta: string }[] = [
     id: "practice",
     name: "Practice",
     blurb:
-      "Just the questions, at your own pace. A report at the end says what landed and what to go back to.",
+      "Built for wanting to practice at your own pace with no distractions. A summary at the end tells you what you have mastered and what you should focus on next.",
     meta: "1 player · no clock, no opponent",
   },
   {
     id: "racer",
     name: "Racer",
-    blurb: "Answer to move. Every correct answer puts road between you and the bot.",
+    blurb: "Answer to move. Answer questions quickly and correctly to gain speed and win!",
     meta: "1 player vs bot · ~4 min",
   },
   {
     id: "mirror",
     name: "Mirror Duel",
     blurb:
-      "The same question, both of you at once. The closer answer takes the gap between them.",
+      "Two players competing to see who can answer the same question most accurately.",
     meta: "2 players · answers placed on a grid · ~3 min",
   },
   {
     id: "last-one-standing",
     name: "Last One Standing",
-    blurb: "Three players, one wrong answer each. The room empties until one is left.",
+    blurb: "Three players seeing who will last the longest while testing both trust and loyalty. Who will banish who?",
     meta: "3 players · ~6 min",
   },
 ];
@@ -68,7 +68,7 @@ const PATHS: Record<GameId, string> = {
 };
 
 const LAUNCH: Record<GameId, string> = {
-  practice: "Start practising",
+  practice: "Start practicing",
   racer: "Start Racer",
   mirror: "Open a duel",
   "last-one-standing": "Open a room",
@@ -389,7 +389,7 @@ export function Library() {
       {unit && (
         <Step
           n="05"
-          title="Choose what to practise"
+          title="Choose what to practice"
           note={`Take up to ${MAX_SUBUNITS} subunits. They are dealt in turn into one session, so a mix is one game rather than several.`}
         >
           <div className="flex flex-col gap-2.5">
